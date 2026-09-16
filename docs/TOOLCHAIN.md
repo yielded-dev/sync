@@ -73,7 +73,7 @@ The workflow does not deploy or publish packages.
 ## Contributor skills
 
 Dev Kit 2.0.2 supplied the setup, Effect development, testing, Cloudflare Workers,
-and visual explanation skills. They are normal tracked files with individual origin
+pull request, and visual explanation skills. They are normal tracked files with individual origin
 receipts; `.claude/skills` links to the same content and `CLAUDE.md` links to
 `AGENTS.md`.
 
