@@ -70,6 +70,22 @@ GitHub Actions installs dependencies with lifecycle scripts suppressed, explicit
 patches the compiler, and runs `vp run ready`. The `ready` job is the CI gate.
 The workflow does not deploy or publish packages.
 
+`pr-review.yml` uses the published Effect Agent review action and the repository's
+`OPENAI_API_KEY` secret. It reviews non-draft, same-repository PRs on opening,
+reopening, readiness, and new commits. Fork PRs require an owner, member, or
+collaborator to request review with `@effect-agent review full`. The same command
+starts a full retry; `@effect-agent review` requests an incremental pass. A manual
+workflow dispatch accepts a PR number and starts a full review.
+
+The privileged review job checks out only default-branch guidance and never runs
+PR code or dependency installation. It uses `GITHUB_TOKEN` to publish feedback and
+the `Effect Agent review` check, with `AGENTS.md` as repository guidance. No GitHub
+App secrets are required. Reviews use `gpt-6-astra` with medium reasoning and
+standard processing, at most two automatic attempts per PR, a $1 base allowance,
+and a $2.50 ceiling per attempt. Manual attempts have the same spending ceiling.
+The check reports blockers and incomplete coverage; it is separate from the
+required `ready` CI job.
+
 ## Contributor skills
 
 Dev Kit 2.0.2 supplied the setup, Effect development, testing, Cloudflare Workers,
