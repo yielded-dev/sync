@@ -1,8 +1,9 @@
 # Repository guidance
 
 Read `README.md` and `docs/TOOLCHAIN.md` before changing repository structure or
-tooling. This is the scaffold for KOM-202; settle public contracts in KOM-203 before
-extracting runtime implementations.
+tooling. Settle the [public API contracts](docs/PUBLIC_API.md) before extracting
+runtime implementations. Keep documentation independent of issue trackers and
+ticket identifiers; describe behavior, boundaries, and implementation stages directly.
 
 ## Effect
 
