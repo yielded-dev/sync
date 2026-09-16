@@ -1,0 +1,38 @@
+{
+  "name": "@yielded/sync",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Effect-native realtime contracts and runtimes.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yielded-dev/sync.git",
+    "directory": "packages/sync"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./client": "./src/client.ts",
+    "./atom": "./src/atom.ts"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vp test --passWithNoTests"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "effect": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0-rc.112"
+  }
+}
