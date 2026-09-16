@@ -2,9 +2,10 @@
 
 This sketch illustrates the [public API contracts](../PUBLIC_API.md). Shared
 `Source`, `Action`, and `Plugin` definitions are implemented and exercised by the
-[external contracts example](../../examples/contracts/README.md). `Server`,
-`Client`, Atom, and adapters below describe the remaining runtime facade, so this
-complete example is not runnable yet. Effect Schema/Layer/Scope are the underlying
+[external contracts example](../../examples/contracts/README.md). The server and
+Cloudflare host also run in the [counter example](../../examples/cloudflare/README.md).
+`Client`, Atom, and local persistence still describe the remaining runtime facade,
+so this complete example is not runnable yet. Effect Schema/Layer/Scope are the underlying
 primitives.
 
 The application owns access checks and HTTP authentication. These are the only
@@ -88,6 +89,7 @@ export class Access extends Context.Service<
 ```ts
 import { Effect, Schema } from "effect";
 import { Server } from "@yielded/sync/server";
+import { ProtocolError } from "@yielded/sync";
 import { Counter, InvalidValue, Label } from "./counter";
 import { Access, Principal } from "./access";
 
@@ -116,7 +118,13 @@ export const CounterServer = Server.make(Counter, {
   snapshot: (state) => ({ value: state.value }),
   authorize: Effect.fn("Counter.authorize")(function* (input) {
     const access = yield* Access;
-    yield* access.authorize(input);
+    yield* access
+      .authorize(input)
+      .pipe(
+        Effect.mapError(() =>
+          ProtocolError.make({ reason: "Forbidden", message: "Access denied" }),
+        ),
+      );
   }),
   actions: {
     set: Effect.fn("Counter.set")(function* ({ state, payload, principal }) {
@@ -167,12 +175,14 @@ export default Cloudflare.worker(CounterServer.contract, {
 ```
 
 `COUNTERS` is the application's binding to `CounterObject`. `authenticate(request)`
-is an application Effect returning `{ principal: { actorId }, expiresAtMillis }`
-or a typed authentication error. The worker forwards a trusted bound identity;
+is an application Effect returning `{ actorId, principal: { actorId }, expiresAtMillis }`
+or a classified `ProtocolError`. The worker forwards a trusted bound identity;
 client headers/payloads cannot impersonate internal authorization data.
 
 The adapter derives the five RPC operations and delegates execution to the server
-runtime. It owns SQLite transactions, socket hibernation and outbox wakeups. This
+runtime using JSON Effect RPC. HTTP supports unary snapshot/action/result operations;
+WebSocket RPC also carries subscriptions and ephemeral messages. It owns SQLite
+transactions, socket hibernation and outbox wakeups. This
 example has no external effects. A source needing projections adds schema-encoded
 outbox records to its plans and supplies a typed delivery Effect at this boundary;
 its destination remains application-owned.

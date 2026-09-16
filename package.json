@@ -37,12 +37,18 @@
   },
   "packageManager": "bun@1.4.0",
   "catalog": {
+    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "@cloudflare/workers-types": "5.20260825.1",
+    "@effect/sql-d1": "4.0.0-rc.112",
+    "@effect/sql-sqlite-do": "4.0.0-rc.112",
     "@effect/tsgo": "0.45.0",
     "@effect/vitest": "4.0.0-rc.112",
     "@types/node": "26.1.2",
     "effect": "4.0.0-rc.112",
+    "effect-cf": "0.42.1",
     "typescript": "7.0.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
-    "vite-plus": "0.3.0"
+    "vite-plus": "0.3.0",
+    "wrangler": "4.133.0"
   }
 }

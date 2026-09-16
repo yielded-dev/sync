@@ -21,12 +21,17 @@
   "scripts": {
     "build": "vp pack",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vp test --passWithNoTests"
+    "test": "vp test"
   },
   "dependencies": {
-    "@yielded/sync": "workspace:*"
+    "@effect/sql-d1": "catalog:",
+    "@effect/sql-sqlite-do": "catalog:",
+    "@yielded/sync": "workspace:*",
+    "effect-cf": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/workers-types": "catalog:",
     "@effect/vitest": "catalog:",
     "effect": "catalog:",
     "typescript": "catalog:",

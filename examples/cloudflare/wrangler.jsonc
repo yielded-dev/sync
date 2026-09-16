@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "yielded-sync-counter",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": { "bindings": [{ "name": "COUNTERS", "class_name": "CounterObject" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CounterObject"] }],
+}

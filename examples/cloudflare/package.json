@@ -1,0 +1,21 @@
+{
+  "name": "sync-cloudflare-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "types": "wrangler types --include-runtime false",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yielded/sync": "workspace:*",
+    "@yielded/sync-platform-cloudflare": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "typescript": "catalog:",
+    "wrangler": "catalog:"
+  }
+}
