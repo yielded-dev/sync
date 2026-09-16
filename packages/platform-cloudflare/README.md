@@ -12,6 +12,8 @@ subscribe and connection-scoped publishMessage. Each socket has one subscription
 its request id, acknowledgement count, source address, and authenticated session
 survive hibernation. Slow consumers close with code 1013 and recover by cursor.
 Session expiry or revoked authorization closes with code 4403.
+If a command commits but publication is interrupted or fails, the host closes the
+affected connections with code 1013 so they recover from their durable positions.
 
 The gateway authenticates every mount and replaces its internal identity headers.
 The Durable Object binding is a trusted capability: expose it through this gateway,

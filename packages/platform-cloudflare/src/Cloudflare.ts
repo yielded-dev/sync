@@ -235,18 +235,43 @@ export const durableObject = <S extends Source.Spec, R>(
       return yield* encode(schema, yield* runtime.snapshot(session));
     }
     if (request.tag.startsWith("execute/")) {
-      const executed = yield* runtime.dispatch(session, request.payload);
+      const host = yield* DurableObjectState.DurableObjectState;
+      const sockets = yield* host.getWebSockets();
+      let committed = false;
 
-      for (const event of executed.events)
-        yield* broadcast(runtime, {
-          _tag: "Event",
-          protocolVersion: 1,
-          address: runtime.address,
-          schemaVersion: contract.schemaVersion,
-          event,
-        });
+      // Cancellation can land after the commit but before dispatch returns its result.
+      return yield* Effect.gen(function* () {
+        const executed = yield* runtime.dispatch(session, request.payload);
 
-      return executed.outcome;
+        committed = true;
+        for (const event of executed.events)
+          yield* broadcast(runtime, {
+            _tag: "Event",
+            protocolVersion: 1,
+            address: runtime.address,
+            schemaVersion: contract.schemaVersion,
+            event,
+          });
+
+        return executed.outcome;
+      }).pipe(
+        Effect.onError((cause) => {
+          const needsRecovery =
+            committed ||
+            cause.reasons.some(
+              (reason) => reason._tag !== "Fail" || reason.error.reason === "Unavailable",
+            );
+
+          return needsRecovery
+            ? Effect.forEach(
+                sockets,
+                (socket) =>
+                  close(socket, 1013, "Publication incomplete; recover from durable position"),
+                { discard: true },
+              )
+            : Effect.void;
+        }),
+      );
     }
     if (request.tag.startsWith("result/")) return yield* runtime.lookup(session, request.payload);
     if (request.tag === "publishMessage") {

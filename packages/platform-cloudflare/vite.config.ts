@@ -3,7 +3,13 @@ import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   plugins: [
-    cloudflareTest({ wrangler: { configPath: "../../examples/cloudflare/wrangler.jsonc" } }),
+    cloudflareTest({
+      main: "./test/fixtures/worker.ts",
+      wrangler: { configPath: "../../examples/cloudflare/wrangler.jsonc" },
+      miniflare: {
+        durableObjects: { PUBLICATION: { className: "PublicationObject", useSQLite: true } },
+      },
+    }),
   ],
   pack: {
     entry: ["src/index.ts"],
