@@ -3,7 +3,8 @@
 Reusable Effect-native realtime synchronization, owned by [Yielded](https://github.com/yielded-dev).
 
 Shared source/action/plugin contracts, Schema envelopes, exact outcome codecs, and
-derived Effect RPC contracts are implemented. Server, client, Atom, and persistence
+derived Effect RPC contracts, the authoritative server runtime, and the Cloudflare
+SQLite/Durable Object adapter are implemented. Client, Atom, and local persistence
 runtimes remain under development. The
 [public API document](docs/PUBLIC_API.md) defines the contract,
 [consumer sketch](docs/api/consumer.md), export ownership, and acceptance plan
@@ -55,10 +56,12 @@ typechecking, tests, and ESM/declaration builds for all four packages.
 | `vp run patch:tsgo`         | Reapply the compiler patch after a script-free install |
 | `vp run changeset`          | Record a consumer-visible change                       |
 
-Core contract tests exercise composition, codecs, and native RPC integration.
+Core tests exercise composition, codecs, scoped server services, and native RPC integration.
 The [external contracts example](examples/contracts/README.md) typechecks public imports,
-action-specific types, and Effect requirements. Adapter suites remain empty and
-provide no synchronization or persistence correctness proof.
+action-specific types, and Effect requirements. The [Cloudflare counter](examples/cloudflare/README.md)
+runs through public exports. Its workerd tests exercise exact retries, interrupted
+and failed transactions, outbox recovery, replay gaps, authentication fencing, and
+hibernating native RPC subscriptions. Local persistence adapter suites remain empty.
 See [toolchain details](docs/TOOLCHAIN.md) and [contributor guidance](AGENTS.md).
 
 ## Release status

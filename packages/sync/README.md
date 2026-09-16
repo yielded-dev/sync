@@ -14,5 +14,18 @@ preserve rich Schema values. Native RPC handlers retain their Effect requirement
 
 See the [external contracts example](../../examples/contracts/README.md) and
 [public API contracts](../../docs/PUBLIC_API.md) for usage and remaining runtime
-semantics. The server, client, and Atom entry points are still empty; this package
-does not yet execute commands, persist receipts, or synchronize replicas.
+semantics. `@yielded/sync/server` exports `Server`, `SourceStorage`, and `ServerCrypto`.
+`Server.make` and `Server.plugin` infer private state, action payloads/results, and
+Effect requirements. `Server.provide` and `Server.providePlugin` acquire Layers in
+the source scope. `Server.open` provides typed execution/result lookup, snapshots,
+replay bootstrap, and authorization over an injected storage handle.
+
+Every command turn authorizes against stored state, finds an exact receipt or
+evaluates its handler, then atomically commits private state, events, the outcome,
+and outbox obligations. Rejections are durable; operational failures and defects
+never become domain rejections. `Server.commit` only constructs a plan. Changed
+state must have an event. Native host operations use the runtime's Schema-encoded
+`dispatch` and `lookup` transport seams.
+
+The client and Atom entry points remain empty. See the
+[Cloudflare example](../../examples/cloudflare/README.md) for a runnable authority.

@@ -3,15 +3,17 @@
 This document defines the contracts for extracting the synchronization library.
 The root entry point implements `Source`, `Action`, `Plugin`, `SourceCatalog`,
 shared identities, envelopes, exact outcome codecs, and derived Effect RPC contracts.
-Server, client, Atom, and adapter APIs below remain design contracts for the next
-implementation stages. The packages remain private.
+The server and Cloudflare adapter implement authoritative execution. Client, Atom,
+and local persistence APIs below remain design contracts. The packages remain private.
 
 Read the [complete consumer sketch](api/consumer.md) alongside these decisions.
 It defines a counter and a reusable label capability, server-private state,
 authorization, a Cloudflare host, a persistent headless client, and Atom bindings.
 The [external contracts example](../examples/contracts/README.md) now compiles the
 shared composition, action types, and native RPC Effect requirements and runs a
-JSON codec smoke check. The complete runtime sketch is not yet runnable.
+JSON codec smoke check. The [Cloudflare counter](../examples/cloudflare/README.md)
+runs the server through public exports and is exercised by workerd tests. The
+complete client/Atom runtime sketch is not yet runnable.
 
 The source review is pinned to Kommunikasie commit
 [`b13ca58e`](https://github.com/reve-ai/kommunikasie/tree/b13ca58ef08e9ec608d2902f05e3bce1660b81f3):
@@ -174,6 +176,22 @@ initializer, public snapshot projection, authorization, and action handlers.
 `Server.commit({ state, events, result, outbox })` is a **plan**, not a persistence
 operation. The runtime validates and commits it before publishing or replying.
 
+`Server.provide(definition, layer)` and `Server.providePlugin(plugin, layer)`
+subtract supplied requirements and acquire services in the caller's source scope.
+`Server.open(definition, address, limits)` acquires the portable runtime from
+`SourceStorage` and `ServerCrypto`. Its typed `execute(session, action, command)`
+and `result(session, action, command)` retain the action's outcome/lookup types.
+Operational errors use `ProtocolError`; application handlers and authorization
+classify infrastructure and policy failures into that channel. `dispatch` and
+`lookup` are Schema-encoded seams for hosts. Snapshot, bootstrap and message
+operations use the same authorization and serialized storage turn.
+
+The initial runtime retains all receipts. `allowUnboundCommands` defaults to false;
+opting in also reserves unbound identities across subsequent authority generations.
+Changed private state must emit at least one durable event. Initialization, commits,
+replay, source turns, socket acknowledgements, pending host turns, and outbox work
+have explicit bounds. The host validates the complete plan before exposing it.
+
 Private state never appears in shared source definitions or generated RPC results.
 Authorized viewers of one source receive the same public snapshot. Viewer-private
 projections remain application endpoints or separate authorization boundaries;
@@ -297,7 +315,10 @@ must not copy them into generic packages just to make source imports compile.
 
 ## Persisted-format and migration scope
 
-The current contracts write no persisted data and reset no formats. During extraction, shared wire version,
+The Cloudflare adapter writes SQLite format 1 inside each configured Durable Object.
+Its metadata, head, replay, receipt and outbox tables are documented in the
+[adapter README](../packages/platform-cloudflare/README.md). It performs no implicit
+migration from existing application authorities and resets no formats. Shared wire version,
 source authority generation, private-state migration version, and local actor
 persistence generation remain distinct. One must never substitute for another.
 
@@ -329,7 +350,9 @@ required proof. The scaffold's empty suites validate no synchronization behavior
 
 Shared contracts and plugin composition are implemented. Native RPC handler
 composition retains service requirements, and Layer provision subtracts supplied
-services. Server-private definitions, handler/reducer registration checks, atomic
-commits, and all replica behavior still require the server and headless client
-runtimes. Local persistence integration builds on the client
+services. Server-private definitions, handler registration checks, atomic commits,
+durable exact results, replay, outbox delivery and Cloudflare hosting are implemented.
+The real Worker suite covers failed/interrupted commits, restart/hibernation,
+receipt retention, actor isolation, gaps and ephemeral isolation. Client reducer
+registration and replica behavior still require the headless runtime. Local persistence integration builds on the client
 runtime. Validate complete consumers before publishing a beta.

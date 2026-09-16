@@ -6,7 +6,13 @@ import { defineConfig } from "vite-plus";
 // tracked project inputs, while symlinked harness targets and generated Git
 // hook internals may duplicate or contain third-party source. Keep these
 // exclusions in tool configuration rather than `.gitignore`.
-const toolIgnorePatterns = [".agents/**", ".claude/**", ".opencode/**", ".vite-hooks/_/**"];
+const toolIgnorePatterns = [
+  ".agents/**",
+  ".claude/**",
+  ".opencode/**",
+  ".vite-hooks/_/**",
+  "**/worker-configuration.d.ts",
+];
 
 // Canonical formatting defaults for this project. Oxfmt does not support
 // config inheritance, so this object is spread into the `fmt` block below.
