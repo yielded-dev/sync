@@ -17,6 +17,17 @@
         "vite-plus": "catalog:",
       },
     },
+    "examples/contracts": {
+      "name": "@yielded/example-contracts",
+      "dependencies": {
+        "@yielded/sync": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/local-expo": {
       "name": "@yielded/sync-local-expo",
       "version": "0.0.0",
@@ -434,6 +445,8 @@
     "@voidzero-dev/vite-plus-win32-arm64-msvc": ["@voidzero-dev/vite-plus-win32-arm64-msvc@0.3.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-KRhdy5K13AYx9KBfCVHRrK7zSZU+bMW9CL6gTai+UkJgAmDJi1kjdSNboZOjO8mrzUnTCrELgMI2tnstcxSTuA=="],
 
     "@voidzero-dev/vite-plus-win32-x64-msvc": ["@voidzero-dev/vite-plus-win32-x64-msvc@0.3.0", "", { "os": "win32", "cpu": "x64" }, "sha512-7+G+GxGmxdpQO0zjiGnkZFXKGqm0CrVduebRsJd6ccuOuxCQYPxLcoHq4WOaGrh56SrAGS7XjhnQCrXRkzKUVQ=="],
+
+    "@yielded/example-contracts": ["@yielded/example-contracts@workspace:examples/contracts"],
 
     "@yielded/sync": ["@yielded/sync@workspace:packages/sync"],
 

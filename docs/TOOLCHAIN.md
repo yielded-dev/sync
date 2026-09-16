@@ -46,12 +46,15 @@ Copied skills and generated hook internals have explicit tool ignores.
 
 Every package has its own `vite.config.ts`, pure `typecheck` task, test task, and
 `vp pack` build. Builds produce ESM, declarations, and source maps in ignored `dist/`
-directories. Source entry points are intentionally empty until API extraction.
+directories. Core's root entry point contains the shared contracts; runtime and
+adapter entry points remain empty. The external contracts example participates in
+workspace typechecking and has a separate `start` task for its codec smoke check.
 
 `vp run ready` composes static checks, workspace tests, and package builds.
 Tests use Vite+'s Vitest runner; Effect tests can use the catalog-pinned
-`@effect/vitest`. Empty suites are allowed only for the scaffold. Remove
-`--passWithNoTests` from each package when its first behavioral suite lands.
+`@effect/vitest`. Core has a behavioral contract suite and requires tests to be
+present. Empty suites are still allowed for the runtime adapters; remove
+`--passWithNoTests` from each adapter when its first behavioral suite lands.
 
 Vite Task caches successful script results. Vitest's mutable result cache is
 disabled to avoid invalidating task inputs. Use `vp run --no-cache <task>` when

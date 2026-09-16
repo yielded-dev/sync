@@ -1,10 +1,11 @@
 # Consumer API sketch
 
-This sketch illustrates the [proposed public API](../PUBLIC_API.md). The package
-exports are currently empty, so the example is not runnable yet. Effect
-Schema/Layer/Scope are the underlying primitives; `Source`, `Server`, `Client`,
-and adapter names describe the proposed library facade. As those APIs are
-implemented, this sketch becomes a typechecked, runnable consumer.
+This sketch illustrates the [public API contracts](../PUBLIC_API.md). Shared
+`Source`, `Action`, and `Plugin` definitions are implemented and exercised by the
+[external contracts example](../../examples/contracts/README.md). `Server`,
+`Client`, Atom, and adapters below describe the remaining runtime facade, so this
+complete example is not runnable yet. Effect Schema/Layer/Scope are the underlying
+primitives.
 
 The application owns access checks and HTTP authentication. These are the only
 application-specific dependencies in the sketch; their contracts are shown below.

@@ -1,14 +1,17 @@
-# Public API proposal
+# Public API contracts
 
 This document defines the contracts for extracting the synchronization library.
-The package entry points remain empty. Names and signatures below describe the
-proposed API, not shipped exports.
+The root entry point implements `Source`, `Action`, `Plugin`, `SourceCatalog`,
+shared identities, envelopes, exact outcome codecs, and derived Effect RPC contracts.
+Server, client, Atom, and adapter APIs below remain design contracts for the next
+implementation stages. The packages remain private.
 
 Read the [complete consumer sketch](api/consumer.md) alongside these decisions.
 It defines a counter and a reusable label capability, server-private state,
 authorization, a Cloudflare host, a persistent headless client, and Atom bindings.
-As the contracts and runtimes are implemented, the sketch must become a
-typechecked external consumer. It does not yet provide compilation or runtime proof.
+The [external contracts example](../examples/contracts/README.md) now compiles the
+shared composition, action types, and native RPC Effect requirements and runs a
+JSON codec smoke check. The complete runtime sketch is not yet runnable.
 
 The source review is pinned to Kommunikasie commit
 [`b13ca58e`](https://github.com/reve-ai/kommunikasie/tree/b13ca58ef08e9ec608d2902f05e3bce1660b81f3):
@@ -92,12 +95,25 @@ generation and nonnegative safe-integer cursor from the existing kernel. Orderin
 is defined only within a generation. Reset/replacement is an explicit frame;
 ordinary snapshots cannot rewind a replica or replace newer live state.
 
-Derived Effect RPC operations are `snapshot`, `execute`, `result`, `subscribe`,
-and `publishMessage`. Their Schema payloads include source address and protocol
-version; the action operations retain the action-specific success/error mapping.
+`source.rpc` is a native Effect `RpcGroup` with five operation families:
+`snapshot`, `execute`, `result`, streaming `subscribe`, and `publishMessage`.
+Each bound action exposes `execute` and `result` RPC definitions with tags
+`execute/<namespace>/<action>` and `result/<namespace>/<action>`. Segments escape
+`%` as `%25` and `/` as `%2F`, so arbitrary registration names cannot collide.
+Separate action operations retain each action's exact payload/result/rejection
+mapping in native RPC clients and handlers. Other tags are the operation name.
+Each request includes source address, protocol version, and source schema version.
 Host routes and Durable Object names are application configuration, not source
 identity. Authentication is carried by the transport and never trusted from an
 actor id in the command payload.
+
+`source.snapshot`, `event`, and `message` are composed schemas. `source.envelope`
+contains snapshot, sequenced event/batch, explicit reset, replay-gap, message, and
+connection-departure schemas. Event confirmation uses an optional
+`command: { actorId, commandId }` stamped by the server, so equal command ids from
+different actors cannot settle one another's intents. Message and departure frames
+have no source position. Convert schemas with `Schema.toCodecJson` at JSON
+boundaries; derived RPC payloads and results already use that conversion.
 
 A submitted command records `{ commandId, address, admittedGeneration, namespace,
 action, schemaVersion, payload }`. The client allocates the id once, snapshots the
@@ -106,6 +122,12 @@ Normal admission requires known authority. A definition may explicitly allow
 admission before hydration; its first authoritative acceptance binds the command
 to a generation. It must not be rebound to a new generation after an ambiguous
 submission.
+
+Each bound action exposes `command`, `outcome`, `lookup`, and `receipt` schemas.
+The receipt contains the exact command, authenticated actor, accepted authority
+generation, a lowercase SHA-256 fingerprint, and the exact typed outcome.
+These are value contracts; fingerprint computation and atomic receipt persistence
+belong to the authoritative runtime stage.
 
 The server deduplication key is `(source authority generation, authenticated
 actor id, command id)`. A fingerprint of the canonical Schema-encoded request
@@ -275,7 +297,7 @@ must not copy them into generic packages just to make source imports compile.
 
 ## Persisted-format and migration scope
 
-This proposal writes no data and resets no formats. During extraction, shared wire version,
+The current contracts write no persisted data and reset no formats. During extraction, shared wire version,
 source authority generation, private-state migration version, and local actor
 persistence generation remain distinct. One must never substitute for another.
 
@@ -305,6 +327,9 @@ storage/platform guarantees. An in-memory test is not Expo or IndexedDB proof.
 Run `vp run ready` for each implementation change and identify unavailable
 required proof. The scaffold's empty suites validate no synchronization behavior.
 
-Implement shared contracts and plugin composition first, then the server and
-headless client runtimes. Local persistence integration builds on the client
+Shared contracts and plugin composition are implemented. Native RPC handler
+composition retains service requirements, and Layer provision subtracts supplied
+services. Server-private definitions, handler/reducer registration checks, atomic
+commits, and all replica behavior still require the server and headless client
+runtimes. Local persistence integration builds on the client
 runtime. Validate complete consumers before publishing a beta.

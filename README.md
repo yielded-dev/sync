@@ -2,9 +2,10 @@
 
 Reusable Effect-native realtime synchronization, owned by [Yielded](https://github.com/yielded-dev).
 
-The workspace, toolchain, and package entry points are ready; the synchronization
-API and runtimes are under development. The
-[public API proposal](docs/PUBLIC_API.md) defines the contract,
+Shared source/action/plugin contracts, Schema envelopes, exact outcome codecs, and
+derived Effect RPC contracts are implemented. Server, client, Atom, and persistence
+runtimes remain under development. The
+[public API document](docs/PUBLIC_API.md) defines the contract,
 [consumer sketch](docs/api/consumer.md), export ownership, and acceptance plan
 for the extraction.
 
@@ -54,8 +55,10 @@ typechecking, tests, and ESM/declaration builds for all four packages.
 | `vp run patch:tsgo`         | Reapply the compiler patch after a script-free install |
 | `vp run changeset`          | Record a consumer-visible change                       |
 
-No runtime tests exist in this scaffold. Test commands allow empty suites until
-behavior is implemented; empty suites provide no synchronization correctness proof.
+Core contract tests exercise composition, codecs, and native RPC integration.
+The [external contracts example](examples/contracts/README.md) typechecks public imports,
+action-specific types, and Effect requirements. Adapter suites remain empty and
+provide no synchronization or persistence correctness proof.
 See [toolchain details](docs/TOOLCHAIN.md) and [contributor guidance](AGENTS.md).
 
 ## Release status

@@ -24,7 +24,7 @@
   "scripts": {
     "build": "vp pack",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vp test --passWithNoTests"
+    "test": "vp test"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
