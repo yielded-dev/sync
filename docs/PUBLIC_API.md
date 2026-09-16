@@ -1,15 +1,14 @@
-# Public API proposal (KOM-203)
+# Public API proposal
 
-This is the reviewable contract for the first extraction step in
-[KOM-202](https://linear.app/reve-ai/issue/KOM-202), before implementing
-[KOM-204](https://linear.app/reve-ai/issue/KOM-204). The package entry points remain
-empty. Names and signatures below describe the proposed API, not shipped exports.
+This document defines the contracts for extracting the synchronization library.
+The package entry points remain empty. Names and signatures below describe the
+proposed API, not shipped exports.
 
 Read the [complete consumer sketch](api/consumer.md) alongside these decisions.
 It defines a counter and a reusable label capability, server-private state,
 authorization, a Cloudflare host, a persistent headless client, and Atom bindings.
-Implementation must turn that sketch into a typechecked external consumer in
-KOM-204–208; this document does not claim compilation or runtime proof for it.
+As the contracts and runtimes are implemented, the sketch must become a
+typechecked external consumer. It does not yet provide compilation or runtime proof.
 
 The source review is pinned to Kommunikasie commit
 [`b13ca58e`](https://github.com/reve-ai/kommunikasie/tree/b13ca58ef08e9ec608d2902f05e3bce1660b81f3):
@@ -36,7 +35,7 @@ applications supply platform HTTP/socket layers. React is not a core dependency.
 Adapters depend inward on core and never on each other.
 
 The repository remains `yielded-dev/sync` and the four manifests stay private
-until KOM-209 configures built exports and beta publication. This design adds no
+until built exports and beta publication are configured. This design adds no
 compatibility re-exports under `@kommunikasie/*`.
 
 ## Source, action, and plugin composition
@@ -276,7 +275,7 @@ must not copy them into generic packages just to make source imports compile.
 
 ## Persisted-format and migration scope
 
-KOM-203 writes no data and resets no formats. During extraction, shared wire version,
+This proposal writes no data and resets no formats. During extraction, shared wire version,
 source authority generation, private-state migration version, and local actor
 persistence generation remain distinct. One must never substitute for another.
 
@@ -286,24 +285,26 @@ covered by that permission. A new package name or changed codec is not permissio
 to wipe retry evidence. Adapter implementations must document physical key/schema
 versions and provide an explicit migration or quarantine path. If a new namespace
 is chosen, old unresolved journals require reconciliation or migration before
-migration is considered complete. Product reset policy is reviewed in KOM-210/211.
+migration is considered complete. Review product reset policy as part of each
+consumer migration.
 
 ## Acceptance plan and next steps
 
-| Issue / boundary               | Focused proof required before handoff                                                                                                                                                                                                                                                                      |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| KOM-204, shared contracts      | Typecheck an external consumer with two capabilities; retain action-specific payload/result/error and unsatisfied Effect requirements; reject duplicate/missing registrations; JSON round-trip rich values and composed frames; build all entry points                                                     |
-| KOM-205, authoritative runtime | Real Worker/SQLite: identical retry returns original result once, conflicting id cannot mutate state, typed rejection repeats, injected commit failure leaves no partial state/event/receipt/outbox, restart restores obligations, replay gaps recover, expired auth is fenced, messages consume no cursor |
-| KOM-206, headless/Atom         | Public boundary: duplicates/gaps, monotonic hydration, rejection rollback, confirmation before result, ambiguous retry with unchanged envelope, generation replacement, source/actor disposal, passive atoms never connect, active atoms share one lease                                                   |
-| KOM-207, persistence           | Real IndexedDB and Expo SQLite: reload/restart retains exact evidence, cache eviction/corruption leaves journal intact, version mismatch quarantines, delayed writers/restore/wipe cannot cross a generation, background flush completes, explicit volatile/custom/memory modes work                       |
-| KOM-208, consumers             | Standalone plus slide-deck pilot: two-client convergence, lost-response recovery, reconnect, reload, and destination projection behavior through public exports                                                                                                                                            |
-| KOM-209–211, release/migration | Built package exports and beta install; published consumer proof; document actual format/reset scope; migrate and remove superseded internal implementations                                                                                                                                               |
+| Boundary                 | Focused proof required before handoff                                                                                                                                                                                                                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared contracts         | Typecheck an external consumer with two capabilities; retain action-specific payload/result/error and unsatisfied Effect requirements; reject duplicate/missing registrations; JSON round-trip rich values and composed frames; build all entry points                                                     |
+| Authoritative runtime    | Real Worker/SQLite: identical retry returns original result once, conflicting id cannot mutate state, typed rejection repeats, injected commit failure leaves no partial state/event/receipt/outbox, restart restores obligations, replay gaps recover, expired auth is fenced, messages consume no cursor |
+| Headless client and Atom | Public boundary: duplicates/gaps, monotonic hydration, rejection rollback, confirmation before result, ambiguous retry with unchanged envelope, generation replacement, source/actor disposal, passive atoms never connect, active atoms share one lease                                                   |
+| Persistence              | Real IndexedDB and Expo SQLite: reload/restart retains exact evidence, cache eviction/corruption leaves journal intact, version mismatch quarantines, delayed writers/restore/wipe cannot cross a generation, background flush completes, explicit volatile/custom/memory modes work                       |
+| Consumers                | Standalone plus slide-deck pilot: two-client convergence, lost-response recovery, reconnect, reload, and destination projection behavior through public exports                                                                                                                                            |
+| Release and migration    | Built package exports and beta install; published consumer proof; document actual format/reset scope; migrate and remove superseded internal implementations                                                                                                                                               |
 
 Use the repository testing skill: commit regression tests at the cheapest faithful
 boundary, use deterministic time for scheduling, and reserve real adapters for
 storage/platform guarantees. An in-memory test is not Expo or IndexedDB proof.
-Each implementation PR runs `vp run ready` and identifies unavailable required
-proof. The scaffold's empty suites validate no synchronization behavior.
+Run `vp run ready` for each implementation change and identify unavailable
+required proof. The scaffold's empty suites validate no synchronization behavior.
 
-Proceed next with KOM-204 using this contract. KOM-207 remains downstream of the
-client runtime in KOM-206; no persistence implementation is included in this PR.
+Implement shared contracts and plugin composition first, then the server and
+headless client runtimes. Local persistence integration builds on the client
+runtime. Validate complete consumers before publishing a beta.

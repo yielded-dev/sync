@@ -2,10 +2,9 @@
 
 Reusable Effect-native realtime synchronization, owned by [Yielded](https://github.com/yielded-dev).
 
-This repository is the scaffold for [KOM-202](https://linear.app/reve-ai/issue/KOM-202).
 The workspace, toolchain, and package entry points are ready; the synchronization
-API and runtimes have not been extracted yet. The
-[KOM-203 public API proposal](docs/PUBLIC_API.md) defines the contract,
+API and runtimes are under development. The
+[public API proposal](docs/PUBLIC_API.md) defines the contract,
 [consumer sketch](docs/api/consumer.md), export ownership, and acceptance plan
 for the extraction.
 
@@ -66,8 +65,7 @@ Changesets defines their eventual shared release group. Package exports resolve 
 TypeScript sources for development, and `vp pack` writes build artifacts to `dist/`.
 There is no automatic npm publication workflow.
 
-Before the first beta in [KOM-209](https://linear.app/reve-ai/issue/KOM-209), configure
-built package exports, remove the private flags, establish prerelease versioning and
+Before the first beta, configure built package exports, remove the private flags, establish prerelease versioning and
 npm publishing, and validate the standalone and slide-deck consumers. The required
 behavioral proof includes convergence, rejection rollback, lost-response retry,
 reconnect, and reload/restart recovery.

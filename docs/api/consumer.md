@@ -1,9 +1,10 @@
 # Consumer API sketch
 
-This is the complete target API example for [KOM-203](../PUBLIC_API.md), not a
-runnable example of today's empty package exports. Effect Schema/Layer/Scope are
-the underlying primitives; `Source`, `Server`, `Client`, and adapter names describe
-the proposed library facade. KOM-204–208 will compile and run this consumer.
+This sketch illustrates the [proposed public API](../PUBLIC_API.md). The package
+exports are currently empty, so the example is not runnable yet. Effect
+Schema/Layer/Scope are the underlying primitives; `Source`, `Server`, `Client`,
+and adapter names describe the proposed library facade. As those APIs are
+implemented, this sketch becomes a typechecked, runnable consumer.
 
 The application owns access checks and HTTP authentication. These are the only
 application-specific dependencies in the sketch; their contracts are shown below.
