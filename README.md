@@ -4,8 +4,10 @@ Reusable Effect-native realtime synchronization, owned by [Yielded](https://gith
 
 This repository is the scaffold for [KOM-202](https://linear.app/reve-ai/issue/KOM-202).
 The workspace, toolchain, and package entry points are ready; the synchronization
-API and runtimes have not been extracted yet. Start API work with
-[KOM-203](https://linear.app/reve-ai/issue/KOM-203).
+API and runtimes have not been extracted yet. The
+[KOM-203 public API proposal](docs/PUBLIC_API.md) defines the contract,
+[consumer sketch](docs/api/consumer.md), export ownership, and acceptance plan
+for the extraction.
 
 ## Packages
 
