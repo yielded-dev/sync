@@ -53,14 +53,15 @@ Every package has its own `vite.config.ts`, pure `typecheck` task, test task, an
 `vp pack` build. Builds produce ESM, declarations, and source maps in ignored `dist/`
 directories. Core's root entry point contains the shared contracts; runtime and
 adapter entry points implement authoritative execution through `./server` and
-the Cloudflare package. Client, Atom and local persistence entry points remain
-empty. The external contracts example participates in
+the Cloudflare package. Client and Atom entry points implement scoped replicas,
+transport/recovery, persistence ports, and view bindings. Local persistence adapter
+entry points remain empty. The external contracts example participates in
 workspace typechecking and has a separate `start` task for its codec smoke check.
 
 `vp run ready` composes static checks, workspace tests, and package builds.
 Tests use Vite+'s Vitest runner; Effect tests can use the catalog-pinned
-`@effect/vitest`. Core has a behavioral contract suite and requires tests to be
-present. The Cloudflare package uses the released Worker pool in its Vite
+`@effect/vitest`. Core has behavioral contract, client, lifecycle, and Atom suites and requires tests
+to be present. The Cloudflare package uses the released Worker pool in its Vite
 configuration and runs tests against the public Cloudflare example. Workerd and
 SQLite provide storage, interruption, eviction, hibernation, and native RPC proof.
 The example's build is a Wrangler dry run and participates in `ready`. Its `types`

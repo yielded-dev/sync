@@ -1,5 +1,12 @@
-/**
- * Client replica runtime and local persistence contracts.
- * Public APIs will be introduced with the extraction from KOM-202.
- */
-export {};
+export * as Client from "./client/Client.ts";
+export { ClientError } from "./client/Model.ts";
+
+export {
+  ReplicaPersistence,
+  PersistenceError,
+  JournalRow,
+  memory,
+  layerMemory,
+  type Handle as PersistenceHandle,
+  type JournalTransaction,
+} from "./client/ReplicaPersistence.ts";

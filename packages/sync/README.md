@@ -27,5 +27,18 @@ never become domain rejections. `Server.commit` only constructs a plan. Changed
 state must have an event. Native host operations use the runtime's Schema-encoded
 `dispatch` and `lookup` transport seams.
 
-The client and Atom entry points remain empty. See the
-[Cloudflare example](../../examples/cloudflare/README.md) for a runnable authority.
+`@yielded/sync/client` exports `Client`, `ReplicaPersistence`, and typed operational
+errors. `Client.definition`/`plugin` register pure reducers; `Client.make` acquires
+an actor runtime with an explicit transport and persistence choice. Scoped
+`open(address)` leases share one coordinator. `ready` waits for authority, then
+`execute(action, payload)` returns that action's exact result or rejection.
+Ambiguous outcomes retain a command id for `retry(id)` without a replacement payload.
+
+`Client.rpcTransport` consumes the application's `RpcClient.Protocol` Layer. It
+adds no platform adapter imports. `@yielded/sync/atom` exports `SourceAtom.make`,
+whose active atoms acquire the same source leases and whose passive atoms never
+connect. Registry disposal releases its leases.
+
+See the [client runtime guide](../../docs/client.md) for lifecycle, retry and
+persistence behavior and the [Cloudflare example](../../examples/cloudflare/README.md)
+for the authority used by the two-client integration test.
