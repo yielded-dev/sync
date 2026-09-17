@@ -3,8 +3,10 @@
 This document defines the contracts for extracting the synchronization library.
 The root entry point implements `Source`, `Action`, `Plugin`, `SourceCatalog`,
 shared identities, envelopes, exact outcome codecs, and derived Effect RPC contracts.
-The server and Cloudflare adapter implement authoritative execution. Client, Atom,
-and local persistence APIs below remain design contracts. The packages remain private.
+The server and Cloudflare adapter implement authoritative execution. The headless
+client and Atom bindings are implemented, with a persistence port and process-local
+memory adapter. Durable local adapters and their storage guarantees remain design
+contracts. The packages remain private.
 
 Read the [complete consumer sketch](api/consumer.md) alongside these decisions.
 It defines a counter and a reusable label capability, server-private state,
@@ -13,7 +15,8 @@ The [external contracts example](../examples/contracts/README.md) now compiles t
 shared composition, action types, and native RPC Effect requirements and runs a
 JSON codec smoke check. The [Cloudflare counter](../examples/cloudflare/README.md)
 runs the server through public exports and is exercised by workerd tests. The
-complete client/Atom runtime sketch is not yet runnable.
+complete browser/Expo assembly still requires the local persistence adapters. See
+the [client runtime guide](client.md) for the implemented API.
 
 The source review is pinned to Kommunikasie commit
 [`b13ca58e`](https://github.com/reve-ai/kommunikasie/tree/b13ca58ef08e9ec608d2902f05e3bce1660b81f3):
@@ -243,9 +246,11 @@ History merges and unversioned observations do not advance cursors or settle wor
 Queue overflow disconnects and recovers; heartbeats detect stale durable progress.
 Retry count, backoff, queue sizes, pending work, and source leases are bounded.
 
-`execute(action, payload)` returns the action's exact success or typed rejection
+`ready` waits for a live authoritative view. `execute(action, payload)` returns the action's exact success or typed rejection
 plus a typed operational error retaining the command id when outcome is unknown.
-`retry(commandId)` accepts no replacement payload. Definite rejection removes the
+`retry(commandId)` accepts no replacement payload and returns the source's union of
+exact action results/rejections, since an arbitrary id does not identify an action
+at typecheck time. Definite rejection removes the
 optimistic overlay; an uncertain result retains retry evidence. Dismissal hides a
 terminal failure from the UI without deleting unresolved work.
 
@@ -353,6 +358,9 @@ composition retains service requirements, and Layer provision subtracts supplied
 services. Server-private definitions, handler registration checks, atomic commits,
 durable exact results, replay, outbox delivery and Cloudflare hosting are implemented.
 The real Worker suite covers failed/interrupted commits, restart/hibernation,
-receipt retention, actor isolation, gaps and ephemeral isolation. Client reducer
-registration and replica behavior still require the headless runtime. Local persistence integration builds on the client
-runtime. Validate complete consumers before publishing a beta.
+receipt retention, actor isolation, gaps and ephemeral isolation. Client reducer registration, replica transitions, immutable command retry,
+confirmation-before-result recovery, explicit generation replacement, scoped
+coordination, native RPC transport and Atom leases are implemented. Memory-backed
+remount tests cover the persistence port; they do not establish process-restart
+durability. Cache scanning/metadata, physical storage migration, cross-process
+fencing, IndexedDB and Expo integration remain adapter work. Validate complete consumers before publishing a beta.

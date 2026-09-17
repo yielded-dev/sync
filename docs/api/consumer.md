@@ -4,8 +4,8 @@ This sketch illustrates the [public API contracts](../PUBLIC_API.md). Shared
 `Source`, `Action`, and `Plugin` definitions are implemented and exercised by the
 [external contracts example](../../examples/contracts/README.md). The server and
 Cloudflare host also run in the [counter example](../../examples/cloudflare/README.md).
-`Client`, Atom, and local persistence still describe the remaining runtime facade,
-so this complete example is not runnable yet. Effect Schema/Layer/Scope are the underlying
+`Client` and Atom are implemented. IndexedDB and Expo sections describe the remaining
+adapters, so the complete persistent browser/Expo assembly is not runnable yet. Effect Schema/Layer/Scope are the underlying
 primitives.
 
 The application owns access checks and HTTP authentication. These are the only
@@ -220,10 +220,7 @@ import { CounterClient } from "./counter-client";
 
 export const openSession = Effect.fn("openSession")(function* (actorId: string) {
   const storage = yield* ReplicaPersistence;
-  const transport = yield* Client.rpcTransport(Counter, {
-    url: "/sync/counters",
-    credentials: "include",
-  });
+  const transport = yield* Client.rpcTransport(Counter);
   return yield* Client.make(CounterClient, {
     actorId,
     transport,
@@ -240,9 +237,10 @@ export const browserSession = (actorId: string) =>
   );
 ```
 
-`rpcTransport` uses contract-derived Effect RPC clients. Its platform HTTP/socket
-requirements remain in the returned Effect and are supplied by the browser app's
-Effect platform Layers. IndexedDB supplies only persistence. This session effect
+`rpcTransport` uses contract-derived Effect RPC clients and requires `RpcClient.Protocol`
+and `Scope`. The application supplies a socket protocol Layer, JSON RPC serialization,
+the authenticated socket, and its lifetime. Routes and credentials belong in that Layer.
+Provide it around the session lifetime, or build it in the session scope with `Layer.build`. IndexedDB supplies only persistence. This session effect
 requires `Scope`: the caller retains that scope for the session and closes it on
 identity change. Do not return a live client from an already-completed
 `Effect.scoped` block.
@@ -263,6 +261,7 @@ import { Counter } from "./counter";
 // session is the Client.make result above. This Effect runs in its child scope.
 const run = Effect.gen(function* () {
   const replica = yield* session.open(Counter.address("demo"));
+  yield* replica.ready;
   yield* replica.changes.pipe(
     Stream.runForEach((state) => Effect.log(state)),
     Effect.forkScoped,
@@ -299,7 +298,8 @@ const setSeven = atoms.execute(address, Counter.actions.set, { value: 7 });
 const recover = atoms.recover(address);
 ```
 
-The UI reads atoms with its Effect Atom bindings and dispatches the mutation and
+Active and passive replica atoms expose `AsyncResult` values; status atoms expose the
+connection string. The UI reads them with its Effect Atom bindings and dispatches the mutation and
 recovery Effects through its existing runtime. The binding creates a child scope
 for each active lease; registry unmount/disposal releases it. Headless and Atom
 leases share the same coordinator. Passive reads, snapshot eviction, and source
