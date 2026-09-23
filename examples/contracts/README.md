@@ -14,7 +14,7 @@ vp run --filter @yielded/example-contracts start
 
 Typechecking verifies action payload/result/rejection correlation, duplicate and
 missing registration rejection, and service requirements through native RPC and
-Layer composition. `start` round-trips the public snapshot and checks its encoded
-JSON shape. `vp run ready` includes the example's typechecks and the core contract
-tests. This example supplies contract evidence; two-client convergence, retries,
-reconnect, and durable recovery await the runtime implementations.
+Layer composition, headless client action types, and Atom mutations. `start`
+round-trips the public snapshot and checks its encoded JSON shape. `vp run ready`
+includes these typechecks. Runtime behavior and persistence boundaries are covered
+in the [client guide](../../docs/client.md).

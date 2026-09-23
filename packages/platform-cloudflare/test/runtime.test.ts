@@ -1,4 +1,5 @@
 import { ProtocolError } from "@yielded/sync";
+import { Client, ClientError } from "@yielded/sync/client";
 import {
   SELF,
   env,
@@ -13,7 +14,7 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { Socket } from "effect/unstable/socket";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { Counter } from "../../../examples/cloudflare/src/contract.ts";
+import { Counter, Label } from "../../../examples/cloudflare/src/contract.ts";
 import type { CounterObject } from "../../../examples/cloudflare/src/worker.ts";
 
 const bindings = env as { COUNTERS: DurableObjectNamespace<InstanceType<typeof CounterObject>> };
@@ -66,9 +67,113 @@ const command = (generation: string, commandId: string, payload: number) => ({
   payload,
 });
 
+const socketProtocol = (actorId: string) =>
+  RpcClient.layerProtocolSocket({ retryTransientErrors: false }).pipe(
+    Layer.provide(
+      Layer.effect(
+        Socket.Socket,
+        Socket.fromWebSocket(
+          Effect.acquireRelease(
+            Effect.gen(function* () {
+              const upgraded = yield* Effect.promise(() =>
+                SELF.fetch("https://example.test/sync/counters/test", {
+                  headers: { upgrade: "websocket", authorization: `Bearer ${actorId}-local` },
+                }),
+              );
+
+              const websocket = upgraded.webSocket;
+
+              if (websocket === null) return yield* Effect.die("Upgrade failed");
+              websocket.accept();
+
+              return websocket;
+            }),
+            (socket) => Effect.sync(() => socket.close(1000)),
+          ),
+        ),
+      ),
+    ),
+    Layer.provide(RpcSerialization.layerJson),
+  );
+
 afterEach(() => reset());
 
 describe("public source on a SQLite Durable Object", () => {
+  it("converges headless clients and recovers an exact result lost after a durable commit", async () => {
+    const definition = Client.definition(Counter, {
+      applyEvent: (_snapshot, event) => event,
+      optimistic: { set: (_snapshot, value) => ({ value }) },
+      plugins: [
+        Client.plugin(Label, {
+          applyEvent: (_snapshot, event) => event,
+          optimistic: { rename: (_snapshot, text) => ({ text }) },
+        }),
+      ],
+    });
+
+    const open = Effect.fn("test.openClient")(function* (actorId: string, loseResponse: boolean) {
+      const services = yield* Layer.build(socketProtocol(actorId));
+      const transport = yield* Client.rpcTransport(Counter).pipe(Effect.provideContext(services));
+
+      const client = yield* Client.make(definition, {
+        actorId,
+        persistence: { mode: "volatile" },
+        transport: {
+          ...transport,
+          execute: (command) =>
+            transport.execute(command).pipe(
+              Effect.filterOrFail(
+                () => !loseResponse,
+                () =>
+                  ProtocolError.make({
+                    reason: "Unavailable",
+                    message: "Response lost after commit",
+                  }),
+              ),
+            ),
+        },
+      });
+
+      return yield* client.open(address);
+    });
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const alice = yield* open("alice", true);
+          const bob = yield* open("bob", false);
+
+          yield* alice.ready;
+          yield* bob.ready;
+          const result = yield* Effect.result(alice.execute(Counter.actions.set, 7));
+
+          if (
+            result._tag !== "Failure" ||
+            !Schema.is(ClientError)(result.failure) ||
+            result.failure.commandId === undefined
+          ) {
+            return yield* Effect.die("Expected an ambiguous command with retained identity");
+          }
+          yield* bob.changes.pipe(
+            Stream.filter((state) => state.value?.source.value === 7),
+            Stream.take(1),
+            Stream.runDrain,
+          );
+          yield* Effect.promise(() => evictDurableObject(stub()));
+          expect(yield* alice.retry(result.failure.commandId)).toEqual({ previous: 0, current: 7 });
+          expect(yield* bob.execute(Counter.plugins.label.actions.rename, "shared")).toBe("shared");
+          yield* alice.changes.pipe(
+            Stream.filter((state) => state.value?.plugins.label.text === "shared"),
+            Stream.take(1),
+            Stream.runDrain,
+          );
+          expect((yield* alice.read).value).toEqual((yield* bob.read).value);
+          expect((yield* alice.read).authoritative?.position.cursor).toBe(2);
+        }),
+      ),
+    );
+  });
+
   it("serves the source's generated Effect RPC client through the authenticated Worker", async () => {
     const transport = RpcClient.layerProtocolHttp({
       url: "https://example.test/sync/counters/test",
@@ -324,29 +429,6 @@ describe("hibernating subscriptions", () => {
   });
 
   it("supports generated streaming RPC clients and acknowledgements across hibernation", async () => {
-    const upgraded = await SELF.fetch("https://example.test/sync/counters/test", {
-      headers: { upgrade: "websocket", authorization: "Bearer alice-local" },
-    });
-
-    const websocket = upgraded.webSocket;
-
-    if (websocket === null) throw new Error("Upgrade failed");
-    websocket.accept();
-
-    const transport = RpcClient.layerProtocolSocket({ retryTransientErrors: false }).pipe(
-      Layer.provide(
-        Layer.effect(
-          Socket.Socket,
-          Socket.fromWebSocket(
-            Effect.acquireRelease(Effect.succeed(websocket), (socket) =>
-              Effect.sync(() => socket.close(1000)),
-            ),
-          ),
-        ),
-      ),
-      Layer.provide(RpcSerialization.layerJson),
-    );
-
     await Effect.runPromise(
       Effect.gen(function* () {
         const client = yield* RpcClient.make(Counter.rpc, { flatten: true });
@@ -395,7 +477,7 @@ describe("hibernating subscriptions", () => {
           "Event",
           "Message",
         ]);
-      }).pipe(Effect.provide(transport), Effect.scoped),
+      }).pipe(Effect.provide(socketProtocol("alice")), Effect.scoped),
     );
   });
 

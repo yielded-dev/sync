@@ -53,14 +53,15 @@ Every package has its own `vite.config.ts`, pure `typecheck` task, test task, an
 `vp pack` build. Builds produce ESM, declarations, and source maps in ignored `dist/`
 directories. Core's root entry point contains the shared contracts; runtime and
 adapter entry points implement authoritative execution through `./server` and
-the Cloudflare package. Client, Atom and local persistence entry points remain
-empty. The external contracts example participates in
+the Cloudflare package. Client and Atom entry points implement scoped replicas,
+transport/recovery, persistence ports, and view bindings. Local persistence adapter
+entry points remain empty. The external contracts example participates in
 workspace typechecking and has a separate `start` task for its codec smoke check.
 
 `vp run ready` composes static checks, workspace tests, and package builds.
 Tests use Vite+'s Vitest runner; Effect tests can use the catalog-pinned
-`@effect/vitest`. Core has a behavioral contract suite and requires tests to be
-present. The Cloudflare package uses the released Worker pool in its Vite
+`@effect/vitest`. Core has behavioral contract, client, lifecycle, and Atom suites and requires tests
+to be present. The Cloudflare package uses the released Worker pool in its Vite
 configuration and runs tests against the public Cloudflare example. Workerd and
 SQLite provide storage, interruption, eviction, hibernation, and native RPC proof.
 The example's build is a Wrangler dry run and participates in `ready`. Its `types`
@@ -92,8 +93,8 @@ workflow dispatch accepts a PR number and starts a full review.
 The privileged review job checks out only default-branch guidance and never runs
 PR code or dependency installation. It uses `GITHUB_TOKEN` to publish feedback and
 the `Effect Agent review` check, with `AGENTS.md` as repository guidance. No GitHub
-App secrets are required. Reviews use `gpt-6-astra` with medium reasoning and
-standard processing, at most two automatic attempts per PR, a $1 base allowance,
+App secrets are required. Reviews use `gpt-6-sol` with high reasoning and
+Fast mode, at most five automatic attempts per PR, a $1 base allowance,
 and a $2.50 ceiling per attempt. Manual attempts have the same spending ceiling.
 The check reports blockers and incomplete coverage; it is separate from the
 required `ready` CI job.
