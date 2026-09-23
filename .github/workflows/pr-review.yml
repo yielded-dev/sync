@@ -56,7 +56,7 @@ jobs:
           command: ${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}
           comment-id: ${{ github.event.comment.id || 0 }}
           expected-head: ${{ github.event.pull_request.head.sha || '' }}
-          automatic-review-limit: 2
+          automatic-review-limit: 5
           guidance-file: AGENTS.md
           model: gpt-6-sol
           effort: high
