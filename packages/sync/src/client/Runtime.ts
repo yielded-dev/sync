@@ -885,6 +885,8 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
           entry.scope = undefined;
           entry.epoch += 1;
+          // A fenced commit can finish journaling without publishing its in-memory state.
+          entry.restored = false;
           if (scope !== undefined) yield* Scope.close(scope, Exit.void);
           entry.run = undefined;
           entry.messages = undefined;

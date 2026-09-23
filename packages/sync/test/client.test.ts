@@ -1,7 +1,13 @@
 import { it } from "@effect/vitest";
 import { Action, Plugin, ProtocolError, RegistrationError, Source } from "@yielded/sync";
 import { SourceAtom } from "@yielded/sync/atom";
-import { Client, ClientError, memory, type PersistenceHandle } from "@yielded/sync/client";
+import {
+  Client,
+  ClientError,
+  memory,
+  type JournalRow,
+  type PersistenceHandle,
+} from "@yielded/sync/client";
 import { Deferred, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { AtomRegistry } from "effect/unstable/reactivity";
@@ -768,6 +774,114 @@ it.effect(
         yield* fresh.ready;
         expect((yield* fresh.read).pending).toEqual([]);
         expect((yield* fresh.read).value?.source.value).toBe(0);
+      }),
+    ),
+);
+
+it.effect.each(["admission", "confirmation"] as const)(
+  "reloads journal %s committed while the last source lease is closing",
+  (transition) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const remote = yield* server;
+        const storage = yield* memory().open("alice");
+        const writing = yield* Deferred.make<Client.Intent>();
+        const finishWrite = yield* Deferred.make<void>();
+        const finishLookup = yield* Deferred.make<void>();
+        const sourceScope = yield* Scope.make();
+
+        const delayCommit = Effect.fn("delayCommit")(function* (row: JournalRow) {
+          yield* Deferred.succeed(
+            writing,
+            yield* Schema.decodeEffect(Schema.toCodecJson(Client.Intent))(row.value).pipe(
+              Effect.orDie,
+            ),
+          );
+          yield* Deferred.await(finishWrite);
+        });
+
+        remote.drop(transition === "confirmation");
+
+        const client = yield* Client.make(
+          definition,
+          options(
+            {
+              ...remote.transport,
+              result: (command) =>
+                Deferred.await(finishLookup).pipe(Effect.andThen(remote.transport.result(command))),
+            },
+            {
+              ...storage,
+              intentJournal: {
+                transaction: (f) =>
+                  storage.intentJournal.transaction((tx) =>
+                    f({
+                      ...tx,
+                      put: (row) =>
+                        tx
+                          .put(row)
+                          .pipe(
+                            Effect.andThen(
+                              transition === "admission" ? delayCommit(row) : Effect.void,
+                            ),
+                          ),
+                      replace: (row) =>
+                        tx
+                          .replace(row)
+                          .pipe(
+                            Effect.andThen(
+                              transition === "confirmation" ? delayCommit(row) : Effect.void,
+                            ),
+                          ),
+                    }),
+                  ),
+              },
+            },
+          ),
+        );
+
+        const lease = yield* client.open(address).pipe(Scope.provide(sourceScope));
+
+        yield* lease.ready;
+
+        const response = yield* lease
+          .execute(Counter.actions.add, { amount: 3 })
+          .pipe(Effect.forkChild);
+
+        const intent = yield* Deferred.await(writing);
+        const closing = yield* Scope.close(sourceScope, Exit.void).pipe(Effect.forkChild);
+
+        yield* tick;
+        expect(yield* Effect.result(lease.read)).toMatchObject({
+          _tag: "Failure",
+          failure: { reason: "Closed" },
+        });
+        yield* Deferred.succeed(finishWrite, undefined);
+        yield* Fiber.join(closing);
+        expect((yield* Fiber.await(response))._tag).toBe("Failure");
+        expect(remote.calls).toEqual(transition === "admission" ? [] : [intent.command]);
+        expect(
+          yield* storage.intentJournal.transaction((tx) =>
+            tx.get(address, intent.command.commandId),
+          ),
+        ).toMatchObject({ value: intent });
+
+        const reopened = yield* client.open(address);
+
+        yield* reopened.ready;
+        expect((yield* reopened.read).pending).toEqual([
+          {
+            commandId: intent.command.commandId,
+            phase: transition === "admission" ? "Pending" : "ConfirmedAwaitingResult",
+          },
+        ]);
+        expect((yield* reopened.read).value?.source.value).toBe(3);
+        yield* Deferred.succeed(finishLookup, undefined);
+        expect(yield* reopened.retry(intent.command.commandId)).toEqual({ before: 0, after: 3 });
+        yield* stateWhere(reopened, (state) => state.pending.length === 0);
+        expect(remote.lookups[0]).toEqual(intent.command);
+        expect(remote.calls).toEqual([intent.command]);
+        expect(yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10))).toEqual([]);
       }),
     ),
 );
