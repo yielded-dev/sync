@@ -4,8 +4,8 @@ This sketch illustrates the [public API contracts](../PUBLIC_API.md). Shared
 `Source`, `Action`, and `Plugin` definitions are implemented and exercised by the
 [external contracts example](../../examples/contracts/README.md). The server and
 Cloudflare host also run in the [counter example](../../examples/cloudflare/README.md).
-`Client` and Atom are implemented. IndexedDB and Expo sections describe the remaining
-adapters, so the complete persistent browser/Expo assembly is not runnable yet. Effect Schema/Layer/Scope are the underlying
+`Client`, Atom, IndexedDB and Expo SQLite are implemented. The persistence sections
+use scoped adapters with explicit application namespaces. Effect Schema/Layer/Scope are the underlying
 primitives.
 
 The application owns access checks and HTTP authentication. These are the only

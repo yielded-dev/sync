@@ -1,0 +1,24 @@
+{
+  "name": "@yielded/sync-example-persistence-expo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --localhost --port 8097",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yielded/sync": "workspace:*",
+    "@yielded/sync-local-expo": "workspace:*",
+    "effect": "catalog:",
+    "expo": "catalog:",
+    "expo-sqlite": "catalog:",
+    "react": "catalog:",
+    "react-native": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "typescript": "catalog:"
+  }
+}

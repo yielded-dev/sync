@@ -6,7 +6,7 @@ Shared source/action/plugin contracts, Schema envelopes, exact outcome codecs, a
 derived Effect RPC contracts, the authoritative server runtime, and the Cloudflare
 SQLite/Durable Object adapter, scoped headless client, and Effect Atom bindings are
 implemented. The client includes explicit volatile and custom persistence modes and
-a process-local memory adapter. IndexedDB and Expo persistence remain under development. The
+a process-local memory adapter. Durable IndexedDB and Expo SQLite adapters are implemented. The
 [public API document](docs/PUBLIC_API.md) defines the contract,
 [consumer sketch](docs/api/consumer.md), export ownership, and acceptance plan
 for the extraction.
@@ -38,6 +38,7 @@ The repository pins Bun 1.4.0, matching Effect Agent.
 
 ```sh
 vp install
+vp -C packages/local-indexeddb exec playwright install chromium
 vp run ready
 ```
 

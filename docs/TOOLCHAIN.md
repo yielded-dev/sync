@@ -3,19 +3,22 @@
 This repository follows Effect Agent's Bun workspace and Vite+ conventions.
 The root `package.json` catalog is the source of truth for exact shared versions.
 
-| Tool                        | Version        |
-| --------------------------- | -------------- |
-| Bun                         | `1.4.0`        |
-| Vite+                       | `0.3.0`        |
-| Effect                      | `4.0.0-rc.112` |
-| Effect Vitest               | `4.0.0-rc.112` |
-| TypeScript                  | `7.0.2`        |
-| Effect TypeScript-Go        | `0.45.0`       |
-| effect-cf                   | `0.42.1`       |
-| Effect SQLite DO / D1       | `4.0.0-rc.112` |
-| Cloudflare Worker test pool | `0.22.0`       |
-| Cloudflare Workers types    | `5.20260825.1` |
-| Wrangler                    | `4.133.0`      |
+| Tool                        | Version              |
+| --------------------------- | -------------------- |
+| Bun                         | `1.4.0`              |
+| Vite+                       | `0.3.0`              |
+| Effect                      | `4.0.0-rc.112`       |
+| Effect Vitest               | `4.0.0-rc.112`       |
+| TypeScript                  | `7.0.2`              |
+| Effect TypeScript-Go        | `0.45.0`             |
+| effect-cf                   | `0.42.1`             |
+| Effect SQLite DO / D1       | `4.0.0-rc.112`       |
+| Cloudflare Worker test pool | `0.22.0`             |
+| Cloudflare Workers types    | `5.20260825.1`       |
+| Wrangler                    | `4.133.0`            |
+| Expo / Expo SQLite          | `57.0.24` / `57.0.3` |
+| React / React Native        | `19.2.3` / `0.86.3`  |
+| Playwright                  | `1.58.2`             |
 
 Effect and Effect Vitest stay aligned on rc.112, the last release whose test
 helper supports Vite+'s Vitest 4 runner. rc.113+ requires Vitest 5 and changes
@@ -55,7 +58,7 @@ directories. Core's root entry point contains the shared contracts; runtime and
 adapter entry points implement authoritative execution through `./server` and
 the Cloudflare package. Client and Atom entry points implement scoped replicas,
 transport/recovery, persistence ports, and view bindings. Local persistence adapter
-entry points remain empty. The external contracts example participates in
+entry points provide scoped IndexedDB and Expo SQLite handles. The external contracts example participates in
 workspace typechecking and has a separate `start` task for its codec smoke check.
 
 `vp run ready` composes static checks, workspace tests, and package builds.
@@ -67,7 +70,12 @@ SQLite provide storage, interruption, eviction, hibernation, and native RPC proo
 The example's build is a Wrangler dry run and participates in `ready`. Its `types`
 task generates binding declarations; pinned Workers types supply the runtime
 declarations. Generated bindings are excluded from formatting and linting.
-Empty suites remain allowed for the two local persistence adapters.
+The IndexedDB suite runs Chromium with Playwright through Vite+; install Chromium
+with `vp -C packages/local-indexeddb exec playwright install chromium`. CI installs
+the browser and its system dependencies explicitly. The Expo adapter suite uses
+real file-backed Node SQLite through the Expo API subset. The Expo Go probe in
+`examples/persistence-expo` is a separate native bridge/restart check and participates
+in workspace typechecking.
 
 Vite Task caches successful script results. Vitest's mutable result cache is
 disabled to avoid invalidating task inputs. Use `vp run --no-cache <task>` when

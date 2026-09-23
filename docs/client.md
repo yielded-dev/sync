@@ -120,10 +120,25 @@ factory to retain records across scopes. `ReplicaPersistence.layerMemory({ actor
 is a convenience Layer. A wipe invalidates old handles; reopen the factory to
 capture the new generation. The memory adapter is not restart durability.
 
-IndexedDB/Expo storage, cache scan/metadata APIs, migrations, and cross-process
-storage fencing remain adapter work. The memory and custom-port tests do not
-establish those platform guarantees. Session disposal retains journal evidence;
-logout deletion is an explicit application policy.
+`IndexedDb.open({ namespace, actorId })` and `ExpoSqlite.open({ namespace, actorId })`
+acquire durable storage in an Effect scope. Their `layer(options)` constructors
+provide `ReplicaPersistence`. Durable handles add bounded oldest-write-first
+`snapshotCache.scan(limit)` metadata. Configure `maxJournalRows`, `maxSnapshots`
+and `maxBytes` explicitly when the defaults do not fit the application.
+
+Adapters use separate cache/journal databases and atomic generation/revision checks.
+A concurrent journal commit returns `Conflict` without replaying the callback.
+Journal formats fail closed and retain evidence; malformed cache records can be
+replaced. Applications own background lifecycle hooks and can await `session.flush`;
+they need no unload write for initial journal admission. Session disposal retains
+journal evidence, and logout deletion remains an explicit application policy.
+
+See the [IndexedDB](../packages/local-indexeddb/README.md) and
+[Expo SQLite](../packages/local-expo/README.md) adapter guides for physical names,
+format versions, reset scope and platform proof. There is no automatic migration
+from application-owned databases or namespaces. The portable `Persistence` helper
+is available for adapter authors implementing atomic string-record stores; custom
+consumers may continue implementing the smaller `PersistenceHandle` directly.
 
 ## Atom bindings
 
