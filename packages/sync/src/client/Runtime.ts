@@ -134,10 +134,9 @@ interface Entry {
   leases: number;
   epoch: number;
   order: number;
-  restored: boolean;
   recoveryGeneration: string | undefined;
   dirty: boolean;
-  readonly settled: Map<string, { readonly action: BoundAction; readonly outcome: unknown }>;
+  readonly settled: Map<string, unknown>;
   readonly recoveryAttempts: Map<string, number>;
   messages: PubSub.PubSub<ReplicaState.Frame> | undefined;
 }
@@ -388,11 +387,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
   });
 
   const restore = Effect.fn("Client.restore")(function* (entry: Entry, epoch: number) {
-    if (entry.restored || storage === undefined) {
-      entry.restored = true;
-
-      return;
-    }
+    if (storage === undefined) return;
 
     const rows = yield* persistence(
       storage.intentJournal.transaction((tx) =>
@@ -465,7 +460,6 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     }
     yield* assertOpen(entry, epoch);
     entry.state = { ...entry.state, intents, quarantined };
-    entry.restored = true;
     yield* signal;
   });
 
@@ -556,7 +550,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
       return ReplicaState.reflected({ ...state, intents });
     });
-    entry.settled.set(id, { action, outcome });
+    entry.settled.set(id, outcome);
     while (entry.settled.size > limits.maxPendingPerSource) {
       const oldest = entry.settled.keys().next();
 
@@ -572,7 +566,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       yield* assertOpen(entry, epoch);
       const remembered = entry.settled.get(id);
 
-      if (remembered !== undefined) return remembered.outcome;
+      if (remembered !== undefined) return remembered;
       if (entry.state.quarantined.has(id))
         return yield* error(
           "Quarantined",
@@ -828,7 +822,6 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             leases: 0,
             epoch: 0,
             order: 0,
-            restored: false,
             recoveryGeneration: undefined,
             dirty: false,
             settled: new Map(),
@@ -855,6 +848,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
                 capacity: limits.frameBuffer,
               });
               yield* Scope.addFinalizer(sourceScope, PubSub.shutdown(active.messages));
+              // Reopening reloads commits that finished journaling after the old scope was fenced.
               yield* restore(active, epoch);
               yield* restoreCache(active, epoch).pipe(
                 Effect.catch((failure) =>
@@ -885,8 +879,6 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
           entry.scope = undefined;
           entry.epoch += 1;
-          // A fenced commit can finish journaling without publishing its in-memory state.
-          entry.restored = false;
           if (scope !== undefined) yield* Scope.close(scope, Exit.void);
           entry.run = undefined;
           entry.messages = undefined;

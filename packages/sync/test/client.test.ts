@@ -789,6 +789,7 @@ it.effect.each(["admission", "confirmation"] as const)(
         const finishWrite = yield* Deferred.make<void>();
         const finishLookup = yield* Deferred.make<void>();
         const sourceScope = yield* Scope.make();
+        const write = transition === "admission" ? "put" : "replace";
 
         const delayCommit = Effect.fn("delayCommit")(function* (row: JournalRow) {
           yield* Deferred.succeed(
@@ -817,22 +818,8 @@ it.effect.each(["admission", "confirmation"] as const)(
                   storage.intentJournal.transaction((tx) =>
                     f({
                       ...tx,
-                      put: (row) =>
-                        tx
-                          .put(row)
-                          .pipe(
-                            Effect.andThen(
-                              transition === "admission" ? delayCommit(row) : Effect.void,
-                            ),
-                          ),
-                      replace: (row) =>
-                        tx
-                          .replace(row)
-                          .pipe(
-                            Effect.andThen(
-                              transition === "confirmation" ? delayCommit(row) : Effect.void,
-                            ),
-                          ),
+                      [write]: (row: JournalRow) =>
+                        tx[write](row).pipe(Effect.andThen(delayCommit(row))),
                     }),
                   ),
               },
