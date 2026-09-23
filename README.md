@@ -57,15 +57,10 @@ typechecking, tests, and ESM/declaration builds for all four packages.
 | `vp run patch:tsgo`         | Reapply the compiler patch after a script-free install |
 | `vp run changeset`          | Record a consumer-visible change                       |
 
-Core tests exercise composition, codecs, scoped server services, replica ordering, exact
-client retries, journal admission, actor/source disposal, and Atom leases.
-The [external contracts example](examples/contracts/README.md) typechecks public imports,
-action-specific types, and Effect requirements. The [Cloudflare counter](examples/cloudflare/README.md)
-runs through public exports. Its workerd tests exercise exact retries, interrupted
-and failed transactions, outbox recovery, replay gaps, authentication fencing, and
-hibernating native RPC subscriptions. Two headless clients converge through that adapter
-and recover a lost result after eviction. Local persistence adapter suites remain empty.
-See [toolchain details](docs/TOOLCHAIN.md) and [contributor guidance](AGENTS.md).
+The [external contracts example](examples/contracts/README.md) demonstrates typed
+public imports; the [Cloudflare counter](examples/cloudflare/README.md) is a runnable
+authority. See the [client guide](docs/client.md) for headless and Atom usage,
+[toolchain details](docs/TOOLCHAIN.md) for verification, and [contributor guidance](AGENTS.md).
 
 ## Release status
 

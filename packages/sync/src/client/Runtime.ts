@@ -14,12 +14,12 @@ import {
 } from "effect";
 
 import type * as Action from "../Action.ts";
-import { ActorId, type ProtocolError, type SourceAddress } from "../Model.ts";
+import { ActorId, type ActionOutcome, type ProtocolError, type SourceAddress } from "../Model.ts";
 import type * as Source from "../Source.ts";
 import type { Definition, Slot } from "./Definition.ts";
 import {
   ClientError,
-  EncodedCommand,
+  type EncodedCommand,
   Intent,
   copyJson,
   decode,
@@ -49,6 +49,7 @@ type BoundAction = Omit<
   Action.Bound<string, number, string, Action.Definition>,
   "execute" | "result"
 >;
+type Outcome = ActionOutcome<unknown, unknown>;
 
 export interface Limits {
   readonly maxSources: number;
@@ -132,11 +133,10 @@ interface Entry {
   run: Fiber.Fiber<void> | undefined;
   readonly restart: Semaphore.Semaphore;
   leases: number;
-  epoch: number;
   order: number;
   recoveryGeneration: string | undefined;
   dirty: boolean;
-  readonly settled: Map<string, unknown>;
+  readonly settled: Map<string, Outcome>;
   readonly recoveryAttempts: Map<string, number>;
   messages: PubSub.PubSub<ReplicaState.Frame> | undefined;
 }
@@ -208,7 +208,6 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
   const leases = Semaphore.makeUnsafe(1);
   const changed = yield* PubSub.sliding<void>({ capacity: 1, replay: 1 });
   const saves = yield* Queue.make<void>({ capacity: 1, strategy: "dropping" });
-  let closed = false;
 
   yield* PubSub.publish(changed, undefined);
 
@@ -248,9 +247,13 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       Effect.mapError((failure) => error("Storage", failure.message, commandId)),
     );
 
-  const assertOpen = (entry?: Entry, epoch?: number) =>
+  const assertOpen = (entry?: Entry, sourceScope?: Scope.Closeable) =>
     Effect.suspend(() =>
-      closed || (entry !== undefined && (entry.scope === undefined || entry.epoch !== epoch))
+      sessionScope.state._tag === "Closed" ||
+      (entry !== undefined &&
+        (sourceScope === undefined ||
+          entry.scope !== sourceScope ||
+          sourceScope.state._tag === "Closed"))
         ? Effect.fail(error("Closed", "Source or actor scope is closed"))
         : Effect.void,
     );
@@ -290,10 +293,10 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
   const commit = Effect.fn("Client.commit")(
     function* (
       entry: Entry,
-      epoch: number,
+      sourceScope: Scope.Closeable,
       change: (state: ReplicaState.State) => ReplicaState.State,
     ) {
-      yield* assertOpen(entry, epoch);
+      yield* assertOpen(entry, sourceScope);
       const previous = entry.state;
 
       const next = yield* Effect.try({
@@ -331,7 +334,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             ),
           );
       }
-      yield* assertOpen(entry, epoch);
+      yield* assertOpen(entry, sourceScope);
       entry.state = next;
       if (next.authoritative !== previous.authoritative) {
         entry.dirty = true;
@@ -344,7 +347,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
   const acceptFrame = Effect.fn("Client.frame")(function* (
     entry: Entry,
-    epoch: number,
+    sourceScope: Scope.Closeable,
     encoded: Schema.Json,
   ) {
     const frame = yield* decode(wire.envelope.outbound, encoded);
@@ -352,14 +355,16 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     if (keyOf(frame.address) !== keyOf(entry.address))
       return yield* error("InvalidValue", "Frame belongs to another source");
     if (frame._tag === "Message" || frame._tag === "MessageLeave") {
-      yield* assertOpen(entry, epoch);
+      yield* assertOpen(entry, sourceScope);
       if (entry.messages !== undefined) yield* PubSub.publish(entry.messages, frame);
 
       return;
     }
     if (frame._tag === "ResyncRequired")
       entry.recoveryGeneration = frame.position.sourceAuthorityGeneration;
-    yield* commit(entry, epoch, (state) => ReplicaState.frame(state, entry.slots, actorId, frame));
+    yield* commit(entry, sourceScope, (state) =>
+      ReplicaState.frame(state, entry.slots, actorId, frame),
+    );
     if (entry.state.connection === "recovering")
       return yield* entry.state.error ?? error("Gap", "Source needs recovery");
   });
@@ -386,7 +391,10 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     for (const entry of entries.values()) yield* flushEntry(entry);
   });
 
-  const restore = Effect.fn("Client.restore")(function* (entry: Entry, epoch: number) {
+  const restore = Effect.fn("Client.restore")(function* (
+    entry: Entry,
+    sourceScope: Scope.Closeable,
+  ) {
     if (storage === undefined) return;
 
     const rows = yield* persistence(
@@ -458,12 +466,15 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       intents.set(row.commandId, intent);
       entry.order = Math.max(entry.order, intent.order + 1);
     }
-    yield* assertOpen(entry, epoch);
+    yield* assertOpen(entry, sourceScope);
     entry.state = { ...entry.state, intents, quarantined };
     yield* signal;
   });
 
-  const restoreCache = Effect.fn("Client.restoreCache")(function* (entry: Entry, epoch: number) {
+  const restoreCache = Effect.fn("Client.restoreCache")(function* (
+    entry: Entry,
+    sourceScope: Scope.Closeable,
+  ) {
     if (storage === undefined) return;
     const cached = yield* persistence(storage.snapshotCache.get(entry.address));
 
@@ -475,7 +486,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
       return;
     }
-    yield* commit(entry, epoch, (state) =>
+    yield* commit(entry, sourceScope, (state) =>
       state.authoritative === undefined
         ? { ...state, provisional: result.success.snapshot }
         : state,
@@ -484,10 +495,10 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
   const recordFailure = Effect.fn("Client.failure")(function* (
     entry: Entry,
-    epoch: number,
+    sourceScope: Scope.Closeable,
     failure: ClientError,
   ) {
-    yield* commit(entry, epoch, (state) => ({
+    yield* commit(entry, sourceScope, (state) => ({
       ...state,
       error: failure,
       connection:
@@ -502,12 +513,11 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
   const settle = Effect.fn("Client.settle")(function* (
     entry: Entry,
-    epoch: number,
+    sourceScope: Scope.Closeable,
     action: BoundAction,
     intent: Intent,
-    encoded: Schema.Json,
+    outcome: Outcome,
   ) {
-    const outcome = yield* decode(action.outcome, encoded);
     const id = intent.command.commandId;
 
     if (outcome._tag === "Succeeded") {
@@ -525,7 +535,9 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         );
       }
     }
-    yield* commit(entry, epoch, (state) => {
+    const encoded = outcome._tag === "Succeeded" ? yield* encode(action.outcome, outcome) : null;
+
+    yield* commit(entry, sourceScope, (state) => {
       const intents = new Map(state.intents);
 
       if (outcome._tag === "Rejected") {
@@ -562,8 +574,8 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
   });
 
   const send = Effect.fn("Client.send")(
-    function* (entry: Entry, epoch: number, id: string, lookup: boolean) {
-      yield* assertOpen(entry, epoch);
+    function* (entry: Entry, sourceScope: Scope.Closeable, id: string, lookup: boolean) {
+      yield* assertOpen(entry, sourceScope);
       const remembered = entry.settled.get(id);
 
       if (remembered !== undefined) return remembered;
@@ -603,13 +615,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         ).pipe(Effect.flatMap((value) => decode(action.lookup, value)));
 
         if (result._tag === "Found")
-          return yield* settle(
-            entry,
-            epoch,
-            action,
-            intent,
-            yield* encode(action.outcome, result.outcome),
-          );
+          return yield* settle(entry, sourceScope, action, intent, result.outcome);
         if (
           result._tag === "Expired" ||
           intent.boundGeneration === null ||
@@ -622,45 +628,49 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
           );
         }
       }
-      yield* assertOpen(entry, epoch);
-      const outcome = yield* transport(options.transport.execute(copyJson(intent.command)), id);
+      yield* assertOpen(entry, sourceScope);
 
-      return yield* settle(entry, epoch, action, intent, outcome);
+      const outcome = yield* transport(
+        options.transport.execute(copyJson(intent.command)),
+        id,
+      ).pipe(Effect.flatMap((value) => decode(action.outcome, value)));
+
+      return yield* settle(entry, sourceScope, action, intent, outcome);
     },
     (effect, entry) => effect.pipe(Semaphore.withPermit(entry.commands)),
   );
 
-  const unwrap = (outcome: unknown): Effect.Effect<unknown, unknown> => {
-    // send validates the exact action schema before this shared branch.
-    const value = outcome as
-      | { readonly _tag: "Succeeded"; readonly result: unknown }
-      | { readonly _tag: "Rejected"; readonly error: unknown };
+  const unwrap = (outcome: Outcome): Effect.Effect<unknown, unknown> =>
+    outcome._tag === "Succeeded" ? Effect.succeed(outcome.result) : Effect.fail(outcome.error);
 
-    return value._tag === "Succeeded" ? Effect.succeed(value.result) : Effect.fail(value.error);
-  };
-
-  const hydrate = Effect.fn("Client.hydrate")(function* (entry: Entry, epoch: number) {
+  const hydrate = Effect.fn("Client.hydrate")(function* (
+    entry: Entry,
+    sourceScope: Scope.Closeable,
+  ) {
     const value = yield* transport(options.transport.snapshot(request(entry.address)));
 
     const frame = yield* decode(wire.envelope.snapshotFrame, value);
 
     if (entry.recoveryGeneration === frame.position.sourceAuthorityGeneration) {
-      yield* acceptFrame(entry, epoch, {
+      yield* acceptFrame(entry, sourceScope, {
         ...(value as Record<string, Schema.Json>),
         _tag: "Reset",
       });
       entry.recoveryGeneration = undefined;
     } else {
-      yield* acceptFrame(entry, epoch, value);
+      yield* acceptFrame(entry, sourceScope, value);
     }
   });
 
-  const connection = Effect.fn("Client.connection")(function* (entry: Entry, epoch: number) {
+  const connection = Effect.fn("Client.connection")(function* (
+    entry: Entry,
+    sourceScope: Scope.Closeable,
+  ) {
     const connectionScope = yield* Effect.scope;
 
     if (entry.state.connection === "recovering" || entry.state.connection === "parked")
-      yield* hydrate(entry, epoch);
-    yield* commit(entry, epoch, (state) => ({
+      yield* hydrate(entry, sourceScope);
+    yield* commit(entry, sourceScope, (state) => ({
       ...state,
       connection: state.authoritative === undefined ? "connecting" : "recovering",
       error: undefined,
@@ -693,12 +703,12 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     yield* Effect.forkScoped(producer, { startImmediately: true });
 
     const consume = Stream.fromQueue(frames).pipe(
-      Stream.runForEach((frame) => acceptFrame(entry, epoch, frame)),
+      Stream.runForEach((frame) => acceptFrame(entry, sourceScope, frame)),
     );
 
     const heartbeatLoop = Effect.gen(function* () {
-      yield* hydrate(entry, epoch);
       yield* Effect.sleep(heartbeat);
+      yield* hydrate(entry, sourceScope);
     }).pipe(Effect.forever);
 
     const reconcileLoop = Effect.gen(function* () {
@@ -715,7 +725,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
         if (attempts >= retry.maxAttempts) continue;
         entry.recoveryAttempts.set(id, attempts + 1);
-        yield* send(entry, epoch, id, true).pipe(
+        yield* send(entry, sourceScope, id, true).pipe(
           Effect.catchIf(
             (failure) => failure.reason !== "Unauthorized",
             () => Effect.void,
@@ -731,31 +741,31 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     yield* Effect.all([consume, heartbeatLoop, reconcileLoop], { concurrency: 3 });
   }, Effect.scoped);
 
-  const run = Effect.fn("Client.coordinate")(function* (entry: Entry, epoch: number) {
+  const run = Effect.fn("Client.coordinate")(function* (
+    entry: Entry,
+    sourceScope: Scope.Closeable,
+  ) {
     for (let attempt = 0; attempt < retry.maxAttempts; attempt += 1) {
-      const result = yield* Effect.result(connection(entry, epoch));
+      const result = yield* Effect.result(connection(entry, sourceScope));
 
       if (result._tag === "Success") return;
-      yield* recordFailure(entry, epoch, result.failure);
+      yield* recordFailure(entry, sourceScope, result.failure);
       if (entry.state.connection === "parked") return;
       if (attempt + 1 < retry.maxAttempts)
         yield* Effect.sleep(Math.min(maxDelay, initialDelay * 2 ** attempt));
     }
-    yield* commit(entry, epoch, (state) => ({ ...state, connection: "parked" }));
+    yield* commit(entry, sourceScope, (state) => ({ ...state, connection: "parked" }));
   });
 
   const start = Effect.fn("Client.start")(
-    function* (entry: Entry, epoch: number) {
-      yield* assertOpen(entry, epoch);
-      const sourceScope = entry.scope;
-
-      if (sourceScope === undefined) return yield* error("Closed", "Source is closed");
+    function* (entry: Entry, sourceScope: Scope.Closeable) {
+      yield* assertOpen(entry, sourceScope);
       if (entry.run !== undefined) yield* Fiber.interrupt(entry.run);
-      entry.run = yield* run(entry, epoch).pipe(
+      entry.run = yield* run(entry, sourceScope).pipe(
         Effect.catch((failure) =>
           failure.reason === "Closed"
             ? Effect.void
-            : recordFailure(entry, epoch, failure).pipe(Effect.ignore),
+            : recordFailure(entry, sourceScope, failure).pipe(Effect.ignore),
         ),
         Effect.provideContext(Context.add(context, Scope.Scope, sourceScope)),
         Effect.forkIn(sourceScope),
@@ -768,7 +778,8 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     address: SourceAddress,
   ): Effect.fn.Return<State<S>, ClientError> {
     yield* decode(wire.addressSchema, address);
-    if (closed) return initial<Snapshot<S>, Action.Error<Actions<S>>>("closed");
+    if (sessionScope.state._tag === "Closed")
+      return initial<Snapshot<S>, Action.Error<Actions<S>>>("closed");
     const entry = entries.get(keyOf(address));
 
     return entry === undefined
@@ -787,6 +798,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     readonly id: string;
   }): Effect.fn.Return<Lease<S>, ClientError, Scope.Scope> {
     const address = yield* decode(wire.addressSchema, input);
+    const leaseScope = yield* Effect.scope;
 
     const entry = yield* Effect.acquireRelease(
       Effect.gen(function* () {
@@ -820,7 +832,6 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             scope: undefined,
             run: undefined,
             leases: 0,
-            epoch: 0,
             order: 0,
             recoveryGeneration: undefined,
             dirty: false,
@@ -834,8 +845,6 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
           const sourceScope = yield* Scope.fork(sessionScope);
 
           entry.scope = sourceScope;
-          entry.epoch += 1;
-          const epoch = entry.epoch;
           const active = entry;
 
           const acquired = yield* Effect.result(
@@ -849,14 +858,14 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
               });
               yield* Scope.addFinalizer(sourceScope, PubSub.shutdown(active.messages));
               // Reopening reloads commits that finished journaling after the old scope was fenced.
-              yield* restore(active, epoch);
-              yield* restoreCache(active, epoch).pipe(
+              yield* restore(active, sourceScope);
+              yield* restoreCache(active, sourceScope).pipe(
                 Effect.catch((failure) =>
-                  recordFailure(active, epoch, failure).pipe(Effect.ignore),
+                  recordFailure(active, sourceScope, failure).pipe(Effect.ignore),
                 ),
                 Effect.forkIn(sourceScope),
               );
-              yield* start(active, epoch);
+              yield* start(active, sourceScope);
             }),
           );
 
@@ -878,31 +887,27 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
           const scope = entry.scope;
 
           entry.scope = undefined;
-          entry.epoch += 1;
           if (scope !== undefined) yield* Scope.close(scope, Exit.void);
           entry.run = undefined;
           entry.messages = undefined;
-          entry.state = { ...entry.state, connection: closed ? "closed" : "idle" };
+          entry.state = {
+            ...entry.state,
+            connection: sessionScope.state._tag === "Closed" ? "closed" : "idle",
+          };
           yield* signal;
         }).pipe(Semaphore.withPermit(leases)),
     );
 
-    const epoch = entry.epoch;
     const sourceScope = entry.scope;
     const messages = entry.messages;
 
     if (sourceScope === undefined || messages === undefined)
       return yield* error("Closed", "Source is closed");
-    let released = false;
-
-    yield* Effect.addFinalizer(() =>
-      Effect.sync(() => {
-        released = true;
-      }),
-    );
 
     const active = Effect.suspend(() =>
-      released ? Effect.fail(error("Closed", "Source lease is closed")) : assertOpen(entry, epoch),
+      leaseScope.state._tag === "Closed"
+        ? Effect.fail(error("Closed", "Source lease is closed"))
+        : assertOpen(entry, sourceScope),
     );
 
     const owned = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
@@ -927,7 +932,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             Random.nextInt.pipe(Effect.map((n) => (n >>> 0).toString(16).padStart(8, "0"))),
           ).pipe(Effect.map((parts) => parts.join("")));
 
-          yield* commit(entry, epoch, (state) => {
+          yield* commit(entry, sourceScope, (state) => {
             if (state.connection === "parked")
               throw (
                 state.error ?? error("Disconnected", "Recover the parked source before dispatching")
@@ -938,20 +943,20 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
               throw error("AuthorityUnknown", "Wait for authority before executing commands");
             const generation = state.authoritative?.position.sourceAuthorityGeneration ?? null;
 
-            const command = Schema.encodeSync(Schema.toCodecJson(action.command))({
+            const command: EncodedCommand = {
               ...request(address),
               commandId: id,
               admittedGeneration: generation,
               namespace: action.namespace,
               action: action.name,
-              payload,
-            });
+              payload: Schema.encodeSync(Schema.toCodecJson(action.payload))(payload),
+            };
 
             const intents = new Map(state.intents);
 
             intents.set(id, {
               formatVersion: 1,
-              command: Schema.decodeUnknownSync(EncodedCommand)(copyJson(command)),
+              command: copyJson(command),
               order: entry.order++,
               phase: "Pending",
               boundGeneration: generation,
@@ -962,7 +967,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             return { ...state, intents };
           });
 
-          return yield* send(entry, epoch, id, false).pipe(
+          return yield* send(entry, sourceScope, id, false).pipe(
             Effect.mapError((failure) => error(failure.reason, failure.message, id)),
             Effect.flatMap(unwrap),
           );
@@ -1004,13 +1009,15 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       execute: execute as Lease<S>["execute"],
       retry: (id) =>
         owned(
-          send(entry, epoch, id, true).pipe(
+          send(entry, sourceScope, id, true).pipe(
             Effect.mapError((failure) => error(failure.reason, failure.message, id)),
             Effect.flatMap(unwrap),
           ),
         ) as ReturnType<Lease<S>["retry"]>,
       recover: owned(
-        Effect.sync(() => entry.recoveryAttempts.clear()).pipe(Effect.andThen(start(entry, epoch))),
+        Effect.sync(() => entry.recoveryAttempts.clear()).pipe(
+          Effect.andThen(start(entry, sourceScope)),
+        ),
       ),
       publishMessage: (message) => publish("$source", message),
       publishPluginMessage: publish,
@@ -1022,11 +1029,11 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
           encode(
             wire.envelope.snapshotFrame,
             frame as typeof wire.envelope.snapshotFrame.Type,
-          ).pipe(Effect.flatMap((value) => acceptFrame(entry, epoch, value))),
+          ).pipe(Effect.flatMap((value) => acceptFrame(entry, sourceScope, value))),
         ),
       mergeObservation: (merge) =>
         owned(
-          commit(entry, epoch, (state) => {
+          commit(entry, sourceScope, (state) => {
             const value = merge(
               (state.authoritative?.snapshot ?? state.provisional) as Snapshot<S> | undefined,
             );
@@ -1044,13 +1051,13 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         ),
       applyHistory: (generation, value) =>
         owned(
-          commit(entry, epoch, (state) =>
+          commit(entry, sourceScope, (state) =>
             ReplicaState.history(state, entry.slots, generation, value as ReplicaState.Snapshot),
           ),
         ),
       dismissFailure: (id) =>
         owned(
-          commit(entry, epoch, (state) => ({
+          commit(entry, sourceScope, (state) => ({
             ...state,
             failures: state.failures.filter((f) => f.commandId !== id),
           })),
@@ -1060,14 +1067,6 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
   yield* Effect.addFinalizer(() =>
     Effect.gen(function* () {
-      closed = true;
-      for (const entry of entries.values()) {
-        const scope = entry.scope;
-
-        entry.scope = undefined;
-        entry.epoch += 1;
-        if (scope !== undefined) yield* Scope.close(scope, Exit.void);
-      }
       entries.clear();
       yield* signal;
       yield* PubSub.shutdown(changed);

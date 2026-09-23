@@ -8,7 +8,18 @@ import {
   type JournalRow,
   type PersistenceHandle,
 } from "@yielded/sync/client";
-import { Deferred, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect";
+import {
+  DateTime,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Queue,
+  Schema,
+  Scope,
+  Stream,
+} from "effect";
 import { TestClock } from "effect/testing";
 import { AtomRegistry } from "effect/unstable/reactivity";
 import { expect } from "vite-plus/test";
@@ -103,14 +114,12 @@ const server = Effect.sync(() => {
   let dropResponse = false;
   let lookupMode: "normal" | "Unknown" | "Expired" = "normal";
   let beforeExecute: Effect.Effect<void> = Effect.void;
-  let load: Effect.Effect<Schema.Json, ProtocolError> | undefined;
 
   const publish = (frame: Schema.Json) =>
     Effect.forEach(queues, (queue) => Queue.offer(queue, frame)).pipe(Effect.asVoid);
 
   const transport: Client.Transport = {
-    snapshot: () =>
-      Effect.suspend(() => load ?? Effect.succeed(snapshot(cursor, value, currentGeneration))),
+    snapshot: () => Effect.sync(() => snapshot(cursor, value, currentGeneration)),
     subscribe: () =>
       Stream.unwrap(
         Effect.acquireRelease(
@@ -119,6 +128,7 @@ const server = Effect.sync(() => {
 
             queues.add(queue);
             opened += 1;
+            yield* Queue.offer(queue, snapshot(cursor, value, currentGeneration));
 
             return queue;
           }),
@@ -207,9 +217,6 @@ const server = Effect.sync(() => {
     },
     pause: (effect: Effect.Effect<void>) => {
       beforeExecute = effect;
-    },
-    load: (effect: Effect.Effect<Schema.Json, ProtocolError>) => {
-      load = effect;
     },
     head: (nextCursor: number, nextValue: number, authority = generation) => {
       cursor = nextCursor;
@@ -544,6 +551,109 @@ it.effect(
     ),
 );
 
+it.effect("preserves rich command and result codecs through lookup, journaling, and remount", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const value = Schema.Struct({ at: Schema.DateTimeUtc });
+
+      const Reminder = Source.make({
+        kind: "reminder",
+        schemaVersion: 1,
+        snapshot: value,
+        event: value,
+        message: Schema.Never,
+        actions: [
+          Action.make("schedule", {
+            payload: value,
+            success: Schema.DateTimeUtc,
+            error: Schema.Never,
+          }),
+        ],
+        plugins: [],
+      });
+
+      const reducers = Client.definition(Reminder, {
+        applyEvent: (_state, event) => event,
+        optimistic: { schedule: (_state, payload) => payload },
+        plugins: [],
+      });
+
+      const at = "2026-09-23T12:00:00.000Z";
+
+      const snapshot = {
+        protocolVersion: 1,
+        schemaVersion: 1,
+        address: Reminder.address("demo"),
+        _tag: "Snapshot",
+        position: position(0),
+        snapshot: { source: { at: "2026-09-22T12:00:00.000Z" }, plugins: {} },
+      };
+
+      const calls: Array<Client.EncodedCommand> = [];
+      let lookups = 0;
+
+      const transport: Client.Transport = {
+        snapshot: () => Effect.succeed(snapshot),
+        subscribe: () => Stream.make(snapshot).pipe(Stream.concat(Stream.never)),
+        execute: (command) =>
+          Effect.sync(() => calls.push(command)).pipe(Effect.andThen(Effect.fail(unavailable()))),
+        result: () =>
+          Effect.sync(() => {
+            lookups += 1;
+
+            return {
+              _tag: "Found",
+              outcome: { _tag: "Succeeded", result: at, position: position(1) },
+            };
+          }),
+        publishMessage: () => Effect.void,
+      };
+
+      const storage = yield* memory().open("alice");
+      const settings = options(transport, storage);
+
+      const id = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const client = yield* Client.make(reducers, settings);
+          const lease = yield* client.open(Reminder.address("demo"));
+
+          yield* lease.ready;
+
+          const result = yield* Effect.result(
+            lease.execute(Reminder.actions.schedule, { at: DateTime.makeUnsafe(at) }),
+          );
+
+          if (result._tag !== "Failure" || result.failure.commandId === undefined)
+            return yield* Effect.die("Expected an ambiguous command result");
+          const id = result.failure.commandId;
+
+          expect(calls[0]?.payload).toEqual({ at });
+          expect(DateTime.formatIso((yield* lease.read).value!.source.at)).toBe(at);
+          expect(DateTime.formatIso(yield* lease.retry(id))).toBe(at);
+          expect(
+            yield* storage.intentJournal.transaction((tx) => tx.get(Reminder.address("demo"), id)),
+          ).toMatchObject({
+            value: {
+              phase: "Accepted",
+              outcome: { _tag: "Succeeded", result: at, position: position(1) },
+            },
+          });
+
+          return id;
+        }),
+      );
+
+      const client = yield* Client.make(reducers, settings);
+      const lease = yield* client.open(Reminder.address("demo"));
+
+      yield* lease.ready;
+      expect(DateTime.formatIso(yield* lease.retry(id))).toBe(at);
+      expect(calls).toHaveLength(1);
+      expect(lookups).toBe(1);
+    }),
+  ),
+);
+
 it.effect(
   "wipes fence stale memory handles and preserve records written by the new generation",
   () =>
@@ -674,6 +784,7 @@ it.effect("never rebinds an ambiguous unbound command to a newly observed author
         options({
           ...remote.transport,
           snapshot: () => Effect.never,
+          subscribe: () => Stream.never,
           execute: () =>
             Effect.suspend(() => {
               calls += 1;
@@ -778,9 +889,13 @@ it.effect(
     ),
 );
 
-it.effect.each(["admission", "confirmation"] as const)(
-  "reloads journal %s committed while the last source lease is closing",
-  (transition) =>
+it.effect.each([
+  { transition: "admission", lifetime: "source" },
+  { transition: "confirmation", lifetime: "source" },
+  { transition: "admission", lifetime: "actor" },
+] as const)(
+  "reloads journal $transition committed while the $lifetime scope closes",
+  ({ transition, lifetime }) =>
     Effect.scoped(
       Effect.gen(function* () {
         const remote = yield* server;
@@ -788,7 +903,8 @@ it.effect.each(["admission", "confirmation"] as const)(
         const writing = yield* Deferred.make<Client.Intent>();
         const finishWrite = yield* Deferred.make<void>();
         const finishLookup = yield* Deferred.make<void>();
-        const sourceScope = yield* Scope.make();
+        const actorScope = yield* Scope.fork(yield* Effect.scope);
+        const sourceScope = yield* Scope.fork(yield* Effect.scope);
         const write = transition === "admission" ? "put" : "replace";
 
         const delayCommit = Effect.fn("delayCommit")(function* (row: JournalRow) {
@@ -803,29 +919,28 @@ it.effect.each(["admission", "confirmation"] as const)(
 
         remote.drop(transition === "confirmation");
 
-        const client = yield* Client.make(
-          definition,
-          options(
-            {
-              ...remote.transport,
-              result: (command) =>
-                Deferred.await(finishLookup).pipe(Effect.andThen(remote.transport.result(command))),
+        const settings = options(
+          {
+            ...remote.transport,
+            result: (command) =>
+              Deferred.await(finishLookup).pipe(Effect.andThen(remote.transport.result(command))),
+          },
+          {
+            ...storage,
+            intentJournal: {
+              transaction: (f) =>
+                storage.intentJournal.transaction((tx) =>
+                  f({
+                    ...tx,
+                    [write]: (row: JournalRow) =>
+                      tx[write](row).pipe(Effect.andThen(delayCommit(row))),
+                  }),
+                ),
             },
-            {
-              ...storage,
-              intentJournal: {
-                transaction: (f) =>
-                  storage.intentJournal.transaction((tx) =>
-                    f({
-                      ...tx,
-                      [write]: (row: JournalRow) =>
-                        tx[write](row).pipe(Effect.andThen(delayCommit(row))),
-                    }),
-                  ),
-              },
-            },
-          ),
+          },
         );
+
+        const client = yield* Client.make(definition, settings).pipe(Scope.provide(actorScope));
 
         const lease = yield* client.open(address).pipe(Scope.provide(sourceScope));
 
@@ -836,13 +951,24 @@ it.effect.each(["admission", "confirmation"] as const)(
           .pipe(Effect.forkChild);
 
         const intent = yield* Deferred.await(writing);
-        const closing = yield* Scope.close(sourceScope, Exit.void).pipe(Effect.forkChild);
+
+        const closing = yield* Scope.close(
+          lifetime === "actor" ? actorScope : sourceScope,
+          Exit.void,
+        ).pipe(Effect.forkChild);
 
         yield* tick;
         expect(yield* Effect.result(lease.read)).toMatchObject({
           _tag: "Failure",
           failure: { reason: "Closed" },
         });
+        if (lifetime === "actor") {
+          expect((yield* client.read(address)).connection).toBe("closed");
+          expect(yield* Effect.result(client.open(address))).toMatchObject({
+            _tag: "Failure",
+            failure: { reason: "Closed" },
+          });
+        }
         yield* Deferred.succeed(finishWrite, undefined);
         yield* Fiber.join(closing);
         expect((yield* Fiber.await(response))._tag).toBe("Failure");
@@ -853,7 +979,8 @@ it.effect.each(["admission", "confirmation"] as const)(
           ),
         ).toMatchObject({ value: intent });
 
-        const reopened = yield* client.open(address);
+        const nextClient = lifetime === "actor" ? yield* Client.make(definition, settings) : client;
+        const reopened = yield* nextClient.open(address);
 
         yield* reopened.ready;
         expect((yield* reopened.read).pending).toEqual([
@@ -952,35 +1079,44 @@ it.effect(
     ),
 );
 
-it.effect(
-  "late HTTP hydration cannot rewind snapshots or events received through the live stream",
-  () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const remote = yield* server;
-        const loading = yield* Deferred.make<Schema.Json>();
+it.effect("bootstraps from the stream and ignores a late snapshot probe after live progress", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const remote = yield* server;
+      const loading = yield* Deferred.make<Schema.Json>();
+      const probing = yield* Deferred.make<void>();
 
-        remote.load(Deferred.await(loading));
-        const client = yield* Client.make(definition, options(remote.transport));
-        const lease = yield* client.open(address);
+      const client = yield* Client.make(
+        definition,
+        options({
+          ...remote.transport,
+          snapshot: () =>
+            Deferred.succeed(probing, undefined).pipe(Effect.andThen(Deferred.await(loading))),
+        }),
+      );
 
-        yield* tick;
-        yield* remote.publish(snapshot(5, 20));
-        yield* lease.ready;
-        yield* remote.publish(event(6, 3));
-        yield* stateWhere(lease, (state) => state.authoritative?.position.cursor === 6);
-        yield* Deferred.succeed(loading, snapshot(0, 0));
-        yield* tick;
-        expect((yield* lease.read).authoritative).toEqual({
-          position: position(6),
-          snapshot: { source: { value: 23 }, plugins: { label: { text: "original" } } },
-        });
-      }),
-    ),
+      const lease = yield* client.open(address);
+
+      yield* lease.ready;
+      expect(yield* Deferred.isDone(probing)).toBe(false);
+      yield* TestClock.adjust("30 seconds");
+      yield* Deferred.await(probing);
+      yield* remote.publish(snapshot(5, 20));
+      yield* stateWhere(lease, (state) => state.authoritative?.position.cursor === 5);
+      yield* remote.publish(event(6, 3));
+      yield* stateWhere(lease, (state) => state.authoritative?.position.cursor === 6);
+      yield* Deferred.succeed(loading, snapshot(0, 0));
+      yield* tick;
+      expect((yield* lease.read).authoritative).toEqual({
+        position: position(6),
+        snapshot: { source: { value: 23 }, plugins: { label: { text: "original" } } },
+      });
+    }),
+  ),
 );
 
 it.effect(
-  "releases client plugin layers with the final source lease rather than the actor scope",
+  "retains plugin registration in contract order and releases layers with the final source lease",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -1000,23 +1136,53 @@ it.effect(
             ),
           );
 
+        const Other = Plugin.make("other", Label.spec);
+        const Composed = Source.make({ ...Counter.spec, plugins: [Label, Other] });
+        const first = Client.providePlugin(label, layer("label"));
+
+        const second = Client.providePlugin(
+          Client.plugin(Other, {
+            applyEvent: (_state, event) => event,
+            optimistic: { rename: (_state, payload) => payload },
+          }),
+          layer("other"),
+        );
+
+        const registrations: [typeof second, typeof first] = [second, first];
+
         const scopedDefinition = Client.provide(
-          Client.definition(Counter, {
+          Client.definition(Composed, {
             applyEvent: (state, event) => ({ value: state.value + event.delta }),
             optimistic: { add: (state, payload) => ({ value: state.value + payload.amount }) },
-            plugins: [Client.providePlugin(label, layer("label"))],
+            plugins: registrations,
           }),
           layer("root"),
         );
 
-        const client = yield* Client.make(scopedDefinition, options(remote.transport));
-        const sourceScope = yield* Scope.make();
-        const lease = yield* client.open(address).pipe(Scope.provide(sourceScope));
+        registrations.splice(0);
 
-        yield* lease.ready;
-        expect(lifecycle).toEqual(["open root", "open label"]);
+        const client = yield* Client.make(
+          scopedDefinition,
+          options({
+            ...remote.transport,
+            subscribe: () => Stream.never,
+          }),
+        );
+
+        const sourceScope = yield* Scope.make();
+
+        yield* client.open(address).pipe(Scope.provide(sourceScope));
+
+        expect(lifecycle).toEqual(["open root", "open label", "open other"]);
         yield* Scope.close(sourceScope, Exit.void);
-        expect(lifecycle).toEqual(["open root", "open label", "close label", "close root"]);
+        expect(lifecycle).toEqual([
+          "open root",
+          "open label",
+          "open other",
+          "close other",
+          "close label",
+          "close root",
+        ]);
         expect((yield* client.read(address)).connection).toBe("idle");
       }),
     ),

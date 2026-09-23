@@ -112,14 +112,18 @@ export const definition = <
     spec.plugins.map((p) => p.id),
   );
 
-  if (
-    spec.plugins.length !== contract.spec.plugins.length ||
-    contract.spec.plugins.some((p) => !spec.plugins.some((client) => client.contract === p))
-  ) {
+  const plugins = contract.spec.plugins.map((p) =>
+    spec.plugins.find((client) => client.contract === p),
+  );
+
+  if (spec.plugins.length !== plugins.length || plugins.some((client) => client === undefined)) {
     throw RegistrationError.make({
       message: "Client plugins must exactly match the source contract",
     });
   }
+
+  // Validation retains every implementation in contract order and its union of requirements.
+  const implementations = plugins as ReadonlyArray<PluginDefinition<string, Requirements<Plugins>>>;
 
   return {
     contract,
@@ -127,12 +131,8 @@ export const definition = <
     acquire: Effect.gen(function* () {
       const slots: Array<Slot> = [{ id: "$source", ...spec } as Slot];
 
-      for (const p of contract.spec.plugins) {
-        const client = spec.plugins.find((candidate) => candidate.contract === p);
-
-        if (client === undefined) return yield* Effect.die("Validated client plugin missing");
-
-        slots.push(yield* (client as PluginDefinition<string, Requirements<Plugins>>).acquire);
+      for (const client of implementations) {
+        slots.push(yield* client.acquire);
       }
 
       return slots;

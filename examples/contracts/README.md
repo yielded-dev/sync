@@ -14,9 +14,7 @@ vp run --filter @yielded/example-contracts start
 
 Typechecking verifies action payload/result/rejection correlation, duplicate and
 missing registration rejection, and service requirements through native RPC and
-Layer composition, headless client action types, and Atom mutations. `start` round-trips the public snapshot and checks its encoded
-JSON shape. `vp run ready` includes the example's typechecks and the core contract
-tests. This example supplies contract evidence. Core client tests cover retries, reconnect
-and scoped disposal; the Cloudflare suite covers two-client convergence and exact
-result recovery against a real authority. Process-restart persistence still needs
-the local adapters.
+Layer composition, headless client action types, and Atom mutations. `start`
+round-trips the public snapshot and checks its encoded JSON shape. `vp run ready`
+includes these typechecks. Runtime behavior and persistence boundaries are covered
+in the [client guide](../../docs/client.md).

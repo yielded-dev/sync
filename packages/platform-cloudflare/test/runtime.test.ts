@@ -67,6 +67,35 @@ const command = (generation: string, commandId: string, payload: number) => ({
   payload,
 });
 
+const socketProtocol = (actorId: string) =>
+  RpcClient.layerProtocolSocket({ retryTransientErrors: false }).pipe(
+    Layer.provide(
+      Layer.effect(
+        Socket.Socket,
+        Socket.fromWebSocket(
+          Effect.acquireRelease(
+            Effect.gen(function* () {
+              const upgraded = yield* Effect.promise(() =>
+                SELF.fetch("https://example.test/sync/counters/test", {
+                  headers: { upgrade: "websocket", authorization: `Bearer ${actorId}-local` },
+                }),
+              );
+
+              const websocket = upgraded.webSocket;
+
+              if (websocket === null) return yield* Effect.die("Upgrade failed");
+              websocket.accept();
+
+              return websocket;
+            }),
+            (socket) => Effect.sync(() => socket.close(1000)),
+          ),
+        ),
+      ),
+    ),
+    Layer.provide(RpcSerialization.layerJson),
+  );
+
 afterEach(() => reset());
 
 describe("public source on a SQLite Durable Object", () => {
@@ -83,32 +112,7 @@ describe("public source on a SQLite Durable Object", () => {
     });
 
     const open = Effect.fn("test.openClient")(function* (actorId: string, loseResponse: boolean) {
-      const upgraded = yield* Effect.promise(() =>
-        SELF.fetch("https://example.test/sync/counters/test", {
-          headers: { upgrade: "websocket", authorization: `Bearer ${actorId}-local` },
-        }),
-      );
-
-      const websocket = upgraded.webSocket;
-
-      if (websocket === null) return yield* Effect.die("Upgrade failed");
-      websocket.accept();
-
-      const protocol = RpcClient.layerProtocolSocket({ retryTransientErrors: false }).pipe(
-        Layer.provide(
-          Layer.effect(
-            Socket.Socket,
-            Socket.fromWebSocket(
-              Effect.acquireRelease(Effect.succeed(websocket), (socket) =>
-                Effect.sync(() => socket.close(1000)),
-              ),
-            ),
-          ),
-        ),
-        Layer.provide(RpcSerialization.layerJson),
-      );
-
-      const services = yield* Layer.build(protocol);
+      const services = yield* Layer.build(socketProtocol(actorId));
       const transport = yield* Client.rpcTransport(Counter).pipe(Effect.provideContext(services));
 
       const client = yield* Client.make(definition, {
@@ -425,29 +429,6 @@ describe("hibernating subscriptions", () => {
   });
 
   it("supports generated streaming RPC clients and acknowledgements across hibernation", async () => {
-    const upgraded = await SELF.fetch("https://example.test/sync/counters/test", {
-      headers: { upgrade: "websocket", authorization: "Bearer alice-local" },
-    });
-
-    const websocket = upgraded.webSocket;
-
-    if (websocket === null) throw new Error("Upgrade failed");
-    websocket.accept();
-
-    const transport = RpcClient.layerProtocolSocket({ retryTransientErrors: false }).pipe(
-      Layer.provide(
-        Layer.effect(
-          Socket.Socket,
-          Socket.fromWebSocket(
-            Effect.acquireRelease(Effect.succeed(websocket), (socket) =>
-              Effect.sync(() => socket.close(1000)),
-            ),
-          ),
-        ),
-      ),
-      Layer.provide(RpcSerialization.layerJson),
-    );
-
     await Effect.runPromise(
       Effect.gen(function* () {
         const client = yield* RpcClient.make(Counter.rpc, { flatten: true });
@@ -496,7 +477,7 @@ describe("hibernating subscriptions", () => {
           "Event",
           "Message",
         ]);
-      }).pipe(Effect.provide(transport), Effect.scoped),
+      }).pipe(Effect.provide(socketProtocol("alice")), Effect.scoped),
     );
   });
 

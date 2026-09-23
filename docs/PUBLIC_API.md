@@ -258,6 +258,10 @@ Persistence is required as one of `{ mode: "persistent", storage }` or
 `{ mode: "volatile" }`; there is no implicit fallback. Memory storage is an explicit
 adapter for tests/process-local use and does not promise restart durability.
 
+The table describes the complete persistence target. The current port and memory
+adapter are documented in the [client guide](client.md); physical databases,
+metadata, snapshot scans, migrations, and cross-process fencing remain adapter work.
+
 | Client persistence component | Contract                                                                                                                                                             |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ReplicaPersistence`         | Actor-scoped handle with captured persistence generation, `snapshotCache`, `intentJournal`, `purgeSource`, and explicit `wipe`                                       |
@@ -269,8 +273,10 @@ adapter for tests/process-local use and does not promise restart durability.
 Journal admission commits before transport I/O. Capacity/storage failure refuses
 new durable work; never evict possibly committed work to make room. Cache corruption
 may discard/rebuild only the cache. Version-mismatched or undecodable journal rows
-stay quarantined with their command ids reserved. A definitive result may settle a
-quarantined command; a codec mismatch cannot.
+stay quarantined with their command ids reserved. Reconciliation may settle one
+only with a definitive result, never because of a codec mismatch. The current
+client returns `Quarantined` from `retry`; a quarantine reconciliation API remains
+future work.
 
 Disposal cancels stale restore/save callbacks and releases sockets, fibers, database
 handles, and Atom subscriptions. Identity change closes the old actor scope before

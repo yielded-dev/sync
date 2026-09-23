@@ -27,7 +27,8 @@ const result = yield * source.execute(contract.actions.set, { value: 7 });
 
 Both construction and opening require `Scope`. Keep the session scope alive for
 the authenticated actor. Close it before constructing a different actor's session.
-Each open holds a source lease; concurrent opens share a coordinator until the
+Effect scopes own actor, source, and lease lifetimes. Each open holds a source lease;
+concurrent opens share a coordinator until the
 last lease closes. Closed leases cannot dispatch, restore state, or publish messages.
 `source.read` and `source.changes` expose the public replica, including the optimistic
 value, authoritative position, provisional cache value, pending phases, failures,
@@ -82,7 +83,8 @@ Inactive sources without unresolved work may be evicted to admit a new source.
 `Client.Transport<R>` is the portable JSON transport port. Its snapshot, execute,
 result and publish operations return typed Effects; subscription returns a Stream.
 Transport implementations must include bootstrap/replay in subscription and scope
-their resources to stream consumption. Runtime construction captures their Effect
+their resources to stream consumption. The subscription supplies initial authority;
+snapshot requests serve recovery and periodic probes. Runtime construction captures their Effect
 requirements. The client performs its own Schema decoding and address checks.
 
 `Client.rpcTransport(contract)` implements the port through native Effect RPC and
