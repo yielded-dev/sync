@@ -58,9 +58,9 @@ jobs:
           expected-head: ${{ github.event.pull_request.head.sha || '' }}
           automatic-review-limit: 2
           guidance-file: AGENTS.md
-          model: gpt-6-astra
-          effort: medium
-          priority: default
+          model: gpt-6-sol
+          effort: high
+          priority: fast
           base-cost-usd: "1.00"
           max-cost-usd: "2.50"
           ignore: "bun.lock,**/CHANGELOG.md,.agents/skills/**,.claude/skills/**"
