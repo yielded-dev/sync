@@ -30,6 +30,9 @@ the authenticated actor. Close it before constructing a different actor's sessio
 Effect scopes own actor, source, and lease lifetimes. Each open holds a source lease;
 concurrent opens share a coordinator until the
 last lease closes. Closed leases cannot dispatch, restore state, or publish messages.
+Closing one lease cancels its in-flight operations while other leases keep the source
+connected. Journal transactions already admitted finish atomically for that coordinator;
+their command identities remain available for recovery.
 `source.read` and `source.changes` expose the public replica, including the optimistic
 value, authoritative position, provisional cache value, pending phases, failures,
 connection state, and the last operational error.
@@ -75,7 +78,9 @@ Defaults bound the runtime to 32 retained sources, 100 pending commands per sour
 seconds. Independent 30-second snapshot probes detect missed durable progress;
 automatic result reconciliation has a per-command attempt bound. Applications can
 configure `limits` and `retry`; `recover` explicitly restarts a parked source and
-its recovery budget. Authentication failures park instead of reconnecting forever.
+its recovery budget. Applying a valid durable subscription frame resets the reconnect
+budget and backoff; snapshot probes and ephemeral messages do not. Authentication
+failures park instead of reconnecting forever.
 Inactive sources without unresolved work may be evicted to admit a new source.
 
 ## Transport and persistence

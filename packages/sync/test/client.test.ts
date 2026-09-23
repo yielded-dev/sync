@@ -206,6 +206,9 @@ const server = Effect.sync(() => {
   return {
     transport,
     publish,
+    disconnect: Effect.suspend(() =>
+      Effect.forEach(queues, (queue) => Queue.fail(queue, unavailable())).pipe(Effect.asVoid),
+    ),
     calls,
     lookups,
     connections: () => ({ opened, closed }),
@@ -446,6 +449,207 @@ it.effect("shares source leases and fences stale handles after source and actor 
         _tag: "Failure",
         failure: { reason: "Closed" },
       });
+    }),
+  ),
+);
+
+it.effect(
+  "cancels a disposed lease's queued command while another lease keeps the source alive",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const remote = yield* server;
+        const storage = yield* memory().open("alice");
+        const started = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+
+        remote.pause(
+          Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release))),
+        );
+        const client = yield* Client.make(definition, options(remote.transport, storage));
+        const survivor = yield* client.open(address);
+        const leaseScope = yield* Scope.fork(yield* Effect.scope);
+        const disposed = yield* client.open(address).pipe(Scope.provide(leaseScope));
+
+        yield* survivor.ready;
+
+        const first = yield* survivor
+          .execute(Counter.actions.add, { amount: 1 })
+          .pipe(Effect.forkChild);
+
+        yield* Deferred.await(started);
+
+        const queued = yield* disposed
+          .execute(Counter.actions.add, { amount: 5 })
+          .pipe(Effect.forkChild);
+
+        yield* stateWhere(survivor, (state) => state.pending.length === 2);
+        const id = (yield* survivor.read).pending[1].commandId;
+
+        yield* Scope.close(leaseScope, Exit.void);
+        yield* Deferred.succeed(release, undefined);
+        expect(yield* Fiber.join(first)).toEqual({ before: 0, after: 1 });
+        expect((yield* Fiber.await(queued))._tag).toBe("Failure");
+        expect(remote.calls).toHaveLength(1);
+        expect(remote.connections()).toEqual({ opened: 1, closed: 0 });
+        expect(yield* storage.intentJournal.transaction((tx) => tx.get(address, id))).toBeDefined();
+        expect(yield* survivor.retry(id)).toEqual({ before: 1, after: 6 });
+        expect(remote.calls[1]?.commandId).toBe(id);
+        expect(remote.lookups[0]?.commandId).toBe(id);
+      }),
+    ),
+);
+
+it.effect.each(["execute", "message"] as const)(
+  "fences an in-flight %s when its lease closes but the shared source remains open",
+  (operation) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const remote = yield* server;
+        const storage = yield* memory().open("alice");
+        const started = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        let published = 0;
+
+        const delayed = Deferred.succeed(started, undefined).pipe(
+          Effect.andThen(Deferred.await(release)),
+        );
+
+        const client = yield* Client.make(
+          definition,
+          options(
+            {
+              ...remote.transport,
+              execute: () =>
+                delayed.pipe(
+                  Effect.as({
+                    _tag: "Succeeded",
+                    result: { before: 0, after: 3 },
+                    position: position(1),
+                  }),
+                  Effect.uninterruptible,
+                ),
+              publishMessage: () =>
+                delayed.pipe(
+                  Effect.andThen(
+                    Effect.sync(() => {
+                      published += 1;
+                    }),
+                  ),
+                ),
+            },
+            storage,
+          ),
+        );
+
+        const survivor = yield* client.open(address);
+        const leaseScope = yield* Scope.fork(yield* Effect.scope);
+        const lease = yield* client.open(address).pipe(Scope.provide(leaseScope));
+
+        yield* lease.ready;
+
+        const response = yield* (
+          operation === "execute"
+            ? lease.execute(Counter.actions.add, { amount: 3 }).pipe(Effect.asVoid)
+            : lease.publishMessage({ editing: true })
+        ).pipe(Effect.forkChild);
+
+        yield* Deferred.await(started);
+        const closing = yield* Scope.close(leaseScope, Exit.void).pipe(Effect.forkChild);
+
+        yield* tick;
+        yield* Deferred.succeed(release, undefined);
+        yield* Fiber.join(closing);
+        expect((yield* Fiber.await(response))._tag).toBe("Failure");
+        expect(remote.connections()).toEqual({ opened: 1, closed: 0 });
+        expect(published).toBe(0);
+        if (operation === "execute") {
+          const pending = (yield* survivor.read).pending;
+
+          expect(pending).toHaveLength(1);
+          expect(pending[0]?.phase).toBe("Pending");
+          expect(
+            yield* storage.intentJournal.transaction((tx) => tx.get(address, pending[0].commandId)),
+          ).toMatchObject({ value: { phase: "Pending", outcome: null } });
+        }
+      }),
+    ),
+);
+
+it.effect("cancels settlement waiting on another lease's journal transaction", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const remote = yield* server;
+      const storage = yield* memory().open("alice");
+      const responding = yield* Deferred.make<void>();
+      const finishResponse = yield* Deferred.make<void>();
+      const writing = yield* Deferred.make<void>();
+      const finishWrite = yield* Deferred.make<void>();
+      let delayAdmission = false;
+
+      remote.pause(
+        Deferred.succeed(responding, undefined).pipe(
+          Effect.andThen(Deferred.await(finishResponse)),
+        ),
+      );
+
+      const client = yield* Client.make(
+        definition,
+        options(remote.transport, {
+          ...storage,
+          intentJournal: {
+            transaction: (f) =>
+              storage.intentJournal.transaction((tx) =>
+                f({
+                  ...tx,
+                  put: (row) =>
+                    tx
+                      .put(row)
+                      .pipe(
+                        Effect.andThen(() =>
+                          delayAdmission
+                            ? Deferred.succeed(writing, undefined).pipe(
+                                Effect.andThen(Deferred.await(finishWrite)),
+                              )
+                            : Effect.void,
+                        ),
+                      ),
+                }),
+              ),
+          },
+        }),
+      );
+
+      const survivor = yield* client.open(address);
+      const leaseScope = yield* Scope.fork(yield* Effect.scope);
+      const lease = yield* client.open(address).pipe(Scope.provide(leaseScope));
+
+      yield* lease.ready;
+
+      const response = yield* lease
+        .execute(Counter.actions.add, { amount: 1 })
+        .pipe(Effect.forkChild);
+
+      yield* Deferred.await(responding);
+      delayAdmission = true;
+
+      const other = yield* survivor
+        .execute(Counter.actions.add, { amount: 2 })
+        .pipe(Effect.forkChild);
+
+      yield* Deferred.await(writing);
+      yield* Deferred.succeed(finishResponse, undefined);
+      yield* tick;
+      const closing = yield* Scope.close(leaseScope, Exit.void).pipe(Effect.forkChild);
+
+      yield* tick;
+      const closedBeforeWrite = closing.pollUnsafe()?._tag === "Success";
+
+      yield* Deferred.succeed(finishWrite, undefined);
+      yield* Fiber.join(closing);
+      yield* Fiber.join(other);
+      expect(closedBeforeWrite).toBe(true);
+      expect((yield* Fiber.await(response))._tag).toBe("Failure");
     }),
   ),
 );
@@ -893,6 +1097,7 @@ it.effect.each([
   { transition: "admission", lifetime: "source" },
   { transition: "confirmation", lifetime: "source" },
   { transition: "admission", lifetime: "actor" },
+  { transition: "admission", lifetime: "lease" },
 ] as const)(
   "reloads journal $transition committed while the $lifetime scope closes",
   ({ transition, lifetime }) =>
@@ -945,6 +1150,7 @@ it.effect.each([
         const lease = yield* client.open(address).pipe(Scope.provide(sourceScope));
 
         yield* lease.ready;
+        if (lifetime === "lease") yield* client.open(address);
 
         const response = yield* lease
           .execute(Counter.actions.add, { amount: 3 })
@@ -998,6 +1204,47 @@ it.effect.each([
         expect(yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10))).toEqual([]);
       }),
     ),
+);
+
+it.effect("resets reconnect backoff after healthy subscription progress", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const remote = yield* server;
+      let attempts = 0;
+      let failing = false;
+
+      const client = yield* Client.make(
+        definition,
+        options({
+          ...remote.transport,
+          subscribe: (request) =>
+            Stream.suspend(() => {
+              attempts += 1;
+
+              return failing ? Stream.fail(unavailable()) : remote.transport.subscribe(request);
+            }),
+        }),
+      );
+
+      const lease = yield* client.open(address);
+
+      yield* lease.ready;
+      for (let cycle = 0; cycle < 5; cycle += 1) {
+        yield* remote.disconnect;
+        yield* stateWhere(lease, (state) => state.connection === "recovering");
+        yield* TestClock.adjust("9 millis");
+        expect(attempts).toBe(cycle + 1);
+        yield* TestClock.adjust("1 millis");
+        expect(attempts).toBe(cycle + 2);
+        yield* lease.ready;
+      }
+      failing = true;
+      yield* remote.disconnect;
+      yield* TestClock.adjust("100 millis");
+      yield* stateWhere(lease, (state) => state.connection === "parked");
+      expect(attempts).toBe(8);
+    }),
+  ),
 );
 
 it.effect(

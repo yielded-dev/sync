@@ -247,9 +247,10 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       Effect.mapError((failure) => error("Storage", failure.message, commandId)),
     );
 
-  const assertOpen = (entry?: Entry, sourceScope?: Scope.Closeable) =>
+  const assertOpen = (entry?: Entry, sourceScope?: Scope.Closeable, leaseScope?: Scope.Scope) =>
     Effect.suspend(() =>
       sessionScope.state._tag === "Closed" ||
+      leaseScope?.state._tag === "Closed" ||
       (entry !== undefined &&
         (sourceScope === undefined ||
           entry.scope !== sourceScope ||
@@ -295,8 +296,10 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       entry: Entry,
       sourceScope: Scope.Closeable,
       change: (state: ReplicaState.State) => ReplicaState.State,
+      leaseScope?: Scope.Scope,
+      onCommit?: () => void,
     ) {
-      yield* assertOpen(entry, sourceScope);
+      yield* assertOpen(entry, sourceScope, leaseScope);
       const previous = entry.state;
 
       const next = yield* Effect.try({
@@ -334,39 +337,48 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             ),
           );
       }
+      // Finish installing an admitted transaction for the surviving coordinator,
+      // even when its originating lease closes while storage is committing.
       yield* assertOpen(entry, sourceScope);
       entry.state = next;
+      onCommit?.();
       if (next.authoritative !== previous.authoritative) {
         entry.dirty = true;
         yield* Queue.offer(saves, undefined);
       }
       yield* signal;
     },
-    (effect, entry) => effect.pipe(Semaphore.withPermit(entry.lock), Effect.uninterruptible),
+    (effect, entry) => effect.pipe(Effect.uninterruptible, Semaphore.withPermit(entry.lock)),
   );
 
   const acceptFrame = Effect.fn("Client.frame")(function* (
     entry: Entry,
     sourceScope: Scope.Closeable,
     encoded: Schema.Json,
+    leaseScope?: Scope.Scope,
   ) {
     const frame = yield* decode(wire.envelope.outbound, encoded);
 
     if (keyOf(frame.address) !== keyOf(entry.address))
       return yield* error("InvalidValue", "Frame belongs to another source");
     if (frame._tag === "Message" || frame._tag === "MessageLeave") {
-      yield* assertOpen(entry, sourceScope);
+      yield* assertOpen(entry, sourceScope, leaseScope);
       if (entry.messages !== undefined) yield* PubSub.publish(entry.messages, frame);
 
-      return;
+      return false;
     }
     if (frame._tag === "ResyncRequired")
       entry.recoveryGeneration = frame.position.sourceAuthorityGeneration;
-    yield* commit(entry, sourceScope, (state) =>
-      ReplicaState.frame(state, entry.slots, actorId, frame),
+    yield* commit(
+      entry,
+      sourceScope,
+      (state) => ReplicaState.frame(state, entry.slots, actorId, frame),
+      leaseScope,
     );
     if (entry.state.connection === "recovering")
       return yield* entry.state.error ?? error("Gap", "Source needs recovery");
+
+    return entry.state.connection === "live";
   });
 
   const flushEntry = Effect.fn("Client.flushSource")(
@@ -517,6 +529,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     action: BoundAction,
     intent: Intent,
     outcome: Outcome,
+    leaseScope?: Scope.Scope,
   ) {
     const id = intent.command.commandId;
 
@@ -537,45 +550,58 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     }
     const encoded = outcome._tag === "Succeeded" ? yield* encode(action.outcome, outcome) : null;
 
-    yield* commit(entry, sourceScope, (state) => {
-      const intents = new Map(state.intents);
+    yield* commit(
+      entry,
+      sourceScope,
+      (state) => {
+        const intents = new Map(state.intents);
 
-      if (outcome._tag === "Rejected") {
-        intents.delete(id);
+        if (outcome._tag === "Rejected") {
+          intents.delete(id);
 
-        return {
-          ...state,
-          intents,
-          failures: [
-            ...state.failures.filter((f) => f.commandId !== id),
-            { commandId: id, error: outcome.error },
-          ].slice(-limits.maxPendingPerSource),
-        };
-      }
-      intents.set(id, {
-        ...intent,
-        phase: "Accepted",
-        boundGeneration: outcome.position.sourceAuthorityGeneration,
-        confirmedAt: outcome.position,
-        outcome: copyJson(encoded),
-      });
+          return {
+            ...state,
+            intents,
+            failures: [
+              ...state.failures.filter((f) => f.commandId !== id),
+              { commandId: id, error: outcome.error },
+            ].slice(-limits.maxPendingPerSource),
+          };
+        }
+        intents.set(id, {
+          ...intent,
+          phase: "Accepted",
+          boundGeneration: outcome.position.sourceAuthorityGeneration,
+          confirmedAt: outcome.position,
+          outcome: copyJson(encoded),
+        });
 
-      return ReplicaState.reflected({ ...state, intents });
-    });
-    entry.settled.set(id, outcome);
-    while (entry.settled.size > limits.maxPendingPerSource) {
-      const oldest = entry.settled.keys().next();
+        return ReplicaState.reflected({ ...state, intents });
+      },
+      leaseScope,
+      () => {
+        entry.settled.set(id, outcome);
+        while (entry.settled.size > limits.maxPendingPerSource) {
+          const oldest = entry.settled.keys().next();
 
-      if (oldest.done) break;
-      entry.settled.delete(oldest.value);
-    }
+          if (oldest.done) break;
+          entry.settled.delete(oldest.value);
+        }
+      },
+    );
 
     return outcome;
   });
 
   const send = Effect.fn("Client.send")(
-    function* (entry: Entry, sourceScope: Scope.Closeable, id: string, lookup: boolean) {
-      yield* assertOpen(entry, sourceScope);
+    function* (
+      entry: Entry,
+      sourceScope: Scope.Closeable,
+      id: string,
+      lookup: boolean,
+      leaseScope?: Scope.Scope,
+    ) {
+      yield* assertOpen(entry, sourceScope, leaseScope);
       const remembered = entry.settled.get(id);
 
       if (remembered !== undefined) return remembered;
@@ -615,7 +641,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         ).pipe(Effect.flatMap((value) => decode(action.lookup, value)));
 
         if (result._tag === "Found")
-          return yield* settle(entry, sourceScope, action, intent, result.outcome);
+          return yield* settle(entry, sourceScope, action, intent, result.outcome, leaseScope);
         if (
           result._tag === "Expired" ||
           intent.boundGeneration === null ||
@@ -628,14 +654,14 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
           );
         }
       }
-      yield* assertOpen(entry, sourceScope);
+      yield* assertOpen(entry, sourceScope, leaseScope);
 
       const outcome = yield* transport(
         options.transport.execute(copyJson(intent.command)),
         id,
       ).pipe(Effect.flatMap((value) => decode(action.outcome, value)));
 
-      return yield* settle(entry, sourceScope, action, intent, outcome);
+      return yield* settle(entry, sourceScope, action, intent, outcome, leaseScope);
     },
     (effect, entry) => effect.pipe(Semaphore.withPermit(entry.commands)),
   );
@@ -665,6 +691,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
   const connection = Effect.fn("Client.connection")(function* (
     entry: Entry,
     sourceScope: Scope.Closeable,
+    recovered: () => void,
   ) {
     const connectionScope = yield* Effect.scope;
 
@@ -703,7 +730,15 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     yield* Effect.forkScoped(producer, { startImmediately: true });
 
     const consume = Stream.fromQueue(frames).pipe(
-      Stream.runForEach((frame) => acceptFrame(entry, sourceScope, frame)),
+      Stream.runForEach((frame) =>
+        acceptFrame(entry, sourceScope, frame).pipe(
+          Effect.tap((healthy) =>
+            Effect.sync(() => {
+              if (healthy) recovered();
+            }),
+          ),
+        ),
+      ),
     );
 
     const heartbeatLoop = Effect.gen(function* () {
@@ -745,21 +780,28 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     entry: Entry,
     sourceScope: Scope.Closeable,
   ) {
-    for (let attempt = 0; attempt < retry.maxAttempts; attempt += 1) {
-      const result = yield* Effect.result(connection(entry, sourceScope));
+    let failures = 0;
+
+    while (failures < retry.maxAttempts) {
+      const result = yield* Effect.result(
+        connection(entry, sourceScope, () => {
+          failures = 0;
+        }),
+      );
 
       if (result._tag === "Success") return;
       yield* recordFailure(entry, sourceScope, result.failure);
       if (entry.state.connection === "parked") return;
-      if (attempt + 1 < retry.maxAttempts)
-        yield* Effect.sleep(Math.min(maxDelay, initialDelay * 2 ** attempt));
+      failures += 1;
+      if (failures < retry.maxAttempts)
+        yield* Effect.sleep(Math.min(maxDelay, initialDelay * 2 ** (failures - 1)));
     }
     yield* commit(entry, sourceScope, (state) => ({ ...state, connection: "parked" }));
   });
 
   const start = Effect.fn("Client.start")(
-    function* (entry: Entry, sourceScope: Scope.Closeable) {
-      yield* assertOpen(entry, sourceScope);
+    function* (entry: Entry, sourceScope: Scope.Closeable, leaseScope?: Scope.Scope) {
+      yield* assertOpen(entry, sourceScope, leaseScope);
       if (entry.run !== undefined) yield* Fiber.interrupt(entry.run);
       entry.run = yield* run(entry, sourceScope).pipe(
         Effect.catch((failure) =>
@@ -771,7 +813,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         Effect.forkIn(sourceScope),
       );
     },
-    (effect, entry) => effect.pipe(Semaphore.withPermit(entry.restart)),
+    (effect, entry) => effect.pipe(Effect.uninterruptible, Semaphore.withPermit(entry.restart)),
   );
 
   const read = Effect.fn("Client.read")(function* (
@@ -904,6 +946,10 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     if (sourceScope === undefined || messages === undefined)
       return yield* error("Closed", "Source is closed");
 
+    const operationsScope = yield* Scope.fork(sourceScope);
+
+    yield* Scope.addFinalizerExit(leaseScope, (exit) => Scope.close(operationsScope, exit));
+
     const active = Effect.suspend(() =>
       leaseScope.state._tag === "Closed"
         ? Effect.fail(error("Closed", "Source lease is closed"))
@@ -915,8 +961,8 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         yield* active;
 
         const fiber = yield* effect.pipe(
-          Effect.provideContext(Context.add(context, Scope.Scope, sourceScope)),
-          Effect.forkIn(sourceScope),
+          Effect.provideContext(Context.add(context, Scope.Scope, operationsScope)),
+          Effect.forkIn(operationsScope),
         );
 
         return yield* Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber)));
@@ -932,42 +978,48 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             Random.nextInt.pipe(Effect.map((n) => (n >>> 0).toString(16).padStart(8, "0"))),
           ).pipe(Effect.map((parts) => parts.join("")));
 
-          yield* commit(entry, sourceScope, (state) => {
-            if (state.connection === "parked")
-              throw (
-                state.error ?? error("Disconnected", "Recover the parked source before dispatching")
-              );
-            if (state.intents.size + state.quarantined.size >= limits.maxPendingPerSource)
-              throw error("Capacity", "Pending command capacity exhausted");
-            if (state.authoritative === undefined && !definition.allowUnboundCommands)
-              throw error("AuthorityUnknown", "Wait for authority before executing commands");
-            const generation = state.authoritative?.position.sourceAuthorityGeneration ?? null;
+          yield* commit(
+            entry,
+            sourceScope,
+            (state) => {
+              if (state.connection === "parked")
+                throw (
+                  state.error ??
+                  error("Disconnected", "Recover the parked source before dispatching")
+                );
+              if (state.intents.size + state.quarantined.size >= limits.maxPendingPerSource)
+                throw error("Capacity", "Pending command capacity exhausted");
+              if (state.authoritative === undefined && !definition.allowUnboundCommands)
+                throw error("AuthorityUnknown", "Wait for authority before executing commands");
+              const generation = state.authoritative?.position.sourceAuthorityGeneration ?? null;
 
-            const command: EncodedCommand = {
-              ...request(address),
-              commandId: id,
-              admittedGeneration: generation,
-              namespace: action.namespace,
-              action: action.name,
-              payload: Schema.encodeSync(Schema.toCodecJson(action.payload))(payload),
-            };
+              const command: EncodedCommand = {
+                ...request(address),
+                commandId: id,
+                admittedGeneration: generation,
+                namespace: action.namespace,
+                action: action.name,
+                payload: Schema.encodeSync(Schema.toCodecJson(action.payload))(payload),
+              };
 
-            const intents = new Map(state.intents);
+              const intents = new Map(state.intents);
 
-            intents.set(id, {
-              formatVersion: 1,
-              command: copyJson(command),
-              order: entry.order++,
-              phase: "Pending",
-              boundGeneration: generation,
-              confirmedAt: null,
-              outcome: null,
-            });
+              intents.set(id, {
+                formatVersion: 1,
+                command: copyJson(command),
+                order: entry.order++,
+                phase: "Pending",
+                boundGeneration: generation,
+                confirmedAt: null,
+                outcome: null,
+              });
 
-            return { ...state, intents };
-          });
+              return { ...state, intents };
+            },
+            leaseScope,
+          );
 
-          return yield* send(entry, sourceScope, id, false).pipe(
+          return yield* send(entry, sourceScope, id, false, leaseScope).pipe(
             Effect.mapError((failure) => error(failure.reason, failure.message, id)),
             Effect.flatMap(unwrap),
           );
@@ -982,6 +1034,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             payload: message,
           } as typeof wire.message.Type);
 
+          yield* active;
           yield* transport(
             options.transport.publishMessage({ ...request(address), message: encoded }),
           );
@@ -1009,14 +1062,14 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       execute: execute as Lease<S>["execute"],
       retry: (id) =>
         owned(
-          send(entry, sourceScope, id, true).pipe(
+          send(entry, sourceScope, id, true, leaseScope).pipe(
             Effect.mapError((failure) => error(failure.reason, failure.message, id)),
             Effect.flatMap(unwrap),
           ),
         ) as ReturnType<Lease<S>["retry"]>,
       recover: owned(
         Effect.sync(() => entry.recoveryAttempts.clear()).pipe(
-          Effect.andThen(start(entry, sourceScope)),
+          Effect.andThen(start(entry, sourceScope, leaseScope)),
         ),
       ),
       publishMessage: (message) => publish("$source", message),
@@ -1029,38 +1082,55 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
           encode(
             wire.envelope.snapshotFrame,
             frame as typeof wire.envelope.snapshotFrame.Type,
-          ).pipe(Effect.flatMap((value) => acceptFrame(entry, sourceScope, value))),
+          ).pipe(
+            Effect.flatMap((value) => acceptFrame(entry, sourceScope, value, leaseScope)),
+            Effect.asVoid,
+          ),
         ),
       mergeObservation: (merge) =>
         owned(
-          commit(entry, sourceScope, (state) => {
-            const value = merge(
-              (state.authoritative?.snapshot ?? state.provisional) as Snapshot<S> | undefined,
-            );
+          commit(
+            entry,
+            sourceScope,
+            (state) => {
+              const value = merge(
+                (state.authoritative?.snapshot ?? state.provisional) as Snapshot<S> | undefined,
+              );
 
-            return state.authoritative === undefined
-              ? { ...state, provisional: value as ReplicaState.Snapshot }
-              : {
-                  ...state,
-                  authoritative: {
-                    ...state.authoritative,
-                    snapshot: value as ReplicaState.Snapshot,
-                  },
-                };
-          }),
+              return state.authoritative === undefined
+                ? { ...state, provisional: value as ReplicaState.Snapshot }
+                : {
+                    ...state,
+                    authoritative: {
+                      ...state.authoritative,
+                      snapshot: value as ReplicaState.Snapshot,
+                    },
+                  };
+            },
+            leaseScope,
+          ),
         ),
       applyHistory: (generation, value) =>
         owned(
-          commit(entry, sourceScope, (state) =>
-            ReplicaState.history(state, entry.slots, generation, value as ReplicaState.Snapshot),
+          commit(
+            entry,
+            sourceScope,
+            (state) =>
+              ReplicaState.history(state, entry.slots, generation, value as ReplicaState.Snapshot),
+            leaseScope,
           ),
         ),
       dismissFailure: (id) =>
         owned(
-          commit(entry, sourceScope, (state) => ({
-            ...state,
-            failures: state.failures.filter((f) => f.commandId !== id),
-          })),
+          commit(
+            entry,
+            sourceScope,
+            (state) => ({
+              ...state,
+              failures: state.failures.filter((f) => f.commandId !== id),
+            }),
+            leaseScope,
+          ),
         ),
     };
   });
