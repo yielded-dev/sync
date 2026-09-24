@@ -41,5 +41,8 @@ jobs:
       - name: Patch Effect TypeScript-Go
         run: ./node_modules/.bin/vp run patch:tsgo
 
+      - name: Install Chromium for persistence tests
+        run: ./node_modules/.bin/vp -C packages/local-indexeddb exec playwright install --with-deps chromium
+
       - name: Check, test, and build
         run: ./node_modules/.bin/vp run ready

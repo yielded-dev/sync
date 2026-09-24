@@ -5,8 +5,8 @@ The root entry point implements `Source`, `Action`, `Plugin`, `SourceCatalog`,
 shared identities, envelopes, exact outcome codecs, and derived Effect RPC contracts.
 The server and Cloudflare adapter implement authoritative execution. The headless
 client and Atom bindings are implemented, with a persistence port and process-local
-memory adapter. Durable local adapters and their storage guarantees remain design
-contracts. The packages remain private.
+memory adapter. Durable IndexedDB and Expo SQLite adapters implement separate
+cache/journal storage and generation fencing. The packages remain private.
 
 Read the [complete consumer sketch](api/consumer.md) alongside these decisions.
 It defines a counter and a reusable label capability, server-private state,
@@ -15,7 +15,7 @@ The [external contracts example](../examples/contracts/README.md) now compiles t
 shared composition, action types, and native RPC Effect requirements and runs a
 JSON codec smoke check. The [Cloudflare counter](../examples/cloudflare/README.md)
 runs the server through public exports and is exercised by workerd tests. The
-complete browser/Expo assembly still requires the local persistence adapters. See
+local persistence adapters provide the browser/Expo storage assembly. See
 the [client runtime guide](client.md) for the implemented API.
 
 The source review is pinned to Kommunikasie commit
@@ -258,9 +258,38 @@ Persistence is required as one of `{ mode: "persistent", storage }` or
 `{ mode: "volatile" }`; there is no implicit fallback. Memory storage is an explicit
 adapter for tests/process-local use and does not promise restart durability.
 
-The table describes the complete persistence target. The current port and memory
-adapter are documented in the [client guide](client.md); physical databases,
-metadata, snapshot scans, migrations, and cross-process fencing remain adapter work.
+The table describes the implemented persistence boundary. The port and adapters
+are documented in the [client guide](client.md); physical formats and migration
+limits are documented in each adapter README.
+
+Durable adapters expose scoped `open({ namespace, actorId, ...limits })` and
+`layer(options)` constructors. Their handles add `snapshotCache.scan(limit)`,
+returning oldest-first address, save-time and encoded-size metadata. The existing
+minimal handle remains valid for custom storage. Default limits are 4,096 journal
+rows, 128 snapshots, and 8 MiB of encoded JSON per actor per database.
+
+The portable `Persistence` adapter helper owns Schema records, capacity,
+snapshot eviction and journal staging. `Persistence.make(options, drivers)` accepts
+lazy journal and cache acquisition Effects, validates configuration before opening
+either store, and keeps the journal usable if the disposable cache cannot open.
+An `AtomicStore` driver supplies atomic read/modify operations over individual
+string keys in a separate cache and journal database.
+Journal callbacks run once against a bounded copy, then commit with an
+atomic generation/revision comparison. A competing write returns `Conflict`;
+callbacks are never replayed automatically. Failed or interrupted callbacks commit
+nothing, and escaped transaction operations return `Conflict`. Every journal
+commit, including read validation, checks the captured generation. Wipe increments
+that generation atomically with clearing the journal. Each actor has one bounded,
+generation-tagged cache record. Reads check the journal fence before and after
+loading; writes and cleanup preserve newer generations. Delayed retired writes
+cannot accumulate unreachable cache records or affect a later generation's cache.
+
+Unknown physical or journal record formats fail closed and preserve all evidence.
+Unknown intent formats remain opaque to the adapters and are quarantined by the
+client. There is no automatic journal migration or reset. Journal format 1 remains
+unchanged; cache format 2 resets only the known disposable cache format 1.
+Databases use application-configured namespaces; migration from application-owned
+databases requires explicit reconciliation before switching namespaces.
 
 | Client persistence component | Contract                                                                                                                                                             |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -368,5 +397,6 @@ receipt retention, actor isolation, gaps and ephemeral isolation. Client reducer
 confirmation-before-result recovery, explicit generation replacement, scoped
 coordination, native RPC transport and Atom leases are implemented. Memory-backed
 remount tests cover the persistence port; they do not establish process-restart
-durability. Cache scanning/metadata, physical storage migration, cross-process
-fencing, IndexedDB and Expo integration remain adapter work. Validate complete consumers before publishing a beta.
+durability. IndexedDB and Expo SQLite now provide bounded snapshot metadata scans,
+transactional journal storage and durable generation/revision fencing. Physical
+format changes require explicit migration; no automatic journal reset is provided. Validate complete consumers before publishing a beta.

@@ -10,3 +10,5 @@ export {
   type Handle as PersistenceHandle,
   type JournalTransaction,
 } from "./client/ReplicaPersistence.ts";
+
+export * as Persistence from "./client/Persistence.ts";
