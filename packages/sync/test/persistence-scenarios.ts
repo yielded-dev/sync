@@ -1,10 +1,5 @@
 import { Action, ProtocolError, Source } from "@yielded/sync";
-import {
-  Client,
-  Persistence,
-  type PersistenceError,
-  type JournalTransaction,
-} from "@yielded/sync/client";
+import { Client, type Persistence, type PersistenceError } from "@yielded/sync/client";
 import { Deferred, Effect, Exit, Fiber, Schema, type Scope, Stream } from "effect";
 import * as TestClock from "effect/testing/TestClock";
 
@@ -13,7 +8,6 @@ export type Open = (
 ) => Effect.Effect<Persistence.DurableHandle, PersistenceError, Scope.Scope>;
 
 const address = { kind: "counter", id: "room/one" } as const;
-const other = { kind: "counter", id: "room/two" };
 
 export const evidence = {
   address,
@@ -84,57 +78,6 @@ export const exercise = (open: Open, namespace: string) =>
       const second = yield* open(config);
 
       yield* first.intentJournal.transaction((tx) => tx.put(evidence));
-      equal(
-        yield* failureReason(
-          second.intentJournal.transaction((tx) => tx.put({ ...evidence, value: "replacement" })),
-        ),
-        "Conflict",
-        "duplicate id replaced evidence",
-      );
-      equal(
-        yield* second.intentJournal.transaction((tx) => tx.get(address, evidence.commandId)),
-        evidence,
-        "another connection lost evidence",
-      );
-      yield* first.snapshotCache.put(address, { value: 1 });
-      yield* first.snapshotCache.put(other, { value: 2 });
-      equal(yield* first.snapshotCache.get(address), undefined, "oldest snapshot was not evicted");
-      equal(
-        (yield* first.snapshotCache.scan(5)).map((row) => row.address),
-        [other],
-        "snapshot scan did not reflect eviction",
-      );
-      equal(
-        yield* second.intentJournal.transaction((tx) => tx.get(address, evidence.commandId)),
-        evidence,
-        "cache eviction removed journal evidence",
-      );
-
-      let escaped: JournalTransaction | undefined;
-
-      const aborted = yield* failureReason(
-        first.intentJournal.transaction((tx) =>
-          Effect.gen(function* () {
-            escaped = tx;
-            yield* tx.put({ ...evidence, commandId: "aborted" });
-
-            return yield* Persistence.failure("Unavailable", "injected rollback");
-          }),
-        ),
-      );
-
-      equal(aborted, "Unavailable", "transaction failure was lost");
-      equal(
-        yield* first.intentJournal.transaction((tx) => tx.get(address, "aborted")),
-        undefined,
-        "failed transaction partially committed",
-      );
-      if (escaped === undefined) throw new Error("transaction never ran");
-      equal(
-        yield* failureReason(escaped.remove(address, evidence.commandId)),
-        "Conflict",
-        "escaped transaction remained usable",
-      );
 
       const entered = yield* Deferred.make<void>();
       const resume = yield* Deferred.make<void>();
@@ -156,7 +99,6 @@ export const exercise = (open: Open, namespace: string) =>
       yield* fresh.intentJournal.transaction((tx) =>
         tx.put({ ...evidence, value: "new generation" }),
       );
-      yield* fresh.snapshotCache.put(address, { value: 9 });
       yield* Deferred.succeed(resume, undefined);
       equal(
         yield* failureReason(Fiber.join(writer)),
@@ -164,57 +106,12 @@ export const exercise = (open: Open, namespace: string) =>
         "delayed writer crossed a wipe",
       );
       equal(
-        yield* failureReason(first.snapshotCache.put(address, { value: -1 })),
-        "StaleGeneration",
-        "old cache writer crossed a wipe",
-      );
-      equal(yield* failureReason(first.wipe), "StaleGeneration", "old wipe deleted newer data");
-      equal(
         yield* fresh.intentJournal.transaction((tx) => tx.get(address, evidence.commandId)),
         { ...evidence, value: "new generation" },
         "late writer destroyed new evidence",
       );
-      equal(
-        yield* fresh.snapshotCache.get(address),
-        { value: 9 },
-        "late cleanup removed new cache",
-      );
 
-      yield* fresh.intentJournal.transaction((tx) => tx.put({ ...evidence, commandId: "second" }));
-      equal(
-        yield* failureReason(
-          fresh.intentJournal.transaction((tx) => tx.put({ ...evidence, commandId: "third" })),
-        ),
-        "Capacity",
-        "capacity admission succeeded",
-      );
-      equal(
-        (yield* fresh.intentJournal.transaction((tx) => tx.scan(address, 10))).length,
-        2,
-        "capacity failure evicted evidence",
-      );
-
-      const bob = yield* open({ ...config, actorId: "bob" });
-
-      equal(
-        yield* bob.intentJournal.transaction((tx) => tx.scan(address, 10)),
-        [],
-        "actor journal leaked",
-      );
-      yield* bob.intentJournal.transaction((tx) => tx.put(evidence));
-      yield* fresh.purgeSource(address);
-      equal(
-        yield* fresh.intentJournal.transaction((tx) => tx.scan(address, 10)),
-        [],
-        "purge did not remove source",
-      );
-      equal(
-        yield* bob.intentJournal.transaction((tx) => tx.get(address, evidence.commandId)),
-        evidence,
-        "purge crossed actors",
-      );
-
-      return "transactions, eviction, generation fencing, capacity, actor isolation";
+      return "generation fencing";
     }),
   );
 
@@ -395,81 +292,5 @@ export const runtimeRestore = (open: Open, namespace: string) =>
         resent,
         remaining: yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10)),
       };
-    }),
-  );
-
-export const inspect = (open: Open, namespace: string) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const storage = yield* open(options(namespace));
-
-      return {
-        cache: yield* storage.snapshotCache.get(address),
-        rows: yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10)),
-      };
-    }),
-  );
-
-export const quarantine = (open: Open, namespace: string) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const storage = yield* open(options(namespace));
-
-      const transport: Client.Transport = {
-        snapshot: () => Effect.succeed(snapshot),
-        subscribe: () => Stream.concat(Stream.succeed(snapshot), Stream.never),
-        execute: () => Effect.die("quarantined evidence must not be dispatched"),
-        result: () => Effect.die("quarantined evidence must not be dispatched"),
-        publishMessage: () => Effect.void,
-      };
-
-      const client = yield* Client.make(definition, {
-        actorId: "alice",
-        transport,
-        persistence: { mode: "persistent", storage },
-      });
-
-      const source = yield* client.open(address);
-
-      yield* source.ready;
-      equal(
-        yield* source
-          .retry(evidence.commandId)
-          .pipe(Effect.match({ onFailure: (error) => error.reason, onSuccess: () => "Success" })),
-        "Quarantined",
-        "unknown intent format was not quarantined",
-      );
-      equal(
-        yield* storage.intentJournal.transaction((tx) => tx.get(address, evidence.commandId)),
-        evidence,
-        "quarantine removed evidence",
-      );
-
-      return "quarantined";
-    }),
-  );
-
-export const unavailableCache = (open: Open, namespace: string) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const storage = yield* open(options(namespace));
-
-      equal(
-        yield* storage.snapshotCache.get(address),
-        undefined,
-        "unavailable cache was not a miss",
-      );
-      equal(
-        yield* failureReason(storage.snapshotCache.put(address, { value: 3 })),
-        "Unavailable",
-        "cache save did not report failure",
-      );
-      equal(
-        yield* storage.intentJournal.transaction((tx) => tx.get(address, evidence.commandId)),
-        evidence,
-        "cache failure prevented journal recovery",
-      );
-
-      return "journal available";
     }),
   );

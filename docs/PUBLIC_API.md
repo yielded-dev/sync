@@ -13,7 +13,7 @@ It defines a counter and a reusable label capability, server-private state,
 authorization, a Cloudflare host, a persistent headless client, and Atom bindings.
 The [external contracts example](../examples/contracts/README.md) now compiles the
 shared composition, action types, and native RPC Effect requirements and runs a
-JSON codec smoke check. The [Cloudflare counter](../examples/cloudflare/README.md)
+JSON codec example. The [Cloudflare counter](../examples/cloudflare/README.md)
 runs the server through public exports and is exercised by workerd tests. The
 local persistence adapters provide the browser/Expo storage assembly. See
 the [client runtime guide](client.md) for the implemented API.
@@ -371,36 +371,20 @@ is chosen, old unresolved journals require reconciliation or migration before
 migration is considered complete. Review product reset policy as part of each
 consumer migration.
 
-## Acceptance plan and next steps
+## Verification boundaries
 
-| Boundary                 | Focused proof required before handoff                                                                                                                                                                                                                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shared contracts         | Typecheck an external consumer with two capabilities; retain action-specific payload/result/error and unsatisfied Effect requirements; reject duplicate/missing registrations; JSON round-trip rich values and composed frames; build all entry points                                                     |
-| Authoritative runtime    | Real Worker/SQLite: identical retry returns original result once, conflicting id cannot mutate state, typed rejection repeats, injected commit failure leaves no partial state/event/receipt/outbox, restart restores obligations, replay gaps recover, expired auth is fenced, messages consume no cursor |
-| Headless client and Atom | Public boundary: duplicates/gaps, monotonic hydration, rejection rollback, confirmation before result, ambiguous retry with unchanged envelope, generation replacement, source/actor disposal, passive atoms never connect, active atoms share one lease                                                   |
-| Persistence              | Real IndexedDB and Expo SQLite: reload/restart retains exact evidence, cache eviction/corruption leaves journal intact, version mismatch quarantines, delayed writers/restore/wipe cannot cross a generation, background flush completes, explicit volatile/custom/memory modes work                       |
-| Consumers                | Standalone plus slide-deck pilot: two-client convergence, lost-response recovery, reconnect, reload, and destination projection behavior through public exports                                                                                                                                            |
-| Release and migration    | Built package exports and beta install; published consumer proof; document actual format/reset scope; migrate and remove superseded internal implementations                                                                                                                                               |
+Use the [testing skill](../.agents/skills/testing/SKILL.md) to choose the cheapest
+sufficient proof for the requested change. Existing real-adapter and public-consumer
+checks protect authority, transaction and recovery boundaries; they do not impose
+new tests or a feature matrix. Run `vp run ready` before handoff and identify any
+unavailable required proof.
 
-Use the repository testing skill: commit regression tests at the cheapest faithful
-boundary, use deterministic time for scheduling, and reserve real adapters for
-storage/platform guarantees. An in-memory test is not Expo or IndexedDB proof.
-Run `vp run ready` for each implementation change and identify unavailable
-required proof. The scaffold's empty suites validate no synchronization behavior.
+Memory remount checks do not establish process-restart durability. Chromium checks
+exercise real IndexedDB; the desktop SQLite suite does not establish the Expo
+native bridge. Use the [native probe](../examples/persistence-expo/README.md) when
+the change requires native or application-restart proof.
 
-Shared contracts and plugin composition are implemented. Native RPC handler
-composition retains service requirements, and Layer provision subtracts supplied
-services. Server-private definitions, handler registration checks, atomic commits,
-durable exact results, replay, outbox delivery and Cloudflare hosting are implemented.
-The real Worker suite covers failed/interrupted commits, restart/hibernation,
-receipt retention, actor isolation, gaps and ephemeral isolation. Client reducer registration, replica transitions, immutable command retry,
-confirmation-before-result recovery, explicit generation replacement, scoped
-coordination, native RPC transport and Atom leases are implemented. Memory-backed
-remount tests cover the persistence port; they do not establish process-restart
-durability. IndexedDB and Expo SQLite now provide bounded snapshot metadata scans,
-transactional journal storage and durable generation/revision fencing. Physical
-format changes require explicit migration; no automatic journal reset is provided.
 The independent list and board consumer exercises the public runtime and its
-IndexedDB assembly; the slide-deck pilot maps the product boundary but has not
+IndexedDB assembly. The slide-deck pilot maps the product boundary but has not
 replaced the product source or projection destination. Validate that integration
 before publishing a beta.

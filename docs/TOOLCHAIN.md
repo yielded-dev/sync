@@ -59,12 +59,12 @@ adapter entry points implement authoritative execution through `./server` and
 the Cloudflare package. Client and Atom entry points implement scoped replicas,
 transport/recovery, persistence ports, and view bindings. Local persistence adapter
 entry points provide scoped IndexedDB and Expo SQLite handles. The external contracts example participates in
-workspace typechecking and has a separate `start` task for its codec smoke check.
+workspace typechecking and has a separate `start` task that displays a codec round trip.
 
 `vp run ready` composes static checks, workspace tests, and package builds.
 Tests use Vite+'s Vitest runner; Effect tests can use the catalog-pinned
-`@effect/vitest`. Core has behavioral contract, client, lifecycle, and Atom suites and requires tests
-to be present. The Cloudflare package uses the released Worker pool in its Vite
+`@effect/vitest`. Core retains focused client admission, recovery and lifecycle races.
+The Cloudflare package uses the released Worker pool in its Vite
 configuration and runs tests against the public Cloudflare example. Workerd and
 SQLite provide storage, interruption, eviction, hibernation, and native RPC proof.
 The example's build is a Wrangler dry run and participates in `ready`. Its `types`
@@ -79,6 +79,9 @@ the browser and its system dependencies explicitly. The Expo adapter suite uses
 real file-backed Node SQLite through the Expo API subset. The Expo Go probe in
 `examples/persistence-expo` is a separate native bridge/restart check and participates
 in workspace typechecking.
+
+Use the [testing skill](../.agents/skills/testing/SKILL.md) to choose proof for a
+change. These existing entrypoints do not require new tests or a scenario matrix.
 
 Vite Task caches successful script results. Vitest's mutable result cache is
 disabled to avoid invalidating task inputs. Use `vp run --no-cache <task>` when

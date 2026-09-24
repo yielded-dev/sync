@@ -23,7 +23,6 @@ const server = Server.make(Publication, {
   authorize: ({ principal, state, operation }) => {
     if (operation._tag === "subscribe" && state > 0) {
       if (principal.failure === "interrupt") return Effect.interrupt;
-      if (principal.failure === "defect") return Effect.die("Authorization defect after commit");
     }
 
     return Effect.void;

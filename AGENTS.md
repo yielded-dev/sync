@@ -48,14 +48,37 @@ and explicit compiler setup.
 - Applications retain domain models, auth-provider integration, projection
   destinations, and UI. Do not move application concerns into the library.
 
-## Verification and skills
+## Testing policy
 
-Follow `.agents/skills/testing/SKILL.md`. Commit tests when they protect plausible
-regressions with independent observable assertions. Use the cheapest faithful
-boundary and reuse focused evidence for unchanged inputs. Record unavailable
-required proof explicitly; do not equate an empty suite with verified behavior.
+Default to no new tests or test infrastructure. Verify requested behavior with
+existing checks and direct workflow evidence. Prefer E2E for complex features;
+this does not require writing an E2E suite or a larger substitute for a rejected
+unit test. Save a verifiable, repeatable artifact without building reporting machinery.
+
+Never write unit tests after implementation. If isolation is necessary, first
+write the scoped failure inventory, then the necessary failing tests, then the
+code. New or expanded committed automation requires a current regression or an
+explicit human test request, plus a concrete gap existing proof cannot cover.
+Being a library does not waive this bar or require tests for every transition.
+
+Load [testing](.agents/skills/testing/SKILL.md) before planning proof or adding,
+retaining, or removing tests. It owns selection, failure-first isolation,
+artifacts, evidence reuse and placement. Keep useful public-contract, atomicity,
+recovery and authority checks at their strongest boundary; remove redundant
+matrices and implementation mirrors. Preserve blocked required proof explicitly.
+The final `vp run ready` gate still applies.
+
+## Skills and pull requests
+
+Use [simplify](.agents/skills/simplify/SKILL.md) to consider removing unnecessary
+mechanisms within the affected workflow. Preserve required contracts, authority,
+durability and retry guarantees; complexity alone does not justify unrelated cleanup.
+
+Use [open-pull-request](.agents/skills/open-pull-request/SKILL.md) for concise PR
+descriptions. Include diagrams only for meaningful architecture changes and code
+examples only when they clarify the change. Opening a PR does not authorize merging it.
 
 Contributor skills in `.agents/skills` are repository tooling, not runtime modules.
-Each `.dev-kit-origin.json` receipt records its source. Update them explicitly with
+Dev Kit copies record their source in `.dev-kit-origin.json`. Update them explicitly with
 the transient Dev Kit CLI when requested; the repository does not depend on Dev Kit
 for installation, checks, builds, or CI.

@@ -67,6 +67,6 @@ format, reconcile/migrate old unresolved evidence first. Browser origin storage
 remains subject to browser quota and eviction policy; applications may request
 persistent storage through their own browser lifecycle.
 
-`vp run test` uses real Chromium IndexedDB, page reloads, independent tabs, corrupt
-records, quarantine, rollback, background flush and exact retry recovery. Install
+`vp run test` uses real Chromium IndexedDB for transaction rollback, generation
+fencing across tabs, background flush and exact retry recovery after reload. Install
 its browser with `vp exec playwright install chromium` from this package.
