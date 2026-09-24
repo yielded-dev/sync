@@ -1,7 +1,7 @@
 # Packages and hosts
 
 All packages are published under the `@yielded` scope at the shared beta version
-`0.1.0-beta.0`. Keep that version exact across the family.
+`{{SYNC_VERSION}}`. Keep that version exact across the family.
 
 | Package                                                                                                | Public entry points                              | Host                                          |
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | --------------------------------------------- |

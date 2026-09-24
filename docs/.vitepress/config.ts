@@ -1,5 +1,7 @@
 import { defineConfig } from "vitepress";
 
+import syncPackage from "../../packages/sync/package.json" with { type: "json" };
+
 export default defineConfig({
   title: "Yielded Sync",
   description: "Effect-native realtime synchronization with exact retries and scoped clients.",
@@ -7,6 +9,13 @@ export default defineConfig({
   base: "/sync/",
   cleanUrls: true,
   sitemap: { hostname: "https://yielded.dev/sync/" },
+  markdown: {
+    config(md) {
+      md.core.ruler.before("normalize", "sync-version", (state) => {
+        state.src = state.src.replaceAll("{{SYNC_VERSION}}", syncPackage.version);
+      });
+    },
+  },
   head: [["link", { rel: "icon", type: "image/svg+xml", href: "/sync/favicon.svg" }]],
   srcExclude: ["PUBLIC_API.md", "TOOLCHAIN.md", "slide-deck-pilot.md"],
   themeConfig: {

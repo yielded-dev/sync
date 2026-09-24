@@ -1,0 +1,66 @@
+name: Deploy docs
+
+on:
+  workflow_run:
+    workflows: [Publish beta]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  VP_GIT_HOOKS: "0"
+
+jobs:
+  deploy:
+    name: Deploy docs
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_run' && github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/publish-beta.yml' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out release revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Check current main
+        id: current
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          latest=$(git ls-remote --exit-code origin refs/heads/main | cut -f1)
+          echo "matches=$([ "$latest" = "$SOURCE_SHA" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        if: ${{ steps.current.outputs.matches == 'true' }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Set up Bun
+        if: ${{ steps.current.outputs.matches == 'true' }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Install dependencies
+        if: ${{ steps.current.outputs.matches == 'true' }}
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Deploy validated docs
+        if: ${{ steps.current.outputs.matches == 'true' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          ./node_modules/.bin/vp run docs:deploy
