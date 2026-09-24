@@ -70,6 +70,9 @@ SQLite provide storage, interruption, eviction, hibernation, and native RPC proo
 The example's build is a Wrangler dry run and participates in `ready`. Its `types`
 task generates binding declarations; pinned Workers types supply the runtime
 declarations. Generated bindings are excluded from formatting and linting.
+The list and board example adds a separate public-consumer Worker test and dry-run
+build, including two-client recovery after Durable Object eviction and a forced
+subscription disconnect.
 The IndexedDB suite runs Chromium with Playwright through Vite+; install Chromium
 with `vp -C packages/local-indexeddb exec playwright install chromium`. CI installs
 the browser and its system dependencies explicitly. The Expo adapter suite uses

@@ -41,6 +41,22 @@
         "typescript": "catalog:",
       },
     },
+    "examples/list-board": {
+      "name": "sync-list-board-example",
+      "dependencies": {
+        "@yielded/sync": "workspace:*",
+        "@yielded/sync-local-indexeddb": "workspace:*",
+        "@yielded/sync-platform-cloudflare": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@cloudflare/vitest-pool-workers": "catalog:",
+        "@cloudflare/workers-types": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "wrangler": "catalog:",
+      },
+    },
     "examples/persistence-expo": {
       "name": "@yielded/sync-example-persistence-expo",
       "version": "0.0.0",
@@ -1674,6 +1690,8 @@
     "supports-preserve-symlinks-flag": ["supports-preserve-symlinks-flag@1.0.0", "", {}, "sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w=="],
 
     "sync-cloudflare-example": ["sync-cloudflare-example@workspace:examples/cloudflare"],
+
+    "sync-list-board-example": ["sync-list-board-example@workspace:examples/list-board"],
 
     "term-size": ["term-size@2.2.1", "", {}, "sha512-wK0Ri4fOGjv/XPy8SBHZChl8CM7uMc5VML7SqiQ0zG7+J5Vr+RMQDoHa2CNT6KHUnTGIXH34UDMkPzAUyapBZg=="],
 

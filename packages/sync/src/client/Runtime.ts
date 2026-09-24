@@ -33,16 +33,13 @@ import { type Handle, type PersistenceError } from "./ReplicaPersistence.ts";
 import type { Request, Transport } from "./Transport.ts";
 
 type SourceActions<S extends Source.Spec> =
-  | Action.Bound<S["kind"], S["schemaVersion"], "$source", S["actions"][number]>
+  | (S["actions"][number] & { readonly namespace: "$source" })
   | {
-      [P in S["plugins"][number] as P["id"]]: Action.Bound<
-        S["kind"],
-        S["schemaVersion"],
-        P["id"],
-        P["spec"]["actions"][number]
-      >;
+      [P in S["plugins"][number] as P["id"]]: P["spec"]["actions"][number] & {
+        readonly namespace: P["id"];
+      };
     }[S["plugins"][number]["id"]];
-export type Actions<S extends Source.Spec> = Extract<SourceActions<S>, BoundAction>;
+export type Actions<S extends Source.Spec> = Extract<SourceActions<S>, Action.Definition>;
 export type Snapshot<S extends Source.Spec> = Source.Definition<S>["snapshot"]["Type"];
 export type State<S extends Source.Spec> = Replica<Snapshot<S>, Action.Error<Actions<S>>>;
 type BoundAction = Omit<
