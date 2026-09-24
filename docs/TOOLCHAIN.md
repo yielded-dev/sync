@@ -101,7 +101,8 @@ patches the compiler, and runs `vp run ready`. The `ready` job is the CI gate.
 `ci.yml` does not deploy or publish packages. The manually dispatched
 `publish-beta.yml` runs the same `ready` gate and publishes its validated tarballs
 through npm trusted publishing. It verifies the registry install and records the
-source revision and workflow evidence in a GitHub prerelease. See the
+source revision and workflow evidence in a GitHub prerelease. A successful beta
+publication triggers `deploy-docs.yml` for that same revision. See the
 [release guide](RELEASE.md) for host support and credential setup.
 
 `pr-review.yml` uses the published Effect Agent review action and the repository's
@@ -124,13 +125,22 @@ required `ready` CI job.
 
 The public documentation source lives in `docs/`. `vp run docs:dev`,
 `vp run docs:build`, and `vp run docs:preview` operate its VitePress site with a
-`/sync/` base path. `site/wrangler.jsonc` deploys a separate static asset Worker
+`/sync/` base path. The build fills `{{SYNC_VERSION}}` from the core package
+manifest, so installation guidance follows Changesets version bumps.
+`site/wrangler.jsonc` deploys a separate static asset Worker
 on the `yielded.dev/sync*` route; its handler removes that path prefix before
 reading assets. The existing `/auth` route is owned separately.
 
-`vp run docs:deploy` builds and deploys the site. It requires Cloudflare access
-to the Yielded domain's account and Worker routes. With the local Wrangler OAuth
-session, unset any unrelated `CLOUDFLARE_API_TOKEN` and
+`deploy-docs.yml` runs after a successful `Publish beta` workflow and checks out
+the validated release revision. It skips deployment if `main` has advanced, so
+an older run cannot replace newer docs. A manual workflow dispatch from current
+`main` can publish docs between package releases or retry a skipped run. The
+workflow needs the repository secret `CLOUDFLARE_API_TOKEN` with permission to
+deploy the docs Worker and manage its `yielded.dev` route.
+
+`vp run docs:deploy` also builds and deploys the site locally. It requires
+Cloudflare access to the Yielded domain's account and Worker routes. With the
+local Wrangler OAuth session, unset any unrelated `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` values before running it. Check the deployed home page,
 a guide page, and an asset URL after publication.
 

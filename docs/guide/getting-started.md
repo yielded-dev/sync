@@ -4,15 +4,15 @@ Yielded Sync separates a source's public contract from its authoritative host an
 its clients. Install the core package and the Effect peer at the exact beta versions:
 
 ```sh
-npm install @yielded/sync@0.1.0-beta.0 effect@4.0.0-rc.112
+npm install @yielded/sync@{{SYNC_VERSION}} effect@4.0.0-rc.112
 ```
 
 Add only the adapters your application runs:
 
 ```sh
-npm install @yielded/sync-platform-cloudflare@0.1.0-beta.0
-npm install @yielded/sync-local-indexeddb@0.1.0-beta.0
-npm install @yielded/sync-local-expo@0.1.0-beta.0 expo-sqlite@57.0.3
+npm install @yielded/sync-platform-cloudflare@{{SYNC_VERSION}}
+npm install @yielded/sync-local-indexeddb@{{SYNC_VERSION}}
+npm install @yielded/sync-local-expo@{{SYNC_VERSION}} expo-sqlite@57.0.3
 ```
 
 The Expo adapter targets native SQLite. Expo web uses the IndexedDB adapter.

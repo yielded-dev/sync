@@ -24,7 +24,7 @@ features:
 
 ## Published beta
 
-The four packages share version **`0.1.0-beta.0`**. Pin exact versions while the
+The four packages share version **`{{SYNC_VERSION}}`**. Pin exact versions while the
 API and persisted formats are in beta. Start with the [installation guide](./guide/getting-started.md)
 and choose the adapters for your host.
 
