@@ -1,0 +1,15 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "effect-sync-docs",
+  "main": "./worker.mjs",
+  "account_id": "f2eec4c2eaf399a3508ee93c1fe414be",
+  "compatibility_date": "2026-08-22",
+  "workers_dev": false,
+  "routes": [{ "pattern": "yielded.dev/sync*", "zone_id": "3156a752fbb91b819c563f6de807a621" }],
+  "assets": {
+    "directory": "../docs/.vitepress/dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "404-page",
+  },
+}

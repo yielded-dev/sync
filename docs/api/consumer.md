@@ -1,9 +1,10 @@
 # Consumer API sketch
 
-This sketch illustrates the [public API contracts](../PUBLIC_API.md). Shared
+This sketch illustrates [how Sync works](../guide/concepts.md). Shared
 `Source`, `Action`, and `Plugin` definitions are implemented and exercised by the
-[external contracts example](../../examples/contracts/README.md). The server and
-Cloudflare host also run in the [counter example](../../examples/cloudflare/README.md).
+[external contracts example](https://github.com/yielded-dev/sync/tree/main/examples/contracts).
+The server and Cloudflare host also run in the
+[counter example](https://github.com/yielded-dev/sync/tree/main/examples/cloudflare).
 `Client`, Atom, IndexedDB and Expo SQLite are implemented. The persistence sections
 use scoped adapters with explicit application namespaces. Effect Schema/Layer/Scope are the underlying
 primitives.

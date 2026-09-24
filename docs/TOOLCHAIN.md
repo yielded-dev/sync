@@ -63,7 +63,8 @@ workspace typechecking and has a separate `start` task that displays a codec rou
 
 `vp run ready` builds packages first so workspace imports resolve their published
 ESM/declaration exports, then runs static checks, workspace tests, and a clean
-packed-consumer install, typecheck, and build.
+packed-consumer install, typecheck, and build. The build task also generates the
+VitePress documentation site from `docs/`.
 Tests use Vite+'s Vitest runner; Effect tests can use the catalog-pinned
 `@effect/vitest`. Core retains focused client admission, recovery and lifecycle races.
 The Cloudflare package uses the released Worker pool in its Vite
@@ -118,6 +119,20 @@ Fast mode, at most five automatic attempts per PR, a $1 base allowance,
 and a $2.50 ceiling per attempt. Manual attempts have the same spending ceiling.
 The check reports blockers and incomplete coverage; it is separate from the
 required `ready` CI job.
+
+## Documentation site
+
+The public documentation source lives in `docs/`. `vp run docs:dev`,
+`vp run docs:build`, and `vp run docs:preview` operate its VitePress site with a
+`/sync/` base path. `site/wrangler.jsonc` deploys a separate static asset Worker
+on the `yielded.dev/sync*` route; its handler removes that path prefix before
+reading assets. The existing `/auth` route is owned separately.
+
+`vp run docs:deploy` builds and deploys the site. It requires Cloudflare access
+to the Yielded domain's account and Worker routes. With the local Wrangler OAuth
+session, unset any unrelated `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` values before running it. Check the deployed home page,
+a guide page, and an asset URL after publication.
 
 ## Contributor skills
 

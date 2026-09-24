@@ -1,9 +1,9 @@
 # Beta release
 
-The four packages share one version. The first beta candidate is
+The four packages share one version. The first published beta is
 `0.1.0-beta.0` for `@yielded/sync`, `@yielded/sync-platform-cloudflare`,
-`@yielded/sync-local-indexeddb`, and `@yielded/sync-local-expo`. Kommunikasie
-should pin those exact versions after they resolve from npm. The shared Effect
+`@yielded/sync-local-indexeddb`, and `@yielded/sync-local-expo`. Consumers
+should pin those exact versions. The shared Effect
 peer is `effect@4.0.0-rc.112`; the Expo adapter also peers on
 `expo-sqlite@57.0.3`.
 
@@ -18,36 +18,23 @@ These beta versions can change public APIs and persisted formats between release
 Pin exact versions, read release notes before upgrading, and migrate or reconcile
 authoritative state, receipts, and unresolved client journals explicitly. There is
 no automatic reset of durable retry evidence. Disposable snapshot caches can be
-rebuilt. Production slide-deck adoption still requires the product integration
-and destination projection checks in the [pilot](slide-deck-pilot.md).
+rebuilt. Production adoption still requires application integration and
+projection-destination checks.
 
-## Publishing
+The [first prerelease](https://github.com/yielded-dev/sync/releases/tag/v0.1.0-beta.0)
+records its source revision, validated tarballs, and the passing registry
+consumer check.
 
-The first publish requires an npm account authorized to create public packages
-under `@yielded`. From the committed `main` revision, run `vp run ready`, then
-publish its validated tarballs in dependency order:
+## Publishing subsequent betas
 
-```sh
-npm publish .release/sync.tgz --access public --tag beta
-npm publish .release/platform-cloudflare.tgz --access public --tag beta
-npm publish .release/local-indexeddb.tgz --access public --tag beta
-npm publish .release/local-expo.tgz --access public --tag beta
-```
-
-After all four packages exist, register `publish-beta.yml` as their trusted
-publisher. Run this for each package name:
-
-```sh
-npm trust github @yielded/sync --file publish-beta.yml --repo yielded-dev/sync --allow-publish
-```
-
-npm requires interactive 2FA for this operation.
-Then dispatch the workflow from `main`. The workflow uses the frozen Bun lockfile,
+The four packages have `publish-beta.yml` registered as their npm trusted
+publisher. The first beta was published from the CLI and has no CI provenance.
+Subsequent beta versions use the manual GitHub workflow from `main`, with npm
+OIDC and provenance. The workflow uses the frozen Bun lockfile,
 Vite+ `ready` gate, and exact tarballs validated by `release:check`. It accepts an
 already published version only when its registry integrity matches the tarball,
 verifies a clean registry install, and records the source revision and validation
-run in a GitHub prerelease. Subsequent beta versions publish through npm OIDC with
-provenance. The initial CLI publish has no CI provenance.
+run in a GitHub prerelease.
 
 `vp run changeset` records subsequent changes. The fixed version group is in
 Changesets beta prerelease mode; `vp run changeset:version` advances all four
