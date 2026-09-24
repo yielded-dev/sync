@@ -1,0 +1,107 @@
+:root {
+  --vp-font-family-base: "IBM Plex Sans Variable", sans-serif;
+  --vp-font-family-mono: "IBM Plex Mono", monospace;
+  --vp-c-bg: #f8f9fb;
+  --vp-c-bg-alt: #eff1f5;
+  --vp-c-bg-soft: #eef0f4;
+  --vp-c-text-1: #1b1d23;
+  --vp-c-text-2: #535866;
+  --vp-c-border: #d4d8e0;
+  --vp-c-divider: #e0e3e9;
+  --vp-c-brand-1: #315be8;
+  --vp-c-brand-2: #2448c8;
+  --vp-c-brand-3: #1936a2;
+  --vp-c-brand-soft: rgba(49, 91, 232, 0.1);
+  --vp-button-brand-bg: #1b1d23;
+  --vp-button-brand-hover-bg: #315be8;
+}
+
+.dark {
+  --vp-c-bg: #171814;
+  --vp-c-bg-alt: #11120f;
+  --vp-c-bg-soft: #23241f;
+  --vp-c-text-1: #f1efe7;
+  --vp-c-text-2: #b9bbb1;
+  --vp-c-border: #3b3d36;
+  --vp-c-divider: #33352f;
+  --vp-c-brand-1: #9eb2ff;
+  --vp-c-brand-2: #bdc9ff;
+  --vp-c-brand-3: #d3dcff;
+  --vp-c-brand-soft: rgba(158, 178, 255, 0.12);
+  --vp-button-brand-bg: #c6f36a;
+  --vp-button-brand-text: #171814;
+  --vp-button-brand-hover-bg: #d4fb83;
+}
+
+body {
+  background-image:
+    linear-gradient(var(--vp-c-divider) 1px, transparent 1px),
+    linear-gradient(90deg, var(--vp-c-divider) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-attachment: fixed;
+}
+
+body::before {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background: color-mix(in srgb, var(--vp-c-bg) 94%, transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.VPNavBar,
+.VPSidebar,
+.VPNavScreen,
+.VPLocalNav {
+  background: color-mix(in srgb, var(--vp-c-bg) 94%, transparent) !important;
+  backdrop-filter: blur(16px);
+}
+
+.VPNavBar {
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.VPNavBarTitle .title {
+  letter-spacing: -0.03em;
+}
+
+.VPSidebar {
+  border-right: 1px solid var(--vp-c-divider);
+}
+
+.vp-doc h1,
+.VPHomeHero .name,
+.VPHomeHero .text {
+  letter-spacing: -0.045em;
+}
+
+.vp-doc h2 {
+  border-top: 1px solid var(--vp-c-divider);
+  padding-top: 1rem;
+}
+
+.vp-doc a,
+.VPHome a {
+  text-underline-offset: 0.2em;
+}
+
+.vp-doc div[class*="language-"] {
+  border: 1px solid var(--vp-c-border);
+  border-radius: 7px;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

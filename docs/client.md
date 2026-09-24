@@ -135,8 +135,9 @@ Applications own background lifecycle hooks and can await `session.flush`;
 they need no unload write for initial journal admission. Session disposal retains
 journal evidence, and logout deletion remains an explicit application policy.
 
-See the [IndexedDB](../packages/local-indexeddb/README.md) and
-[Expo SQLite](../packages/local-expo/README.md) adapter guides for physical names,
+See the [IndexedDB](https://github.com/yielded-dev/sync/blob/main/packages/local-indexeddb/README.md) and
+[Expo SQLite](https://github.com/yielded-dev/sync/blob/main/packages/local-expo/README.md)
+adapter guides for physical names,
 format versions, reset scope and platform proof. There is no automatic migration
 from application-owned databases or namespaces. The portable `Persistence` helper
 is available for adapter authors implementing atomic string-record stores; custom

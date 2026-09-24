@@ -2,6 +2,9 @@
 
 Reusable Effect-native realtime synchronization, owned by [Yielded](https://github.com/yielded-dev).
 
+Read the [published documentation](https://yielded.dev/sync/) for installation,
+host choices, a complete consumer example, and client lifecycle guidance.
+
 Shared source/action/plugin contracts, Schema envelopes, exact outcome codecs, and
 derived Effect RPC contracts, the authoritative server runtime, and the Cloudflare
 SQLite/Durable Object adapter, scoped headless client, and Effect Atom bindings are
@@ -54,7 +57,8 @@ install, typecheck, and build.
 | `vp run typecheck`          | Pure TypeScript and Effect diagnostic checks           |
 | `vp run check`              | Formatting, linting, and all workspace typechecks      |
 | `vp run test`               | All workspace test suites                              |
-| `vp run build`              | All package ESM, declaration, and source-map builds    |
+| `vp run build`              | All package builds and the public docs site            |
+| `vp run docs:build`         | Build the public documentation site                    |
 | `vp run release:check`      | Pack four tarballs and verify a clean consumer         |
 | `vp run ready`              | Full local and CI validation                           |
 | `vp run patch:tsgo`         | Reapply the compiler patch after a script-free install |
@@ -69,10 +73,10 @@ for headless and Atom usage,
 
 ## Release status
 
-The four publishable packages are versioned as `0.1.0-beta.0` and export built
-ESM and declarations. The [release guide](docs/RELEASE.md) lists supported hosts,
-the beta compatibility policy, exact adoption versions, and the manual GitHub
-publication workflow, including the credential needed for the first version.
+The four packages are published as `0.1.0-beta.0` and export built ESM and
+declarations. The [release guide](docs/RELEASE.md) lists supported hosts, the
+beta compatibility policy, exact adoption versions, and the GitHub publication
+workflow.
 The standalone consumer covers convergence, rejection rollback, lost-response
 retry, and reconnect; adapter checks cover browser reload and native iOS restart
 storage. Product adoption and destination projection validation remain in the
