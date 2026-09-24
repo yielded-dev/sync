@@ -60,7 +60,9 @@ typechecking, tests, and ESM/declaration builds for all four packages.
 
 The [external contracts example](examples/contracts/README.md) demonstrates typed
 public imports; the [Cloudflare counter](examples/cloudflare/README.md) is a runnable
-authority. See the [client guide](docs/client.md) for headless and Atom usage,
+authority. The [list and board consumer](examples/list-board/README.md) exercises
+two clients through those public entry points. See the [client guide](docs/client.md)
+for headless and Atom usage,
 [toolchain details](docs/TOOLCHAIN.md) for verification, and [contributor guidance](AGENTS.md).
 
 ## Release status
@@ -70,10 +72,11 @@ Changesets defines their eventual shared release group. Package exports resolve 
 TypeScript sources for development, and `vp pack` writes build artifacts to `dist/`.
 There is no automatic npm publication workflow.
 
-Before the first beta, configure built package exports, remove the private flags, establish prerelease versioning and
-npm publishing, and validate the standalone and slide-deck consumers. The required
-behavioral proof includes convergence, rejection rollback, lost-response retry,
-reconnect, and reload/restart recovery.
+Before the first beta, configure built package exports, remove the private flags,
+establish prerelease versioning and npm publishing, and complete the
+[slide-deck pilot](docs/slide-deck-pilot.md) against its product destination. The
+standalone consumer covers convergence, rejection rollback, lost-response retry,
+and reconnect; the adapter suites cover browser reload and native restart storage.
 
 ## License
 

@@ -1,0 +1,24 @@
+{
+  "name": "sync-list-board-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "dev": "wrangler dev",
+    "test": "vp test",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yielded/sync": "workspace:*",
+    "@yielded/sync-local-indexeddb": "workspace:*",
+    "@yielded/sync-platform-cloudflare": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/workers-types": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

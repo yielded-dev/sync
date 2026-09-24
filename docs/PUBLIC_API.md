@@ -399,4 +399,8 @@ coordination, native RPC transport and Atom leases are implemented. Memory-backe
 remount tests cover the persistence port; they do not establish process-restart
 durability. IndexedDB and Expo SQLite now provide bounded snapshot metadata scans,
 transactional journal storage and durable generation/revision fencing. Physical
-format changes require explicit migration; no automatic journal reset is provided. Validate complete consumers before publishing a beta.
+format changes require explicit migration; no automatic journal reset is provided.
+The independent list and board consumer exercises the public runtime and its
+IndexedDB assembly; the slide-deck pilot maps the product boundary but has not
+replaced the product source or projection destination. Validate that integration
+before publishing a beta.
