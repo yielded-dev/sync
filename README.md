@@ -43,8 +43,9 @@ vp run ready
 ```
 
 Installation patches TypeScript with the pinned Effect TypeScript-Go compiler and
-installs the Vite+ Git hook dispatcher. `vp run ready` runs formatting, linting,
-typechecking, tests, and ESM/declaration builds for all four packages.
+installs the Vite+ Git hook dispatcher. `vp run ready` builds all four packages,
+then runs formatting, linting, typechecking, tests, and a clean packed-consumer
+install, typecheck, and build.
 
 | Command                     | Purpose                                                |
 | --------------------------- | ------------------------------------------------------ |
@@ -54,6 +55,7 @@ typechecking, tests, and ESM/declaration builds for all four packages.
 | `vp run check`              | Formatting, linting, and all workspace typechecks      |
 | `vp run test`               | All workspace test suites                              |
 | `vp run build`              | All package ESM, declaration, and source-map builds    |
+| `vp run release:check`      | Pack four tarballs and verify a clean consumer         |
 | `vp run ready`              | Full local and CI validation                           |
 | `vp run patch:tsgo`         | Reapply the compiler patch after a script-free install |
 | `vp run changeset`          | Record a consumer-visible change                       |
@@ -67,16 +69,14 @@ for headless and Atom usage,
 
 ## Release status
 
-The four package manifests are private while their APIs are under construction.
-Changesets defines their eventual shared release group. Package exports resolve local
-TypeScript sources for development, and `vp pack` writes build artifacts to `dist/`.
-There is no automatic npm publication workflow.
-
-Before the first beta, configure built package exports, remove the private flags,
-establish prerelease versioning and npm publishing, and complete the
-[slide-deck pilot](docs/slide-deck-pilot.md) against its product destination. The
-standalone consumer covers convergence, rejection rollback, lost-response retry,
-and reconnect; the adapter suites cover browser reload and native restart storage.
+The four publishable packages are versioned as `0.1.0-beta.0` and export built
+ESM and declarations. The [release guide](docs/RELEASE.md) lists supported hosts,
+the beta compatibility policy, exact adoption versions, and the manual GitHub
+publication workflow, including the credential needed for the first version.
+The standalone consumer covers convergence, rejection rollback, lost-response
+retry, and reconnect; adapter checks cover browser reload and native iOS restart
+storage. Product adoption and destination projection validation remain in the
+[slide-deck pilot](docs/slide-deck-pilot.md).
 
 ## License
 
