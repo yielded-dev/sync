@@ -268,23 +268,28 @@ returning oldest-first address, save-time and encoded-size metadata. The existin
 minimal handle remains valid for custom storage. Default limits are 4,096 journal
 rows, 128 snapshots, and 8 MiB of encoded JSON per actor per database.
 
-The portable `Persistence` adapter helper owns format-1 Schema records, capacity,
-snapshot eviction and journal staging. An `AtomicStore` driver supplies atomic
-read/modify operations over individual string keys in a separate cache and journal
-database. Journal callbacks run once against a bounded copy, then commit with an
+The portable `Persistence` adapter helper owns Schema records, capacity,
+snapshot eviction and journal staging. `Persistence.make(options, drivers)` accepts
+lazy journal and cache acquisition Effects, validates configuration before opening
+either store, and keeps the journal usable if the disposable cache cannot open.
+An `AtomicStore` driver supplies atomic read/modify operations over individual
+string keys in a separate cache and journal database.
+Journal callbacks run once against a bounded copy, then commit with an
 atomic generation/revision comparison. A competing write returns `Conflict`;
 callbacks are never replayed automatically. Failed or interrupted callbacks commit
 nothing, and escaped transaction operations return `Conflict`. Every journal
 commit, including read validation, checks the captured generation. Wipe increments
-that generation atomically with clearing the journal. Cache keys include the
-generation and reads check the journal fence before and after loading, so delayed
-cache writes and cleanup cannot affect a later generation.
+that generation atomically with clearing the journal. Each actor has one bounded,
+generation-tagged cache record. Reads check the journal fence before and after
+loading; writes and cleanup preserve newer generations. Delayed retired writes
+cannot accumulate unreachable cache records or affect a later generation's cache.
 
 Unknown physical or journal record formats fail closed and preserve all evidence.
 Unknown intent formats remain opaque to the adapters and are quarantined by the
-client. There is no automatic journal migration or reset. Format-1 databases use
-application-configured namespaces; migration from application-owned databases
-requires explicit reconciliation before switching namespaces.
+client. There is no automatic journal migration or reset. Journal format 1 remains
+unchanged; cache format 2 resets only the known disposable cache format 1.
+Databases use application-configured namespaces; migration from application-owned
+databases requires explicit reconciliation before switching namespaces.
 
 | Client persistence component | Contract                                                                                                                                                             |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

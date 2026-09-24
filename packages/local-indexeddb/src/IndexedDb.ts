@@ -9,13 +9,14 @@ export const databaseNames = (namespace: string) => ({
   cache: `yielded-sync:${encodeURIComponent(namespace)}:cache`,
 });
 
-const connect = (name: string) =>
+const connect = (name: string, version: 1 | 2) =>
   Effect.acquireRelease(
     Effect.callback<IDBDatabase, PersistenceError>((resume) => {
       let cancelled = false;
-      const request = indexedDB.open(name, 1);
+      const request = indexedDB.open(name, version);
 
-      request.onupgradeneeded = () => {
+      request.onupgradeneeded = (event) => {
+        if (event.oldVersion === 1) request.result.deleteObjectStore("records");
         request.result.createObjectStore("records");
       };
       request.onsuccess = () => {
@@ -42,8 +43,8 @@ const connect = (name: string) =>
     (db) => Effect.sync(() => db.close()),
   );
 
-const store = Effect.fn("IndexedDb.store")(function* (name: string) {
-  const db = yield* connect(name);
+const store = Effect.fn("IndexedDb.store")(function* (name: string, version: 1 | 2) {
+  const db = yield* connect(name, version);
   let closed = false;
 
   db.onversionchange = () => {
@@ -129,25 +130,15 @@ const store = Effect.fn("IndexedDb.store")(function* (name: string) {
 });
 
 export const open = Effect.fn("IndexedDb.open")(function* (options: Options) {
-  yield* Persistence.configuration(options);
-
   const names = yield* Effect.try({
     try: () => databaseNames(options.namespace),
     catch: Persistence.storageError,
   });
 
-  const journal = yield* store(names.journal);
-
-  const cache: Persistence.AtomicStore = yield* store(names.cache).pipe(
-    Effect.catch((error) =>
-      Effect.succeed({
-        read: () => Effect.succeed(undefined),
-        modify: () => Effect.fail(error),
-      }),
-    ),
-  );
-
-  return yield* Persistence.make(options, { journal, cache });
+  return yield* Persistence.make(options, {
+    journal: store(names.journal, 1),
+    cache: store(names.cache, 2),
+  });
 });
 
 export const layer = (options: Options) => Layer.effect(ReplicaPersistence, open(options));

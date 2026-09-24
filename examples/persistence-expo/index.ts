@@ -6,7 +6,7 @@ import { ScrollView, Text } from "react-native";
 
 import * as scenarios from "../../packages/sync/test/persistence-scenarios.ts";
 
-const namespace = "native-restart-proof";
+const namespace = "native-restart-proof-v2";
 
 const probe = Effect.gen(function* () {
   const existing = yield* Effect.scoped(
@@ -41,16 +41,10 @@ const App = () => {
   useEffect(() => {
     void Effect.runPromise(probe).then(
       (result) => {
-        const body = JSON.stringify(result);
-
-        setReport(body);
-        void fetch("http://127.0.0.1:8098", { method: "POST", body }).catch(() => {});
+        setReport(JSON.stringify(result));
       },
       (error: unknown) => {
-        const body = JSON.stringify({ error: String(error) });
-
-        setReport(body);
-        void fetch("http://127.0.0.1:8098", { method: "POST", body }).catch(() => {});
+        setReport(JSON.stringify({ error: String(error) }));
       },
     );
   }, []);

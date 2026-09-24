@@ -1,18 +1,8 @@
-import { Persistence, ReplicaPersistence, type PersistenceError } from "@yielded/sync/client";
+import { Persistence, ReplicaPersistence } from "@yielded/sync/client";
 import { Effect, Layer, Schema, Semaphore } from "effect";
-
-/** The subset of Expo's async database API used by this adapter. */
-export interface Database {
-  readonly execAsync: (sql: string) => Promise<void>;
-  readonly getFirstAsync: <T>(sql: string, ...params: Array<string>) => Promise<T | null>;
-  readonly runAsync: (sql: string, ...params: Array<string>) => Promise<unknown>;
-  readonly closeAsync: () => Promise<void>;
-}
 
 export interface Options extends Persistence.Options {
   readonly directory?: string;
-  /** Driver seam for hosts and storage tests; each call must return a fresh connection. */
-  readonly openDatabase?: (name: string) => Effect.Effect<Database, PersistenceError>;
 }
 
 export const databaseNames = (namespace: string) => ({
@@ -20,23 +10,26 @@ export const databaseNames = (namespace: string) => ({
   cache: `yielded-sync-${encodeURIComponent(namespace)}-cache.sqlite`,
 });
 
-const Version = Schema.Struct({ user_version: Schema.Literal(1) });
 const Record = Schema.Struct({ value: Schema.String });
 
-const store = Effect.fn("ExpoSqlite.store")(function* (name: string, options: Options) {
+const store = Effect.fn("ExpoSqlite.store")(function* (
+  name: string,
+  options: Options,
+  kind: "journal" | "cache",
+) {
+  const targetVersion = kind === "journal" ? 1 : 2;
+  const table = kind === "journal" ? "records" : "snapshots";
   const lock = Semaphore.makeUnsafe(1);
 
   const db = yield* Effect.acquireRelease(
-    options.openDatabase === undefined
-      ? Effect.tryPromise({
-          try: async () => {
-            const { openDatabaseAsync } = await import("expo-sqlite");
+    Effect.tryPromise({
+      try: async () => {
+        const { openDatabaseAsync } = await import("expo-sqlite");
 
-            return openDatabaseAsync(name, { useNewConnection: true }, options.directory);
-          },
-          catch: Persistence.storageError,
-        })
-      : options.openDatabase(name),
+        return openDatabaseAsync(name, { useNewConnection: true }, options.directory);
+      },
+      catch: Persistence.storageError,
+    }),
     (database) =>
       Effect.tryPromise({ try: () => database.closeAsync(), catch: Persistence.storageError }).pipe(
         Effect.orDie,
@@ -90,13 +83,20 @@ const store = Effect.fn("ExpoSqlite.store")(function* (name: string, options: Op
           "Unversioned SQLite database requires explicit migration",
         );
       await db.execAsync(
-        "CREATE TABLE records (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL); PRAGMA user_version = 1;",
+        `CREATE TABLE ${table} (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL); PRAGMA user_version = ${targetVersion};`,
       );
-    } else Schema.decodeUnknownSync(Version)(version);
+    } else if (kind === "cache" && version?.user_version === 1) {
+      await db.execAsync(
+        "DROP TABLE records; CREATE TABLE snapshots (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL); PRAGMA user_version = 2;",
+      );
+    } else
+      Schema.decodeUnknownSync(Schema.Struct({ user_version: Schema.Literal(targetVersion) }))(
+        version,
+      );
   });
 
   const load = async (key: string) => {
-    const row = await db.getFirstAsync("SELECT value FROM records WHERE key = ?", key);
+    const row = await db.getFirstAsync(`SELECT value FROM ${table} WHERE key = ?`, key);
 
     return row === null ? undefined : Schema.decodeUnknownSync(Record)(row).value;
   };
@@ -107,10 +107,10 @@ const store = Effect.fn("ExpoSqlite.store")(function* (name: string, options: Op
       exclusive(async () => {
         const [value, next] = f(await load(key));
 
-        if (next === undefined) await db.runAsync("DELETE FROM records WHERE key = ?", key);
+        if (next === undefined) await db.runAsync(`DELETE FROM ${table} WHERE key = ?`, key);
         else
           await db.runAsync(
-            "INSERT INTO records (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            `INSERT INTO ${table} (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
             key,
             next,
           );
@@ -121,25 +121,15 @@ const store = Effect.fn("ExpoSqlite.store")(function* (name: string, options: Op
 });
 
 export const open = Effect.fn("ExpoSqlite.open")(function* (options: Options) {
-  yield* Persistence.configuration(options);
-
   const names = yield* Effect.try({
     try: () => databaseNames(options.namespace),
     catch: Persistence.storageError,
   });
 
-  const journal = yield* store(names.journal, options);
-
-  const cache: Persistence.AtomicStore = yield* store(names.cache, options).pipe(
-    Effect.catch((error) =>
-      Effect.succeed({
-        read: () => Effect.succeed(undefined),
-        modify: () => Effect.fail(error),
-      }),
-    ),
-  );
-
-  return yield* Persistence.make(options, { journal, cache });
+  return yield* Persistence.make(options, {
+    journal: store(names.journal, options, "journal"),
+    cache: store(names.cache, options, "cache"),
+  });
 });
 
 export const layer = (options: Options) => Layer.effect(ReplicaPersistence, open(options));

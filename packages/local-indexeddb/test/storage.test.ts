@@ -61,8 +61,42 @@ it("quarantines unknown intent formats and rebuilds only corrupt cache records",
   expect(restored.rows).toHaveLength(1);
   await page.evaluate(() => window.persistence.upgradeCache("corrupt-cache"));
   expect(await run("unavailableCache", "corrupt-cache")).toBe("journal available");
+  expect(await page.evaluate(() => window.persistence.records("corrupt-cache", "cache"))).toEqual({
+    version: 3,
+    keys: ['["alice"]'],
+    values: ["invalid JSON"],
+  });
   await page.evaluate(() => window.persistence.corrupt("corrupt-cache", "journal", '{"format":2}'));
   await expect(run("inspect", "corrupt-cache")).rejects.toThrow("retain the database");
+});
+
+it("resets only the known legacy cache and retains exact journal evidence", async () => {
+  const seeded = await page.evaluate(() => window.persistence.seedLegacy("cache-migration"));
+  const restored = (await run("inspect", "cache-migration")) as { cache: unknown; rows: unknown[] };
+
+  expect(restored.cache).toBeUndefined();
+  expect(restored.rows).toEqual([seeded.evidence]);
+  expect(await page.evaluate(() => window.persistence.records("cache-migration", "cache"))).toEqual(
+    {
+      version: 2,
+      keys: [],
+      values: [],
+    },
+  );
+  await page.evaluate(() => window.persistence.saveSnapshot("cache-migration"));
+  expect(await run("restore", "cache-migration")).toBe("restored");
+  const cache = await page.evaluate(() => window.persistence.records("cache-migration", "cache"));
+
+  expect(cache.keys).toEqual(['["alice"]']);
+  expect(cache.values).toHaveLength(1);
+  expect(JSON.parse(cache.values[0] as string)).toMatchObject({ format: 2, generation: 3 });
+  expect(
+    await page.evaluate(() => window.persistence.records("cache-migration", "journal")),
+  ).toEqual({
+    version: 1,
+    keys: ['["alice"]'],
+    values: [seeded.journal],
+  });
 });
 
 it("fences a handle in another browser tab and rejects operations after scope close", async () => {

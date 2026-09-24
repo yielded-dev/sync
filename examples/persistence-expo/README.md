@@ -17,10 +17,8 @@ restored `resent` objects, including command id, payload and authority generatio
 The static unsupported-format evidence remains byte-for-byte equivalent across
 relaunch. All databases use probe-only `native-*` namespaces.
 
-Results are also POSTed to `http://127.0.0.1:8098` when a local receiver is running;
-no external service receives them. The screen remains the result when no receiver
-is present. The journal stays in Expo Go's application container across process
-restarts. For a fresh two-launch run, change the probe namespace in `index.ts`.
+The screen displays the result. The journal stays in Expo Go's application
+container across process restarts. For a fresh two-launch run, change the probe namespace in `index.ts`.
 The transaction scenarios create separate namespaces for each run.
 
 This example is typechecked by `vp run ready`. Native execution requires an iOS or

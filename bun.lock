@@ -65,7 +65,6 @@
         "@yielded/sync": "workspace:*",
       },
       "devDependencies": {
-        "@effect/vitest": "catalog:",
         "@types/node": "catalog:",
         "effect": "catalog:",
         "expo": "catalog:",
@@ -87,7 +86,6 @@
         "@yielded/sync": "workspace:*",
       },
       "devDependencies": {
-        "@effect/vitest": "catalog:",
         "@types/node": "catalog:",
         "effect": "catalog:",
         "playwright": "catalog:",

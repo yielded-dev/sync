@@ -32,10 +32,10 @@ payload `bytes` metadata in eviction order.
 
 `databaseNames(namespace)` exposes both names:
 `yielded-sync:<encodeURIComponent(namespace)>:journal` and `:cache`.
-Both databases have physical version 1 and a `records` object store. Values are
-Schema-encoded JSON strings. Journal keys are JSON `[actorId]`; cache keys are
-`[actorId, generation]`. One journal record contains `{ format: 1, generation,
-revision, rows }`; one cache record contains `{ format: 1, rows }`. Journal rows
+The journal has physical version 1; the cache has physical version 2. Both use a
+`records` object store with Schema-encoded JSON strings keyed by JSON `[actorId]`.
+One journal record contains `{ format: 1, generation, revision, rows }`; one cache
+record contains `{ format: 2, generation, rows }`. Journal rows
 retain their address, command id and opaque JSON value. Cache rows additionally
 record save time and encoded size. The bounded journal is read and rewritten as
 one actor document; this implementation favors a small, explicit atomic boundary.
@@ -43,9 +43,15 @@ one actor document; this implementation favors a small, explicit atomic boundary
 Strict IndexedDB transactions serialize commits across tabs. Journal callbacks
 stage changes once, then compare revision and generation atomically before commit.
 Concurrent modification returns `Conflict` without replaying the callback. A wipe
-clears the journal and rotates its generation in one transaction. Cache keys carry
-that generation, and reads check the journal fence before and after loading.
+clears the journal and rotates its generation in one transaction. Each actor has
+one cache record carrying its generation; reads check the journal fence before and
+after loading, and cache modifications compare the stored generation atomically.
 Delayed writes/cleanup cannot overwrite or remove a newer generation's cache.
+
+Opening the known physical cache version 1 upgrades it to version 2 by recreating
+only its `records` object store. This discards legacy generation-keyed snapshots
+without touching journal evidence. IndexedDB closes older adapter connections on
+the version change. Unknown future cache versions are retained and open cacheless.
 
 Malformed or unsupported **cache records only** are treated as misses and replaced
 on subsequent saves. If the cache database cannot open, journal operations still

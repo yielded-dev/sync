@@ -1,8 +1,7 @@
-import { Clock, Effect, Schema, Semaphore } from "effect";
+import { Clock, Effect, Exit, Schema, Scope, Semaphore } from "effect";
 
 import { ActorId, SourceAddress, type SourceAddress as Address } from "../Model.ts";
-import { copyJson } from "./Model.ts";
-import { JournalRow, PersistenceError, type Handle } from "./ReplicaPersistence.ts";
+import { JournalRow, PersistenceError, stageJournal, type Handle } from "./ReplicaPersistence.ts";
 
 /** A scoped driver. modify must commit the callback's result atomically or fail. */
 export interface AtomicStore {
@@ -32,7 +31,7 @@ const Configuration = Schema.Struct({
   maxBytes: Positive,
 });
 
-export const configuration = (options: Options) =>
+const configuration = (options: Options) =>
   Schema.decodeEffect(Configuration)({
     maxJournalRows: 4096,
     maxSnapshots: 128,
@@ -56,7 +55,13 @@ export const SnapshotMetadata = Schema.Struct({
 export type SnapshotMetadata = typeof SnapshotMetadata.Type;
 
 const Snapshot = Schema.Struct({ ...SnapshotMetadata.fields, value: Schema.Json });
-const Cache = Schema.Struct({ format: Schema.Literal(1), rows: Schema.Array(Snapshot) });
+
+const Cache = Schema.Struct({
+  format: Schema.Literal(2),
+  generation: Natural,
+  rows: Schema.Array(Snapshot),
+});
+
 const journalCodec = Schema.fromJsonString(Journal);
 const cacheCodec = Schema.fromJsonString(Cache);
 const decodeJournal = Schema.decodeSync(journalCodec);
@@ -122,18 +127,33 @@ const journalState = (value: string | undefined) => {
   }
 };
 
-const cacheState = (value: string | undefined): typeof Cache.Type => {
+const cacheState = (value: string | undefined) => {
   const decoded = decodeCache(value);
 
-  return decoded._tag === "Some" ? decoded.value : { format: 1, rows: [] };
+  return decoded._tag === "Some" ? decoded.value : undefined;
 };
 
 /** Portable policy shared by durable adapters; databases remain separate driver resources. */
-export const make = Effect.fn("Persistence.make")(function* (
+export const make = Effect.fn("Persistence.make")(function* <R1, R2>(
   options: Options,
-  stores: { readonly journal: AtomicStore; readonly cache: AtomicStore },
+  drivers: {
+    readonly journal: Effect.Effect<AtomicStore, PersistenceError, R1>;
+    readonly cache: Effect.Effect<AtomicStore, PersistenceError, R2>;
+  },
 ) {
   const limits = yield* configuration(options);
+  const journal = yield* drivers.journal;
+  const cacheScope = yield* Scope.fork(yield* Effect.scope);
+
+  const cache = yield* drivers.cache.pipe(
+    Scope.provide(cacheScope),
+    Effect.onError((cause) => Scope.close(cacheScope, Exit.failCause(cause))),
+    Effect.catch((error): Effect.Effect<AtomicStore> =>
+      Effect.succeed({ read: () => Effect.undefined, modify: () => Effect.fail(error) }),
+    ),
+  );
+
+  const stores = { journal, cache };
   const key = JSON.stringify([options.actorId]);
 
   const initial = yield* stores.journal.modify(key, (stored) => {
@@ -146,7 +166,6 @@ export const make = Effect.fn("Persistence.make")(function* (
   });
 
   const generation = initial.generation;
-  const cacheKey = JSON.stringify([options.actorId, generation]);
   const lock = Semaphore.makeUnsafe(1);
 
   const check = (value: typeof Journal.Type) => {
@@ -176,64 +195,7 @@ export const make = Effect.fn("Persistence.make")(function* (
   const transaction: Handle["intentJournal"]["transaction"] = (f) =>
     Effect.gen(function* () {
       const before = yield* read;
-      const rows = new Map(before.rows.map((row) => [rowKey(row), row]));
-      let active = true;
-      let dirty = false;
-
-      const within = <A>(body: () => A) =>
-        Effect.try({
-          try: () => {
-            if (!active) throw failure("Conflict", "Journal transaction is closed");
-
-            return body();
-          },
-          catch: storageError,
-        });
-
-      const write = (input: JournalRow, replace: boolean) =>
-        within(() => {
-          const row = Schema.decodeSync(JournalRow)(input);
-          const id = rowKey(row);
-
-          if (rows.has(id) !== replace)
-            throw failure("Conflict", "Journal identity already exists or is missing");
-          if (!replace && rows.size >= limits.maxJournalRows)
-            throw failure("Capacity", "Journal capacity exhausted");
-          rows.set(id, copyJson(row));
-          dirty = true;
-        });
-
-      const value = yield* Effect.suspend(() =>
-        f({
-          get: (address, commandId) =>
-            within(() => {
-              const row = rows.get(rowKey({ address, commandId, value: null }));
-
-              return row === undefined ? undefined : copyJson(row);
-            }),
-          scan: (address, limit) =>
-            within(() => {
-              Schema.decodeSync(Positive)(limit);
-
-              return Array.from(rows.values())
-                .filter((row) => addressKey(row.address) === addressKey(address))
-                .slice(0, limit)
-                .map(copyJson);
-            }),
-          put: (row) => write(row, false),
-          replace: (row) => write(row, true),
-          remove: (address, commandId) =>
-            within(() => {
-              dirty = rows.delete(rowKey({ address, commandId, value: null })) || dirty;
-            }),
-        }),
-      ).pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            active = false;
-          }),
-        ),
-      );
+      const { value, rows, dirty } = yield* stageJournal(before.rows, limits.maxJournalRows, f);
 
       yield* stores.journal.modify(key, (stored) => {
         const current = check(journalState(stored));
@@ -258,11 +220,11 @@ export const make = Effect.fn("Persistence.make")(function* (
 
   const cached = Effect.gen(function* () {
     yield* read;
-    const value = cacheState(yield* stores.cache.read(cacheKey));
+    const value = cacheState(yield* stores.cache.read(key));
 
     yield* read;
 
-    return value;
+    return value?.generation === generation ? value.rows : [];
   });
 
   const changeCache = (
@@ -270,10 +232,21 @@ export const make = Effect.fn("Persistence.make")(function* (
   ) =>
     Effect.gen(function* () {
       yield* read;
-      yield* stores.cache.modify(cacheKey, (stored) => [
-        undefined,
-        encodeCache({ format: 1, rows: f(cacheState(stored).rows) }),
-      ]);
+      yield* stores.cache.modify(key, (stored) => {
+        const previous = cacheState(stored);
+
+        if (previous !== undefined && previous.generation > generation)
+          throw failure("StaleGeneration", "Cache belongs to a newer persistence generation");
+
+        return [
+          undefined,
+          encodeCache({
+            format: 2,
+            generation,
+            rows: f(previous?.generation === generation ? previous.rows : []),
+          }),
+        ];
+      });
       yield* read;
     });
 
@@ -285,17 +258,14 @@ export const make = Effect.fn("Persistence.make")(function* (
       get: (address) =>
         cached.pipe(
           Effect.map(
-            (cache) =>
-              cache.rows.find((row) => addressKey(row.address) === addressKey(address))?.value,
+            (cache) => cache.find((row) => addressKey(row.address) === addressKey(address))?.value,
           ),
         ),
       scan: (limit) =>
         Effect.gen(function* () {
           yield* Schema.decodeEffect(Positive)(limit).pipe(Effect.mapError(storageError));
 
-          return (yield* cached).rows
-            .slice(0, limit)
-            .map(({ value: _value, ...metadata }) => metadata);
+          return (yield* cached).slice(0, limit).map(({ value: _value, ...metadata }) => metadata);
         }),
       put: (address, value) =>
         Effect.gen(function* () {
@@ -321,7 +291,7 @@ export const make = Effect.fn("Persistence.make")(function* (
             while (
               rows.length > 0 &&
               (rows.length > limits.maxSnapshots ||
-                bytes(encodeCache({ format: 1, rows })) > limits.maxBytes)
+                bytes(encodeCache({ format: 2, generation, rows })) > limits.maxBytes)
             )
               rows.shift();
 
@@ -365,8 +335,15 @@ export const make = Effect.fn("Persistence.make")(function* (
           }),
         ];
       });
-      // Only the retired generation's disposable cache is eligible for cleanup.
-      yield* stores.cache.modify(cacheKey, () => [undefined, undefined]);
+      yield* stores.cache.modify(key, (stored) => {
+        const previous = cacheState(stored);
+
+        // A new handle may already have saved a fresh snapshot after the journal wipe.
+        return [
+          undefined,
+          previous !== undefined && previous.generation > generation ? stored : undefined,
+        ];
+      });
     }),
   };
 

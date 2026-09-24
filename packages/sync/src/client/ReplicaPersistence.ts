@@ -70,6 +70,84 @@ const addressKey = (address: Address) => JSON.stringify([address.kind, address.i
 const rowKey = (address: Address, commandId: string) =>
   JSON.stringify([address.kind, address.id, commandId]);
 
+/** Stages one callback; the owning store decides how to commit its result. */
+export const stageJournal = Effect.fn("ReplicaPersistence.stageJournal")(function* <A>(
+  initial: Iterable<JournalRow>,
+  maxRows: number,
+  f: (tx: JournalTransaction) => Effect.Effect<A, PersistenceError>,
+) {
+  const rows = new Map(Array.from(initial, (row) => [rowKey(row.address, row.commandId), row]));
+  let active = true;
+  let dirty = false;
+
+  const within = <B>(body: () => B) =>
+    Effect.try({
+      try: () => {
+        if (!active)
+          throw PersistenceError.make({
+            reason: "Conflict",
+            message: "Journal transaction is closed",
+          });
+
+        return body();
+      },
+      catch: (cause) =>
+        Schema.is(PersistenceError)(cause)
+          ? cause
+          : PersistenceError.make({ reason: "Unavailable", message: "Invalid journal operation" }),
+    });
+
+  const write = (input: JournalRow, replace: boolean) =>
+    within(() => {
+      const row = Schema.decodeSync(JournalRow)(input);
+      const key = rowKey(row.address, row.commandId);
+
+      if (rows.has(key) !== replace)
+        throw PersistenceError.make({
+          reason: "Conflict",
+          message: "Journal identity already exists or is missing",
+        });
+      if (!replace && rows.size >= maxRows)
+        throw PersistenceError.make({ reason: "Capacity", message: "Journal capacity exhausted" });
+      rows.set(key, copyJson(row));
+      dirty = true;
+    });
+
+  const value = yield* Effect.suspend(() =>
+    f({
+      get: (address, commandId) =>
+        within(() => {
+          const row = rows.get(rowKey(address, commandId));
+
+          return row === undefined ? undefined : copyJson(row);
+        }),
+      scan: (address, limit) =>
+        within(() => {
+          Schema.decodeSync(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)))(limit);
+
+          return Array.from(rows.values())
+            .filter((row) => addressKey(row.address) === addressKey(address))
+            .slice(0, limit)
+            .map(copyJson);
+        }),
+      put: (row) => write(row, false),
+      replace: (row) => write(row, true),
+      remove: (address, commandId) =>
+        within(() => {
+          dirty = rows.delete(rowKey(address, commandId)) || dirty;
+        }),
+    }),
+  ).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        active = false;
+      }),
+    ),
+  );
+
+  return { value, rows, dirty };
+});
+
 /** Process-local storage only. Reuse the factory to exercise actor remounts and wipes. */
 export const memory = (options?: {
   readonly maxJournalRows?: number;
@@ -112,71 +190,11 @@ export const memory = (options?: {
     const transaction: Handle["intentJournal"]["transaction"] = (f) =>
       Effect.gen(function* () {
         yield* assertGeneration;
-        const rows = new Map(state.journal);
-        let transactionOpen = true;
 
-        const within = <A>(effect: Effect.Effect<A, PersistenceError>) =>
-          Effect.suspend(() =>
-            transactionOpen
-              ? effect
-              : Effect.fail(
-                  PersistenceError.make({
-                    reason: "Conflict",
-                    message: "Journal transaction is closed",
-                  }),
-                ),
-          );
-
-        const write = (row: JournalRow, replace: boolean) =>
-          Effect.gen(function* () {
-            const parsed = yield* Schema.decodeEffect(JournalRow)(row).pipe(Effect.orDie);
-            const key = rowKey(parsed.address, parsed.commandId);
-
-            if (rows.has(key) !== replace)
-              return yield* PersistenceError.make({
-                reason: "Conflict",
-                message: "Journal identity already exists or is missing",
-              });
-            if (!replace && rows.size >= (options?.maxJournalRows ?? 4096))
-              return yield* PersistenceError.make({
-                reason: "Capacity",
-                message: "Journal capacity exhausted",
-              });
-            rows.set(key, copyJson(parsed));
-          });
-
-        const value = yield* f({
-          get: (address, id) =>
-            within(
-              Effect.sync(() => {
-                const row = rows.get(rowKey(address, id));
-
-                return row === undefined ? undefined : copyJson(row);
-              }),
-            ),
-          scan: (address, limit) =>
-            within(
-              Effect.sync(() =>
-                Array.from(rows.values())
-                  .filter((row) => addressKey(row.address) === addressKey(address))
-                  .slice(0, limit)
-                  .map(copyJson),
-              ),
-            ),
-          put: (row) => within(write(row, false)),
-          replace: (row) => within(write(row, true)),
-          remove: (address, id) =>
-            within(
-              Effect.sync(() => {
-                rows.delete(rowKey(address, id));
-              }),
-            ),
-        }).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              transactionOpen = false;
-            }),
-          ),
+        const { value, rows } = yield* stageJournal(
+          state.journal.values(),
+          options?.maxJournalRows ?? 4096,
+          f,
         );
 
         yield* assertGeneration;

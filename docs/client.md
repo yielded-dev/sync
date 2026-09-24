@@ -128,8 +128,10 @@ and `maxBytes` explicitly when the defaults do not fit the application.
 
 Adapters use separate cache/journal databases and atomic generation/revision checks.
 A concurrent journal commit returns `Conflict` without replaying the callback.
-Journal formats fail closed and retain evidence; malformed cache records can be
-replaced. Applications own background lifecycle hooks and can await `session.flush`;
+Journal formats fail closed and retain evidence. Each actor has one bounded,
+generation-tagged cache record; cache format 2 resets known format-1 cache data
+without touching the journal. Malformed cache records can be replaced.
+Applications own background lifecycle hooks and can await `session.flush`;
 they need no unload write for initial journal admission. Session disposal retains
 journal evidence, and logout deletion remains an explicit application policy.
 

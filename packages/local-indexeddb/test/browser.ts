@@ -23,17 +23,14 @@ export const run = (
 
 export const corrupt = (namespace: string, database: "cache" | "journal", value: string) =>
   new Promise<void>((resolve, reject) => {
-    const request = indexedDB.open(IndexedDb.databaseNames(namespace)[database], 1);
+    const request = indexedDB.open(IndexedDb.databaseNames(namespace)[database]);
 
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const db = request.result;
       const tx = db.transaction("records", "readwrite");
 
-      tx.objectStore("records").put(
-        value,
-        JSON.stringify(database === "journal" ? ["alice"] : ["alice", 0]),
-      );
+      tx.objectStore("records").put(value, JSON.stringify(["alice"]));
       tx.oncomplete = () => {
         db.close();
         resolve();
@@ -68,7 +65,7 @@ export const closeHeld = () => Effect.runPromise(Scope.close(heldScope, Exit.voi
 
 export const upgradeCache = (namespace: string) =>
   new Promise<void>((resolve, reject) => {
-    const request = indexedDB.open(IndexedDb.databaseNames(namespace).cache, 2);
+    const request = indexedDB.open(IndexedDb.databaseNames(namespace).cache, 3);
 
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
@@ -76,3 +73,81 @@ export const upgradeCache = (namespace: string) =>
       resolve();
     };
   });
+
+export const seedLegacy = async (namespace: string) => {
+  const journal = JSON.stringify({
+    format: 1,
+    generation: 3,
+    revision: 7,
+    rows: [scenarios.evidence],
+  });
+
+  const names = IndexedDb.databaseNames(namespace);
+
+  await Promise.all(
+    (["journal", "cache"] as const).map(
+      (kind) =>
+        new Promise<void>((resolve, reject) => {
+          const request = indexedDB.open(names[kind], 1);
+
+          request.onupgradeneeded = () => request.result.createObjectStore("records");
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            const db = request.result;
+            const tx = db.transaction("records", "readwrite");
+            const records = tx.objectStore("records");
+
+            if (kind === "journal") records.put(journal, JSON.stringify(["alice"]));
+            else {
+              records.put('{"format":1,"rows":[]}', JSON.stringify(["alice", 1]));
+              records.put('{"format":1,"rows":[]}', JSON.stringify(["alice", 3]));
+            }
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onabort = () => {
+              db.close();
+              reject(tx.error);
+            };
+          };
+        }),
+    ),
+  );
+
+  return { journal, evidence: scenarios.evidence };
+};
+
+export const records = (namespace: string, kind: "journal" | "cache") =>
+  new Promise<{ version: number; keys: IDBValidKey[]; values: unknown[] }>((resolve, reject) => {
+    const request = indexedDB.open(IndexedDb.databaseNames(namespace)[kind]);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction("records", "readonly");
+      const records = tx.objectStore("records");
+      const keys = records.getAllKeys();
+      const values = records.getAll();
+
+      tx.oncomplete = () => {
+        db.close();
+        resolve({ version: db.version, keys: keys.result, values: values.result });
+      };
+      tx.onabort = () => {
+        db.close();
+        reject(tx.error);
+      };
+    };
+  });
+
+export const saveSnapshot = (namespace: string) =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const storage = yield* IndexedDb.open({ namespace, actorId: "alice" });
+
+        yield* storage.snapshotCache.put(scenarios.evidence.address, { value: 7 });
+      }),
+    ),
+  );

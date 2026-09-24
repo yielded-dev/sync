@@ -15,15 +15,14 @@ The adapter uses Expo SQLite 57's async API and private connections
 (`useNewConnection: true`). Each connection serializes operations, with
 `BEGIN IMMEDIATE`, a five-second busy timeout, and `synchronous = FULL`.
 Transactions finish or roll back before interruption releases the connection.
-`openDatabase` is an optional driver seam; supplied connections must be fresh and
-implement the exported `Database` interface. Ordinary applications omit it.
 
 ## Format and recovery
 
 `databaseNames(namespace)` returns
 `yielded-sync-<encodeURIComponent(namespace)>-journal.sqlite` and `-cache.sqlite`.
-Each file uses `PRAGMA user_version = 1` and
-`records(key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)`.
+The journal uses `PRAGMA user_version = 1` and
+`records(key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)`. The cache uses
+`PRAGMA user_version = 2` and a `snapshots` table with the same columns.
 The default directory is Expo's document SQLite directory. The databases are
 separate so cache recovery never drops the journal file.
 
@@ -36,7 +35,11 @@ at SQLite's database lock and check the durable revision and generation.
 
 Malformed cache records can be discarded and replaced. An unavailable cache opens
 cacheless: reads miss and saves/flush report failure while journal operations remain
-available. No code deletes or resets either database file automatically. Unknown
+available. Opening the known cache version 1 atomically drops its legacy `records`
+table, creates `snapshots`, and advances its version to 2. This discards only
+disposable cache data and leaves the journal unchanged. The distinct table name
+prevents already-open old connections from restoring legacy cache rows. Neither
+database file is deleted automatically, and the journal is never reset. Unknown
 physical versions, nonempty unversioned databases and undecodable journals require
 explicit recovery or migration and remain untouched. Unknown intent formats retain
 their exact JSON and reserved identities for client quarantine. Wipe rotates the
