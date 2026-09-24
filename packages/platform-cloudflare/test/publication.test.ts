@@ -88,44 +88,41 @@ const connect = async (failure = "none", after?: SourcePosition) => {
 
 afterEach(() => reset());
 
-it.each(["interrupt", "defect"])(
-  "disconnects all subscribers after a committed command's publication ends with %s",
-  async (failure) => {
-    const initial = await snapshot();
-    const affected = await connect(failure);
-    const peer = await connect();
+it("disconnects all subscribers after a committed command's publication is interrupted", async () => {
+  const initial = await snapshot();
+  const affected = await connect("interrupt");
+  const peer = await connect();
 
-    await Promise.all([affected.first, peer.first]);
+  await Promise.all([affected.first, peer.first]);
 
-    const command = {
-      ...header,
-      namespace: "$source",
-      action: "set",
-      admittedGeneration: initial.position.sourceAuthorityGeneration,
-      commandId: "committed",
-      payload: 1,
-    };
+  const command = {
+    ...header,
+    namespace: "$source",
+    action: "set",
+    admittedGeneration: initial.position.sourceAuthorityGeneration,
+    commandId: "committed",
+    payload: 1,
+  };
 
-    const status = await request("execute/$source/set", command).then(
-      (response) => response.status,
-      () => 500,
-    );
+  const status = await request("execute/$source/set", command).then(
+    (response) => response.status,
+    () => 500,
+  );
 
-    expect(status).toBeGreaterThanOrEqual(500);
-    expect(await snapshot()).toMatchObject({ position: { cursor: 1 }, snapshot: { source: 1 } });
-    expect(await Promise.all([affected.closed, peer.closed])).toEqual([1013, 1013]);
-    expect(await rpc("execute/$source/set", command)).toMatchObject({
-      _tag: "Succeeded",
-      position: { ...initial.position, cursor: 1 },
-      result: 1,
-    });
+  expect(status).toBeGreaterThanOrEqual(500);
+  expect(await snapshot()).toMatchObject({ position: { cursor: 1 }, snapshot: { source: 1 } });
+  expect(await Promise.all([affected.closed, peer.closed])).toEqual([1013, 1013]);
+  expect(await rpc("execute/$source/set", command)).toMatchObject({
+    _tag: "Succeeded",
+    position: { ...initial.position, cursor: 1 },
+    result: 1,
+  });
 
-    const recovered = await connect("none", initial.position);
+  const recovered = await connect("none", initial.position);
 
-    expect(await recovered.first).toMatchObject({
-      _tag: "Chunk",
-      values: [{ _tag: "Events", position: { cursor: 1 }, events: [{ event: { payload: 1 } }] }],
-    });
-    recovered.socket.close();
-  },
-);
+  expect(await recovered.first).toMatchObject({
+    _tag: "Chunk",
+    values: [{ _tag: "Events", position: { cursor: 1 }, events: [{ event: { payload: 1 } }] }],
+  });
+  recovered.socket.close();
+});

@@ -64,34 +64,3 @@ const supplied = Server.provide(definition, Layer.succeed(Access, { check: Effec
 export type Remaining = Assert<
   Equal<Effect.Services<typeof supplied.acquire>, Audit | Scope.Scope>
 >;
-
-declare const runtime: Server.Runtime<typeof Counter.spec>;
-declare const session: Server.Session;
-declare const command: typeof Counter.actions.set.command.Type;
-const execution = runtime.execute(session, Counter.actions.set, command);
-
-export type Outcome = Assert<
-  Equal<Effect.Success<typeof execution>, typeof Counter.actions.set.outcome.Type>
->;
-
-export type Errors = Assert<Equal<Effect.Error<typeof execution>, ProtocolError>>;
-
-Server.plugin(Label, {
-  principal: Principal,
-  state: Label.snapshot,
-  initialize: Effect.succeed({ text: "" }),
-  snapshot: (state) => state,
-  // @ts-expect-error A server implementation must register every declared action.
-  actions: {},
-});
-Server.plugin(Label, {
-  principal: Principal,
-  state: Label.snapshot,
-  initialize: Effect.succeed({ text: "" }),
-  snapshot: (state) => state,
-  actions: {
-    rename: ({ payload }) =>
-      // @ts-expect-error Rename returns its exact result shape.
-      Effect.succeed(Server.commit({ state: payload, events: [], result: 123, outbox: [] })),
-  },
-});

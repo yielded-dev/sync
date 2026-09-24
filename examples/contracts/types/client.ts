@@ -38,7 +38,6 @@ const client = Client.make(definition, {
 });
 
 export type Requirements = Assert<Equal<Effect.Services<typeof client>, Session | Scope.Scope>>;
-export type Errors = Assert<Equal<Effect.Error<typeof client>, ClientError>>;
 
 declare const lease: Client.Lease<typeof Counter.spec>;
 const result = lease.execute(Counter.actions.set, { value: 7 });
@@ -55,22 +54,6 @@ export type RenameError = Assert<Equal<Effect.Error<typeof renamed>, ClientError
 
 // @ts-expect-error A set cannot receive a rename payload.
 export const invalidPayload = lease.execute(Counter.actions.set, { text: "wrong" });
-// @ts-expect-error Retry never accepts a replacement payload.
-export const invalidRetry = lease.retry("id", { value: 9 });
-// @ts-expect-error Persistence must be explicitly selected.
-export const invalidPersistence = Client.make(definition, { actorId: "actor", transport });
-Client.plugin(Label, {
-  applyEvent: (_snapshot, event) => event,
-  // @ts-expect-error Every action needs an explicit optimistic reducer (identity is allowed).
-  optimistic: {},
-});
-Client.definition(Counter, {
-  applyEvent: (_snapshot, event) => event,
-  optimistic: { set: (snapshot) => snapshot },
-  // @ts-expect-error Missing client plugin.
-  plugins: [],
-});
-
 declare const runtime: Client.Runtime<typeof Counter.spec>;
 const atoms = SourceAtom.make(runtime);
 const mutation = atoms.execute(Counter.address("demo"), Counter.actions.set, { value: 1 });

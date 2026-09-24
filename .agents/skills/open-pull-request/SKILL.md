@@ -15,6 +15,10 @@ checklists, or lists of commands run. Still perform required checks and disclose
 material risks or limitations; include validation details only when required by
 higher-priority instructions.
 
+This is a public repository. Keep descriptions self-contained. Omit private
+tracker links and issue IDs, customer names, account identifiers, and private
+workspace links from PR text and linked evidence unless explicitly requested.
+
 - Ownership, data flow, or API changes: [diagrams and examples](references/explanation.md).
 - UI or other visible behavior: [capture and publish evidence](references/evidence.md).
 - Performance claims: [baseline and candidate comparisons](references/explanation.md#performance-claims).
