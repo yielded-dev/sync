@@ -16,8 +16,10 @@
     "check": "vp check && vp run typecheck",
     "test": "vp run -r --concurrency-limit 4 test",
     "build": "vp run -r build",
-    "ready": "vp run check && vp run test && vp run build",
+    "ready": "vp run build && vp run check && vp run test && vp run release:check",
+    "release:check": "node scripts/release-check.mjs",
     "changeset": "changeset",
+    "changeset:pre": "changeset pre",
     "changeset:version": "changeset version"
   },
   "devDependencies": {

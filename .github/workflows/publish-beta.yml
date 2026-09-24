@@ -1,0 +1,113 @@
+name: Publish beta
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: publish-beta
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  VP_GIT_HOOKS: "0"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Require main branch
+        run: test "$GITHUB_REF" = refs/heads/main
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Patch Effect TypeScript-Go
+        run: ./node_modules/.bin/vp run patch:tsgo
+
+      - name: Install Chromium for persistence tests
+        run: ./node_modules/.bin/vp -C packages/local-indexeddb exec playwright install --with-deps chromium
+
+      - name: Check, test, build, and validate tarballs
+        run: ./node_modules/.bin/vp run ready
+
+      - name: Publish validated tarballs
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./packages/sync/package.json').version")
+          case "$version" in
+            *-beta.*) ;;
+            *) echo "Expected a beta version, found $version" >&2; exit 1 ;;
+          esac
+
+          for package in sync platform-cloudflare local-indexeddb local-expo; do
+            if [ "$package" = sync ]; then
+              name=@yielded/sync
+            else
+              name=@yielded/sync-$package
+            fi
+            archive=".release/$package.tgz"
+            if remote=$(npm view "$name@$version" dist.integrity --json 2>/dev/null); then
+              local_integrity="sha512-$(openssl dgst -sha512 -binary "$archive" | openssl base64 -A)"
+              remote_integrity=$(node -p "JSON.parse(process.argv[1])" "$remote")
+              if [ "$local_integrity" != "$remote_integrity" ]; then
+                echo "$name@$version exists with different contents" >&2
+                exit 1
+              fi
+              echo "$name@$version already matches the validated tarball"
+            else
+              npm publish "$archive" --access public --tag beta --provenance
+            fi
+          done
+
+      - name: Verify registry installation
+        run: ./node_modules/.bin/vp run release:check --registry
+
+      - name: Record source and validation evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./packages/sync/package.json').version")
+          tag="v$version"
+          cat > .release/notes.md <<EOF
+          Beta of the four @yielded/sync packages at $version.
+
+          Source revision: [$GITHUB_SHA](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)
+          Validation: [release workflow run](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) ran vp run ready and installed, typechecked, and built the published versions from npm.
+          Supported hosts, adapters, and compatibility policy: [release guide](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/RELEASE.md).
+          EOF
+          if gh release view "$tag" >/dev/null 2>&1; then
+            target=$(gh release view "$tag" --json targetCommitish --jq .targetCommitish)
+            if [ "$target" != "$GITHUB_SHA" ]; then
+              echo "$tag already points to a different source revision" >&2
+              exit 1
+            fi
+            gh release upload "$tag" .release/*.tgz --clobber
+            gh release edit "$tag" --notes-file .release/notes.md
+          else
+            gh release create "$tag" .release/*.tgz --target "$GITHUB_SHA" --prerelease --title "Effect Sync $version" --notes-file .release/notes.md
+          fi

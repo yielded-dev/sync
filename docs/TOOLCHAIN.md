@@ -61,7 +61,9 @@ transport/recovery, persistence ports, and view bindings. Local persistence adap
 entry points provide scoped IndexedDB and Expo SQLite handles. The external contracts example participates in
 workspace typechecking and has a separate `start` task that displays a codec round trip.
 
-`vp run ready` composes static checks, workspace tests, and package builds.
+`vp run ready` builds packages first so workspace imports resolve their published
+ESM/declaration exports, then runs static checks, workspace tests, and a clean
+packed-consumer install, typecheck, and build.
 Tests use Vite+'s Vitest runner; Effect tests can use the catalog-pinned
 `@effect/vitest`. Core retains focused client admission, recovery and lifecycle races.
 The Cloudflare package uses the released Worker pool in its Vite
@@ -95,7 +97,11 @@ Inspect the installation with `vp hooks status`.
 
 GitHub Actions installs dependencies with lifecycle scripts suppressed, explicitly
 patches the compiler, and runs `vp run ready`. The `ready` job is the CI gate.
-The workflow does not deploy or publish packages.
+`ci.yml` does not deploy or publish packages. The manually dispatched
+`publish-beta.yml` runs the same `ready` gate and publishes its validated tarballs
+through npm trusted publishing. It verifies the registry install and records the
+source revision and workflow evidence in a GitHub prerelease. See the
+[release guide](RELEASE.md) for host support and credential setup.
 
 `pr-review.yml` uses the published Effect Agent review action and the repository's
 `OPENAI_API_KEY` secret. It reviews non-draft, same-repository PRs on opening,

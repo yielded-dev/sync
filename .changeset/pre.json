@@ -1,0 +1,12 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "@yielded/sync-example-persistence-expo": "0.0.0",
+    "@yielded/sync-local-expo": "0.0.0",
+    "@yielded/sync-local-indexeddb": "0.0.0",
+    "@yielded/sync-platform-cloudflare": "0.0.0",
+    "@yielded/sync": "0.0.0"
+  },
+  "changesets": ["first-beta"]
+}

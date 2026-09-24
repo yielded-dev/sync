@@ -1,7 +1,6 @@
 {
   "name": "@yielded/sync-local-expo",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-beta.0",
   "description": "Expo SQLite local persistence for Effect Sync clients.",
   "license": "MIT",
   "repository": {
@@ -11,12 +10,20 @@
   },
   "files": [
     "dist",
-    "src"
+    "LICENSE"
   ],
   "type": "module",
   "sideEffects": false,
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "vp pack",

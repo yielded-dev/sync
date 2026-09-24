@@ -6,7 +6,8 @@ shared identities, envelopes, exact outcome codecs, and derived Effect RPC contr
 The server and Cloudflare adapter implement authoritative execution. The headless
 client and Atom bindings are implemented, with a persistence port and process-local
 memory adapter. Durable IndexedDB and Expo SQLite adapters implement separate
-cache/journal storage and generation fencing. The packages remain private.
+cache/journal storage and generation fencing. The four packages have built beta
+exports and share a prerelease version; see the [release guide](RELEASE.md).
 
 Read the [complete consumer sketch](api/consumer.md) alongside these decisions.
 It defines a counter and a reusable label capability, server-private state,
@@ -42,8 +43,8 @@ applications supply platform HTTP/socket layers. React is not a core dependency.
 `SourceAtom` uses Effect Atom; a consuming application chooses its UI bindings.
 Adapters depend inward on core and never on each other.
 
-The repository remains `yielded-dev/sync` and the four manifests stay private
-until built exports and beta publication are configured. This design adds no
+The repository remains `yielded-dev/sync`, with explicit built exports for the
+four beta packages. This design adds no
 compatibility re-exports under `@kommunikasie/*`.
 
 ## Source, action, and plugin composition
@@ -387,4 +388,4 @@ the change requires native or application-restart proof.
 The independent list and board consumer exercises the public runtime and its
 IndexedDB assembly. The slide-deck pilot maps the product boundary but has not
 replaced the product source or projection destination. Validate that integration
-before publishing a beta.
+before production adoption.

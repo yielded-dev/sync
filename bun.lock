@@ -75,7 +75,7 @@
     },
     "packages/local-expo": {
       "name": "@yielded/sync-local-expo",
-      "version": "0.0.0",
+      "version": "0.1.0-beta.0",
       "dependencies": {
         "@yielded/sync": "workspace:*",
       },
@@ -96,7 +96,7 @@
     },
     "packages/local-indexeddb": {
       "name": "@yielded/sync-local-indexeddb",
-      "version": "0.0.0",
+      "version": "0.1.0-beta.0",
       "dependencies": {
         "@yielded/sync": "workspace:*",
       },
@@ -113,7 +113,7 @@
     },
     "packages/platform-cloudflare": {
       "name": "@yielded/sync-platform-cloudflare",
-      "version": "0.0.0",
+      "version": "0.1.0-beta.0",
       "dependencies": {
         "@effect/sql-d1": "catalog:",
         "@effect/sql-sqlite-do": "catalog:",
@@ -133,7 +133,7 @@
     },
     "packages/sync": {
       "name": "@yielded/sync",
-      "version": "0.0.0",
+      "version": "0.1.0-beta.0",
       "devDependencies": {
         "@effect/vitest": "catalog:",
         "effect": "catalog:",

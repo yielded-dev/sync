@@ -1,7 +1,6 @@
 # Changesets
 
-Run `vp run changeset` for consumer-visible changes once the package APIs are ready
-for release. The four packages share a fixed version group.
-
-Packages remain private during scaffolding. KOM-209 owns the first beta, built
-publication exports, prerelease setup, and npm publication workflow.
+Run `vp run changeset` for consumer-visible changes. The four packages share a
+fixed version group and are in beta prerelease mode. Use
+`vp run changeset:version` to advance all four versions together. See the
+[release guide](../docs/RELEASE.md) for publication and validation.
