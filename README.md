@@ -11,7 +11,7 @@ SQLite/Durable Object adapter, scoped headless client, and Effect Atom bindings 
 implemented. The client includes explicit volatile and custom persistence modes and
 a process-local memory adapter. Durable IndexedDB and Expo SQLite adapters are implemented. The
 [public API document](docs/PUBLIC_API.md) defines the contract,
-[consumer sketch](docs/api/consumer.md), export ownership, and acceptance plan
+[consumer sketch](docs/src/content/docs/api/consumer.md), export ownership, and acceptance plan
 for the extraction.
 
 ## Packages
@@ -67,14 +67,14 @@ install, typecheck, and build.
 The [external contracts example](examples/contracts/README.md) demonstrates typed
 public imports; the [Cloudflare counter](examples/cloudflare/README.md) is a runnable
 authority. The [list and board consumer](examples/list-board/README.md) exercises
-two clients through those public entry points. See the [client guide](docs/client.md)
+two clients through those public entry points. See the [client guide](docs/src/content/docs/client.md)
 for headless and Atom usage,
 [toolchain details](docs/TOOLCHAIN.md) for verification, and [contributor guidance](AGENTS.md).
 
 ## Release status
 
 The four packages are published as `0.1.0-beta.0` and export built ESM and
-declarations. The [release guide](docs/RELEASE.md) lists supported hosts, the
+declarations. The [release guide](docs/src/content/docs/RELEASE.md) lists supported hosts, the
 beta compatibility policy, exact adoption versions, and the GitHub publication
 workflow.
 The standalone consumer covers convergence, rejection rollback, lost-response

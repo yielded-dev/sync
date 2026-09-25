@@ -103,7 +103,7 @@ patches the compiler, and runs `vp run ready`. The `ready` job is the CI gate.
 through npm trusted publishing. It verifies the registry install and records the
 source revision and workflow evidence in a GitHub prerelease. A successful beta
 publication triggers `deploy-docs.yml` for that same revision. See the
-[release guide](RELEASE.md) for host support and credential setup.
+[release guide](src/content/docs/RELEASE.md) for host support and credential setup.
 
 `pr-review.yml` uses the published Effect Agent review action and the repository's
 `OPENAI_API_KEY` secret. It reviews non-draft, same-repository PRs on opening,

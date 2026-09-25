@@ -16,4 +16,4 @@ Typechecking verifies action result/error correlation and service requirements
 through native RPC and Layer composition, headless client action types, and Atom
 mutations. `start` displays the encoded and decoded public snapshot. `vp run ready`
 includes these typechecks. Runtime behavior and persistence boundaries are covered
-in the [client guide](../../docs/client.md).
+in the [client guide](../../docs/src/content/docs/client.md).
