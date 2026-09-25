@@ -5,8 +5,8 @@ The root `package.json` catalog is the source of truth for exact shared versions
 
 | Tool                        | Version              |
 | --------------------------- | -------------------- |
-| Bun                         | `1.4.0`              |
-| Vite+                       | `0.3.0`              |
+| Bun                         | `1.4.2`              |
+| Vite+                       | `0.3.3`              |
 | Effect                      | `4.0.0-rc.112`       |
 | Effect Vitest               | `4.0.0-rc.112`       |
 | TypeScript                  | `7.0.2`              |
@@ -148,8 +148,8 @@ a guide page, and an asset URL after publication.
 
 Dev Kit 2.0.2 supplied the setup, Effect development, testing, Cloudflare Workers,
 pull request, and visual explanation skills. They are normal tracked files with individual origin
-receipts; `.claude/skills` links to the same content and `CLAUDE.md` links to
-`AGENTS.md`.
+receipts; `.claude/skills` links to the same content. `AGENTS.md` is the only
+agent guidance file.
 
 Dev Kit is a transient setup tool. There is no Dev Kit dependency, runtime import,
 managed project manifest, reconciliation step, or lifecycle command.

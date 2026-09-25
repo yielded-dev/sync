@@ -34,8 +34,8 @@
     "@stylistic/eslint-plugin": "5.10.0",
     "@types/node": "catalog:",
     "effect": "catalog:",
-    "oxfmt": "0.64.0",
-    "oxlint": "1.79.0",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",
@@ -46,7 +46,7 @@
   "engines": {
     "node": "^22.18.0 || >=24.11.0"
   },
-  "packageManager": "bun@1.4.0",
+  "packageManager": "bun@1.4.2",
   "catalog": {
     "@cloudflare/vitest-pool-workers": "0.22.0",
     "@cloudflare/workers-types": "5.20260825.1",
@@ -60,8 +60,8 @@
     "effect": "4.0.0-rc.112",
     "effect-cf": "0.42.1",
     "typescript": "7.0.2",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
-    "vite-plus": "0.3.0",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3",
+    "vite-plus": "0.3.3",
     "wrangler": "4.133.0",
     "vitepress": "2.0.0-alpha.18",
     "vue": "3.5.40",
