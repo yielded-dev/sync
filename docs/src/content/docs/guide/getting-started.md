@@ -1,4 +1,6 @@
-# Getting started
+---
+title: Getting started
+---
 
 Yielded Sync separates a source's public contract from its authoritative host and
 its clients. Install the core package and the Effect peer at the exact beta versions:
@@ -78,7 +80,7 @@ journals retain unresolved command identities across restarts; snapshot caches
 can be rebuilt. The [client guide](../client.md) covers lifecycle, recovery, and
 exact retry behavior.
 
-::: warning Beta compatibility
+:::caution[Beta compatibility]
 Pin all four packages to the same exact beta version. Read the
 [release guide](../RELEASE.md) before upgrading persisted formats or changing a
 source schema.

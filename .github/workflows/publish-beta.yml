@@ -98,7 +98,7 @@ jobs:
 
           Source revision: [$GITHUB_SHA](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)
           Validation: [release workflow run](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) ran vp run ready and installed, typechecked, and built the published versions from npm.
-          Supported hosts, adapters, and compatibility policy: [release guide](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/RELEASE.md).
+          Supported hosts, adapters, and compatibility policy: [release guide](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/src/content/docs/RELEASE.md).
           EOF
           if gh release view "$tag" >/dev/null 2>&1; then
             target=$(gh release view "$tag" --json targetCommitish --jq .targetCommitish)

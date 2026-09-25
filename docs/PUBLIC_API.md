@@ -7,9 +7,9 @@ The server and Cloudflare adapter implement authoritative execution. The headles
 client and Atom bindings are implemented, with a persistence port and process-local
 memory adapter. Durable IndexedDB and Expo SQLite adapters implement separate
 cache/journal storage and generation fencing. The four packages have built beta
-exports and share a prerelease version; see the [release guide](RELEASE.md).
+exports and share a prerelease version; see the [release guide](src/content/docs/RELEASE.md).
 
-Read the [complete consumer sketch](api/consumer.md) alongside these decisions.
+Read the [complete consumer sketch](src/content/docs/api/consumer.md) alongside these decisions.
 It defines a counter and a reusable label capability, server-private state,
 authorization, a Cloudflare host, a persistent headless client, and Atom bindings.
 The [external contracts example](../examples/contracts/README.md) now compiles the
@@ -17,7 +17,7 @@ shared composition, action types, and native RPC Effect requirements and runs a
 JSON codec example. The [Cloudflare counter](../examples/cloudflare/README.md)
 runs the server through public exports and is exercised by workerd tests. The
 local persistence adapters provide the browser/Expo storage assembly. See
-the [client runtime guide](client.md) for the implemented API.
+the [client runtime guide](src/content/docs/client.md) for the implemented API.
 
 The source review is pinned to Kommunikasie commit
 [`b13ca58e`](https://github.com/reve-ai/kommunikasie/tree/b13ca58ef08e9ec608d2902f05e3bce1660b81f3):
@@ -260,7 +260,7 @@ Persistence is required as one of `{ mode: "persistent", storage }` or
 adapter for tests/process-local use and does not promise restart durability.
 
 The table describes the implemented persistence boundary. The port and adapters
-are documented in the [client guide](client.md); physical formats and migration
+are documented in the [client guide](src/content/docs/client.md); physical formats and migration
 limits are documented in each adapter README.
 
 Durable adapters expose scoped `open({ namespace, actorId, ...limits })` and

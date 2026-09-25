@@ -1,4 +1,6 @@
-# Beta release
+---
+title: Beta release
+---
 
 The four packages share one version. The first published beta is
 `0.1.0-beta.0` for `@yielded/sync`, `@yielded/sync-platform-cloudflare`,

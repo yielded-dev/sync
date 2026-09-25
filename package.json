@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "examples/*"
+    "examples/*",
+    "docs"
   ],
   "type": "module",
   "scripts": {
@@ -15,10 +16,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && vp run -r typecheck",
     "check": "vp check && vp run typecheck",
     "test": "vp run -r --concurrency-limit 4 test",
-    "build": "vp run -r build && vp run docs:build",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs",
+    "build": "vp run -r build",
+    "docs:dev": "vp run @yielded/sync-docs#dev",
+    "docs:build": "vp run @yielded/sync-docs#build",
+    "docs:preview": "vp run @yielded/sync-docs#preview",
     "docs:deploy": "vp run docs:build && vp exec wrangler deploy --config site/wrangler.jsonc",
     "ready": "vp run build && vp run check && vp run test && vp run release:check",
     "release:check": "node scripts/release-check.mjs",
@@ -29,8 +30,6 @@
   "devDependencies": {
     "@changesets/cli": "2.31.0",
     "@effect/tsgo": "catalog:",
-    "@fontsource-variable/ibm-plex-sans": "catalog:",
-    "@fontsource/ibm-plex-mono": "catalog:",
     "@stylistic/eslint-plugin": "5.10.0",
     "@types/node": "catalog:",
     "effect": "catalog:",
@@ -39,8 +38,6 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "vitepress": "catalog:",
-    "vue": "catalog:",
     "wrangler": "catalog:"
   },
   "engines": {
@@ -54,8 +51,6 @@
     "@effect/sql-sqlite-do": "4.0.0-rc.112",
     "@effect/tsgo": "0.45.0",
     "@effect/vitest": "4.0.0-rc.112",
-    "@fontsource-variable/ibm-plex-sans": "5.3.0",
-    "@fontsource/ibm-plex-mono": "5.3.0",
     "@types/node": "26.1.2",
     "effect": "4.0.0-rc.112",
     "effect-cf": "0.42.1",
@@ -63,13 +58,15 @@
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3",
     "vite-plus": "0.3.3",
     "wrangler": "4.133.0",
-    "vitepress": "2.0.0-alpha.18",
-    "vue": "3.5.40",
     "expo-sqlite": "57.0.3",
     "playwright": "1.58.2",
     "expo": "57.0.24",
     "react": "19.2.3",
     "react-native": "0.86.3",
-    "@types/react": "19.2.14"
+    "@types/react": "19.2.14",
+    "@astrojs/starlight": "0.42.4",
+    "astro": "7.3.5",
+    "starlight-links-validator": "0.26.0",
+    "@yielded/starlight-theme": "0.1.0"
   }
 }

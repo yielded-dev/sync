@@ -1,4 +1,6 @@
-# Consumer API sketch
+---
+title: Consumer API sketch
+---
 
 This sketch illustrates [how Sync works](../guide/concepts.md). Shared
 `Source`, `Action`, and `Plugin` definitions are implemented and exercised by the

@@ -39,6 +39,6 @@ adds no platform adapter imports. `@yielded/sync/atom` exports `SourceAtom.make`
 whose active atoms acquire the same source leases and whose passive atoms never
 connect. Registry disposal releases its leases.
 
-See the [client runtime guide](../../docs/client.md) for lifecycle, retry and
+See the [client runtime guide](../../docs/src/content/docs/client.md) for lifecycle, retry and
 persistence behavior and the [list and board example](../../examples/list-board/README.md)
 for the authority used by the two-client integration test.

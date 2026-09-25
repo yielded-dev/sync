@@ -1,4 +1,6 @@
-# Headless clients and Atom
+---
+title: Headless clients and Atom
+---
 
 `Client.definition(contract, reducers)` supplies `applyEvent`, an `optimistic`
 reducer for every action, and matching `Client.plugin` registrations. Use an
