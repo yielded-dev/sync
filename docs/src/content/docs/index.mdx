@@ -1,26 +1,36 @@
 ---
-layout: home
-
+title: Yielded Sync
+description: Effect-native realtime synchronization with exact retries and scoped clients.
+template: splash
 hero:
-  name: Yielded Sync
-  text: Realtime state, with receipts.
+  title: Realtime state, with receipts.
   tagline: Effect-native contracts, an authoritative server, and scoped clients that keep the same command identity through retries.
   actions:
-    - theme: brand
-      text: Get started
-      link: /guide/getting-started
-    - theme: alt
-      text: Explore the API
-      link: /reference/packages
-
-features:
-  - title: One source of authority
-    details: Commit state, durable events, exact outcomes, and outbox obligations together. Replay stays ordered and gaps trigger recovery.
-  - title: Honest optimistic state
-    details: Clients expose provisional edits and declared rejections while retaining unresolved commands for exact retry.
-  - title: Explicit host boundaries
-    details: Keep your domain model and authorization in the app. Add Cloudflare hosting and browser or Expo persistence only where needed.
+    - text: Get started
+      link: /sync/guide/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: Explore the API
+      link: /sync/reference/packages/
+      variant: secondary
 ---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+<CardGrid>
+  <Card title="One source of authority">
+    Commit state, durable events, exact outcomes, and outbox obligations together. Replay stays
+    ordered and gaps trigger recovery.
+  </Card>
+  <Card title="Honest optimistic state">
+    Clients expose provisional edits and declared rejections while retaining unresolved commands for
+    exact retry.
+  </Card>
+  <Card title="Explicit host boundaries">
+    Keep your domain model and authorization in the app. Add Cloudflare hosting and browser or Expo
+    persistence only where needed.
+  </Card>
+</CardGrid>
 
 ## Published beta
 

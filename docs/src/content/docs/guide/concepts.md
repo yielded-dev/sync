@@ -1,4 +1,6 @@
-# How Sync works
+---
+title: How Sync works
+---
 
 A source is one ordered authority for a domain entity. The shared contract names
 its public snapshot, durable events, ephemeral messages, and typed actions. A

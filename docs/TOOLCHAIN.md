@@ -64,7 +64,7 @@ workspace typechecking and has a separate `start` task that displays a codec rou
 `vp run ready` builds packages first so workspace imports resolve their published
 ESM/declaration exports, then runs static checks, workspace tests, and a clean
 packed-consumer install, typecheck, and build. The build task also generates the
-VitePress documentation site from `docs/`.
+Starlight documentation site from the `docs/` workspace.
 Tests use Vite+'s Vitest runner; Effect tests can use the catalog-pinned
 `@effect/vitest`. Core retains focused client admission, recovery and lifecycle races.
 The Cloudflare package uses the released Worker pool in its Vite
@@ -123,9 +123,14 @@ required `ready` CI job.
 
 ## Documentation site
 
-The public documentation source lives in `docs/`. `vp run docs:dev`,
-`vp run docs:build`, and `vp run docs:preview` operate its VitePress site with a
-`/sync/` base path. The build fills `{{SYNC_VERSION}}` from the core package
+The `docs/` workspace is an Astro Starlight site; public pages live in
+`docs/src/content/docs/` and the sidebar in `docs/astro.config.ts`. Contributor notes
+such as this file stay at the top of `docs/` and are not published. `vp run docs:dev`,
+`vp run docs:build`, and `vp run docs:preview` operate the site with a `/sync/` base
+path. Link pages with relative Markdown paths such as `../client.md`; the build
+rewrites them and fails on broken links or anchors. The shared yielded.dev look,
+library switcher, and Markdown helpers come from `@yielded/starlight-theme`
+(`yielded-dev/site`). The build fills `{{SYNC_VERSION}}` from the core package
 manifest, so installation guidance follows Changesets version bumps.
 `site/wrangler.jsonc` deploys a separate static asset Worker
 on the `yielded.dev/sync*` route; its handler removes that path prefix before

@@ -3,7 +3,7 @@ dist/
 .release/
 coverage/
 .vite/
-.vitepress/cache/
+.astro/
 .vite-hooks/_/
 .worktrees/
 .playwright-cli/

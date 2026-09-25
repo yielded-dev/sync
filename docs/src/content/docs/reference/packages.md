@@ -1,4 +1,6 @@
-# Packages and hosts
+---
+title: Packages and hosts
+---
 
 All packages are published under the `@yielded` scope at the shared beta version
 `{{SYNC_VERSION}}`. Keep that version exact across the family.
