@@ -12,8 +12,9 @@ All packages are published under the `@yielded` scope at the shared beta version
 | [`@yielded/sync-local-indexeddb`](https://www.npmjs.com/package/@yielded/sync-local-indexeddb)         | `IndexedDb` persistence                          | Browser IndexedDB                             |
 | [`@yielded/sync-local-expo`](https://www.npmjs.com/package/@yielded/sync-local-expo)                   | `ExpoSqlite` persistence                         | Expo native SQLite                            |
 
-The core package peers on `effect@4.0.0-rc.112`. The Expo adapter also peers on
-`expo-sqlite@57.0.3`. The adapters depend on the exact core beta version.
+The core package declares its supported Effect range in its package manifest.
+The Expo adapter also peers on `expo-sqlite@57.0.3`. The adapters depend on the
+exact core beta version.
 
 ## Choose a host
 
