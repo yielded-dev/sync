@@ -5,9 +5,8 @@ title: Beta release
 The four packages share one version. The first published beta is
 `0.1.0-beta.0` for `@yielded/sync`, `@yielded/sync-platform-cloudflare`,
 `@yielded/sync-local-indexeddb`, and `@yielded/sync-local-expo`. Consumers
-should pin those exact versions. The shared Effect
-peer is `effect@4.0.0-rc.112`; the Expo adapter also peers on
-`expo-sqlite@57.0.3`.
+should pin those exact versions. Package manifests declare the supported Effect
+peer range; the Expo adapter also peers on `expo-sqlite@57.0.3`.
 
 | Package                             | Host and validation                                                                                                                                                               |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

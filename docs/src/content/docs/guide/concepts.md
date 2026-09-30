@@ -7,6 +7,17 @@ its public snapshot, durable events, ephemeral messages, and typed actions. A
 plugin adds a reusable capability with its own snapshot and actions while sharing
 the source's cursor and lifecycle.
 
+```mermaid
+flowchart TB
+  accTitle: A source connects clients to an authoritative server
+  accDescr: A shared source contract defines both sides. Clients send actions and exact retries to the server, which stores state and receipts and sends snapshots and ordered events back to clients.
+  Contract[Shared source contract] --> Client[Scoped clients]
+  Contract --> Server[Authoritative server]
+  Client -->|Actions and exact retries| Server
+  Server -->|Snapshots and ordered events| Client
+  Server --> Storage[(State and receipts)]
+```
+
 ## Authority and receipts
 
 The server keeps private state behind the public contract. Each action turn

@@ -5,6 +5,18 @@ tooling. Settle the [public API contracts](docs/PUBLIC_API.md) before extracting
 runtime implementations. Keep documentation independent of issue trackers and
 ticket identifiers; describe behavior, boundaries, and implementation stages directly.
 
+## Documentation
+
+Use `bun add` for consumer package installation examples.
+Use fenced `mermaid` blocks for flow diagrams, with `accTitle` and `accDescr`.
+The shared Starlight theme owns rendering and colors.
+
+Never hardcode Effect's current version in documentation, including READMEs,
+guides, reference pages, contributor docs, and installation commands. Use plain
+`effect` without a version or release tag in install examples. Package manifests
+and the root catalog own exact versions and peer compatibility; refer to them
+instead of repeating version numbers in prose or tables.
+
 ## Effect
 
 Before writing Effect code, read `node_modules/effect/AGENTS.md` completely and

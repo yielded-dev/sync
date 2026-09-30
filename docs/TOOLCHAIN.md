@@ -7,12 +7,9 @@ The root `package.json` catalog is the source of truth for exact shared versions
 | --------------------------- | -------------------- |
 | Bun                         | `1.4.2`              |
 | Vite+                       | `0.3.3`              |
-| Effect                      | `4.0.0-rc.112`       |
-| Effect Vitest               | `4.0.0-rc.112`       |
 | TypeScript                  | `7.0.2`              |
 | Effect TypeScript-Go        | `0.45.0`             |
 | effect-cf                   | `0.42.1`             |
-| Effect SQLite DO / D1       | `4.0.0-rc.112`       |
 | Cloudflare Worker test pool | `0.22.0`             |
 | Cloudflare Workers types    | `5.20260825.1`       |
 | Wrangler                    | `4.133.0`            |
@@ -20,9 +17,8 @@ The root `package.json` catalog is the source of truth for exact shared versions
 | React / React Native        | `19.2.3` / `0.86.3`  |
 | Playwright                  | `1.58.2`             |
 
-Effect and Effect Vitest stay aligned on rc.112, the last release whose test
-helper supports Vite+'s Vitest 4 runner. rc.113+ requires Vitest 5 and changes
-Effect testing module paths. Upgrade both together when the runner supports them.
+Exact Effect-family versions belong in the root catalog. Upgrade the family
+together and verify compatibility with Vite+'s bundled Vitest runner.
 
 Workspace manifests inherit shared versions through `catalog:` and refer to core
 through `workspace:*`. `bunfig.toml` disables implicit workspace linking. Commit
