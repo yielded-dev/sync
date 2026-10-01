@@ -1,9 +1,11 @@
 import { ProtocolError } from "@yielded/sync";
-import { Cloudflare } from "@yielded/sync-platform-cloudflare";
+import { EffectCf } from "@yielded/sync-platform-effect-cf";
 import { Server } from "@yielded/sync/server";
-import { Effect, Layer, Schema } from "effect";
+import { Context, Effect, Option, Schema } from "effect";
+import { DurableObject, DurableObjectNamespace, Worker } from "effect-cf";
 
 import { Board, CardRejected, Cards } from "./contract.ts";
+import { DemoActor } from "./demo.ts";
 
 const Principal = Schema.Struct({ actorId: Schema.String });
 
@@ -67,29 +69,71 @@ const server = Server.make(Cards, {
   plugins: [board],
 });
 
-export const BoardObject: Cloudflare.SourceObject = Cloudflare.durableObject(server, {
-  services: Layer.empty,
+const sync = EffectCf.make(server, {
   storageNamespace: "list-board-v1",
   replay: { maxEvents: 16, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 32, bufferSize: 32 },
 });
 
+export const BoardObject = DurableObject.make(sync.layer, sync.handlers);
 export type BoardObject = InstanceType<typeof BoardObject>;
 
-export default Cloudflare.worker(Cards, {
-  binding: "BOARDS",
-  path: "/sync/boards/:id",
-  objectName: (id) => `board:${id}`,
-  authenticate: (request) => {
-    const token = request.headers.get("authorization");
+class Boards extends Context.Service<
+  Boards,
+  DurableObjectNamespace.DurableObjectNamespaceEffectClient<BoardObject>
+>()("Boards") {
+  static readonly layer = DurableObjectNamespace.layer(this, { binding: "BOARDS" });
+}
 
-    const actorId =
-      token === "Bearer alice-local" ? "alice" : token === "Bearer bob-local" ? "bob" : undefined;
+const fetch = Effect.gen(function* () {
+  const request = yield* Worker.NativeRequest;
+  const url = new URL(request.url);
+  const match = /^\/sync\/boards\/([^/]+)\/?$/.exec(url.pathname);
 
-    return actorId === undefined
-      ? Effect.fail(
-          ProtocolError.make({ reason: "Unauthenticated", message: "Demo credentials required" }),
-        )
-      : Effect.succeed({ actorId, principal: { actorId }, expiresAtMillis: 4_000_000_000_000 });
-  },
-});
+  if (match === null) return new Response("Not found", { status: 404 });
+
+  const id = yield* Effect.try({
+    try: () => decodeURIComponent(match[1]),
+    catch: () => ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source id" }),
+  });
+
+  // Public demo identities only. Browser WebSockets cannot set Authorization.
+  // Replace this selection with the application's auth provider before deployment.
+  const token = request.headers.get("authorization");
+
+  const actorId = Option.getOrUndefined(
+    Schema.decodeUnknownOption(DemoActor)(
+      token === "Bearer alice-local"
+        ? "alice"
+        : token === "Bearer bob-local"
+          ? "bob"
+          : token === null
+            ? url.searchParams.get("actor")
+            : undefined,
+    ),
+  );
+
+  if (actorId === undefined)
+    return yield* ProtocolError.make({
+      reason: "Unauthenticated",
+      message: "Demo credentials required",
+    });
+
+  const boards = yield* Boards;
+  const stub = yield* boards.getByName(`board:${id}`);
+
+  const prepared = yield* EffectCf.prepareRequest(Cards, {
+    request,
+    address: Cards.address(id),
+    identity: { actorId, principal: { actorId }, expiresAtMillis: 4_000_000_000_000 },
+  });
+
+  return yield* boards.fetch(stub, prepared);
+}).pipe(
+  Effect.catchTag("DurableObjectFetchError", () =>
+    Effect.fail(ProtocolError.make({ reason: "Unavailable", message: "Source unavailable" })),
+  ),
+  Effect.catchTag("ProtocolError", (error) => Effect.succeed(EffectCf.errorResponse(error))),
+);
+
+export default Worker.makeFetchHandler(Boards.layer, { fetch });

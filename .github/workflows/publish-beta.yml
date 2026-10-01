@@ -62,7 +62,7 @@ jobs:
             *) echo "Expected a beta version, found $version" >&2; exit 1 ;;
           esac
 
-          for package in sync platform-cloudflare local-indexeddb local-expo; do
+          for package in sync platform-cloudflare platform-effect-cf platform-alchemy-cf local-indexeddb local-expo; do
             if [ "$package" = sync ]; then
               name=@yielded/sync
             else
@@ -94,7 +94,7 @@ jobs:
           version=$(node -p "require('./packages/sync/package.json').version")
           tag="v$version"
           cat > .release/notes.md <<EOF
-          Beta of the four @yielded/sync packages at $version.
+          Beta of the six @yielded/sync packages at $version.
 
           Source revision: [$GITHUB_SHA](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)
           Validation: [release workflow run](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) ran vp run ready and installed, typechecked, and built the published versions from npm.

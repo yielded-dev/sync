@@ -44,7 +44,7 @@
     "vite-plus": "catalog:"
   },
   "peerDependencies": {
-    "effect": "^4.0.0-rc.112",
+    "effect": "catalog:",
     "expo-sqlite": "^57.0.3"
   }
 }

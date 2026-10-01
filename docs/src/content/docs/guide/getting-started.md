@@ -17,6 +17,11 @@ bun add @yielded/sync-local-indexeddb@{{SYNC_VERSION}}
 bun add @yielded/sync-local-expo@{{SYNC_VERSION}} expo-sqlite@57.0.3
 ```
 
+The framework adapters are new in this checkout and pending the next beta; see
+[release status](../RELEASE.md). Choose one Cloudflare framework adapter. They both
+use the shared Cloudflare runtime. Keep transitive Effect packages on the catalog version; the
+[Alchemy example](https://github.com/yielded-dev/sync/tree/main/examples/alchemy-cloudflare)
+shows the catalog and platform dependencies for a local checkout.
 The Expo adapter targets native SQLite. Expo web uses the IndexedDB adapter.
 
 ## Define a shared contract
@@ -59,7 +64,9 @@ Atom bindings.
 Use `Server.make` to supply private state, action handlers, authorization, and
 initialization. An accepted action commits state, events, its exact outcome, and
 outbox obligations atomically. For Cloudflare, add
-`@yielded/sync-platform-cloudflare` to host the server in a SQLite Durable Object.
+`@yielded/sync-platform-effect-cf` or `@yielded/sync-platform-alchemy-cf` to host
+the server in a SQLite Durable Object. Construct the Worker and Durable Object
+with the framework's native APIs and pass in the adapter's handlers.
 The [runnable counter](https://github.com/yielded-dev/sync/tree/main/examples/cloudflare)
 and [list and board consumer](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
 show public package imports and host assembly.
@@ -75,13 +82,14 @@ choice. Open a source address, wait for authority, then execute a registered
 action. Use `SourceAtom.make` when a UI needs Atom bindings over the same session.
 
 Choose `{ mode: "volatile" }` for disposable state or
-`{ mode: "persistent", storage }` with the browser or Expo adapter. Persistent
+`{ mode: "persistent" }` with a browser or Expo `ReplicaPersistence` Layer. Provide
+`Client.CurrentActor` and `Client.Transport` at the session boundary. Persistent
 journals retain unresolved command identities across restarts; snapshot caches
 can be rebuilt. The [client guide](../client.md) covers lifecycle, recovery, and
 exact retry behavior.
 
 :::caution[Beta compatibility]
-Pin all four packages to the same exact beta version. Read the
+Pin the Sync packages you use to the same exact beta version. Read the
 [release guide](../RELEASE.md) before upgrading persisted formats or changing a
 source schema.
 :::

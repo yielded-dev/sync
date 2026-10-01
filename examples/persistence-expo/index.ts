@@ -1,4 +1,5 @@
 import { ExpoSqlite } from "@yielded/sync-local-expo";
+import { Client } from "@yielded/sync/client";
 import { Clock, Effect } from "effect";
 import { registerRootComponent } from "expo";
 import { createElement, useEffect, useState } from "react";
@@ -11,7 +12,7 @@ const namespace = "native-restart-proof-v2";
 const probe = Effect.gen(function* () {
   const existing = yield* Effect.scoped(
     Effect.gen(function* () {
-      const storage = yield* ExpoSqlite.open({ namespace, actorId: "alice" });
+      const storage = yield* ExpoSqlite.open({ namespace });
 
       return yield* storage.intentJournal.transaction((tx) =>
         tx.get(scenarios.evidence.address, scenarios.evidence.commandId),
@@ -33,7 +34,7 @@ const probe = Effect.gen(function* () {
   const client = yield* scenarios.runtimeRestore(ExpoSqlite.open, `${namespace}-client`);
 
   return { phase: "restored", transactions, conflicts, client };
-});
+}).pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" }));
 
 const App = () => {
   const [report, setReport] = useState("Running native persistence proof…");

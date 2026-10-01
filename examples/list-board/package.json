@@ -3,21 +3,30 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "wrangler deploy --dry-run --outdir dist",
-    "dev": "wrangler dev",
+    "build": "vp build && wrangler deploy --dry-run",
+    "dev": "vp dev",
     "test": "vp test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@effect/atom-react": "catalog:",
     "@yielded/sync": "workspace:*",
     "@yielded/sync-local-indexeddb": "workspace:*",
-    "@yielded/sync-platform-cloudflare": "workspace:*",
-    "effect": "catalog:"
+    "@yielded/sync-platform-effect-cf": "workspace:*",
+    "effect": "catalog:",
+    "effect-cf": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "catalog:",
     "@cloudflare/vitest-pool-workers": "catalog:",
     "@cloudflare/workers-types": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plus": "catalog:",
     "wrangler": "catalog:"
   }

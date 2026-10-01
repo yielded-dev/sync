@@ -10,8 +10,9 @@
   },
   "dependencies": {
     "@yielded/sync": "workspace:*",
-    "@yielded/sync-platform-cloudflare": "workspace:*",
-    "effect": "catalog:"
+    "@yielded/sync-platform-effect-cf": "workspace:*",
+    "effect": "catalog:",
+    "effect-cf": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

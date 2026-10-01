@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+import { Client } from "@yielded/sync/client";
 import { Effect } from "effect";
 import { afterAll, beforeAll, expect, it, vi } from "vite-plus/test";
 
@@ -39,16 +40,33 @@ afterAll(async () => {
 const open: scenarios.Open = (options) => ExpoSqlite.open({ ...options, directory });
 
 it("rolls back conflicting journal writes and fences retired SQLite connections", async () => {
-  expect(await Effect.runPromise(scenarios.exercise(open, "operations"))).toContain(
-    "generation fencing",
-  );
-  expect(await Effect.runPromise(scenarios.concurrent(open, "concurrent"))).toBe(
-    "conflict and interruption rollback",
-  );
+  expect(
+    await Effect.runPromise(
+      scenarios
+        .exercise(open, "operations")
+        .pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
+    ),
+  ).toContain("generation fencing");
+  expect(
+    await Effect.runPromise(
+      scenarios
+        .concurrent(open, "concurrent")
+        .pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
+    ),
+  ).toBe("conflict and interruption rollback");
 });
 it("background flushes and recovers immutable commands on reopen", async () => {
-  const before = await Effect.runPromise(scenarios.runtimeSeed(open, "client"));
-  const after = await Effect.runPromise(scenarios.runtimeRestore(open, "client"));
+  const before = await Effect.runPromise(
+    scenarios
+      .runtimeSeed(open, "client")
+      .pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
+  );
+
+  const after = await Effect.runPromise(
+    scenarios
+      .runtimeRestore(open, "client")
+      .pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
+  );
 
   expect(after.resent).toEqual(before.command);
   expect(after.remaining).toEqual([]);

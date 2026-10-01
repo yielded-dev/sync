@@ -1,3 +1,4 @@
+import { SqliteClient } from "@effect/sql-sqlite-do";
 import {
   OutboxRecord,
   SourceStorage,
@@ -9,8 +10,7 @@ import {
   type SourceTransaction,
   type StorageCommit,
 } from "@yielded/sync/server";
-import { Effect, Layer, Schema } from "effect";
-import { DurableObjectSqlite, DurableObjectState } from "effect-cf";
+import { Effect, Layer, Schema, Scheduler } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 
 export interface Options {
@@ -33,7 +33,7 @@ const fromRow = <S extends Schema.Codec<unknown, unknown>>(schema: S, row: unkno
 const toJson = <S extends Schema.Codec<unknown, unknown>>(schema: S, value: S["Type"]) =>
   Schema.encodeEffect(Schema.fromJsonString(schema))(value).pipe(Effect.mapError(failure));
 
-export const layer = (options: Options) =>
+export const layer = (native: DurableObjectStorage, options: Options) =>
   Layer.effect(
     SourceStorage,
     Effect.gen(function* () {
@@ -46,37 +46,36 @@ export const layer = (options: Options) =>
       )
         return yield* Effect.die("Invalid SQLite storage limits or namespace");
       const sql = (yield* SqlClient.SqlClient).withoutTransforms();
-      const host = yield* DurableObjectState.DurableObjectState;
-      const native = host.raw.storage;
 
-      yield* sql
-        .withTransaction(
-          Effect.gen(function* () {
-            yield* sql`CREATE TABLE IF NOT EXISTS sync_metadata (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), version INTEGER NOT NULL, namespace TEXT NOT NULL)`;
+      // Native transactions hold the input gate; timer-backed yields cannot run inside it.
+      const transact = <A, E, R>(body: Effect.Effect<A, E, R>) =>
+        sql
+          .withTransaction(body)
+          .pipe(Effect.provideService(Scheduler.PreventSchedulerYield, true));
 
-            const rows = yield* sql<{
-              version: number;
-              namespace: string;
-            }>`SELECT version, namespace FROM sync_metadata WHERE singleton = 1`;
+      yield* transact(
+        Effect.gen(function* () {
+          yield* sql`CREATE TABLE IF NOT EXISTS sync_metadata (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), version INTEGER NOT NULL, namespace TEXT NOT NULL)`;
 
-            if (
-              rows.length > 0 &&
-              (rows[0].version !== 1 || rows[0].namespace !== options.namespace)
-            )
-              return yield* StorageError.make({
-                message:
-                  "Storage namespace or migration version differs; refusing to reset authoritative data",
-              });
-            yield* sql`CREATE TABLE IF NOT EXISTS sync_head (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), generation TEXT NOT NULL, cursor INTEGER NOT NULL, value TEXT NOT NULL)`;
-            yield* sql`CREATE TABLE IF NOT EXISTS sync_events (generation TEXT NOT NULL, cursor INTEGER NOT NULL, value TEXT NOT NULL, PRIMARY KEY(generation, cursor))`;
-            yield* sql`CREATE TABLE IF NOT EXISTS sync_receipts (generation TEXT NOT NULL, actor TEXT NOT NULL, command TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(generation, actor, command))`;
-            yield* sql`CREATE UNIQUE INDEX IF NOT EXISTS sync_unbound_receipts ON sync_receipts(actor, command) WHERE json_extract(value, '$.command.admittedGeneration') IS NULL`;
-            yield* sql`CREATE TABLE IF NOT EXISTS sync_outbox (id TEXT PRIMARY KEY, available INTEGER NOT NULL, attempts INTEGER NOT NULL, status TEXT NOT NULL, value TEXT NOT NULL, failure TEXT)`;
-            yield* sql`CREATE INDEX IF NOT EXISTS sync_outbox_pending ON sync_outbox(status, available)`;
-            yield* sql`INSERT OR IGNORE INTO sync_metadata(singleton, version, namespace) VALUES(1, 1, ${options.namespace})`;
-          }),
-        )
-        .pipe(Effect.mapError(failure));
+          const rows = yield* sql<{
+            version: number;
+            namespace: string;
+          }>`SELECT version, namespace FROM sync_metadata WHERE singleton = 1`;
+
+          if (rows.length > 0 && (rows[0].version !== 1 || rows[0].namespace !== options.namespace))
+            return yield* StorageError.make({
+              message:
+                "Storage namespace or migration version differs; refusing to reset authoritative data",
+            });
+          yield* sql`CREATE TABLE IF NOT EXISTS sync_head (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), generation TEXT NOT NULL, cursor INTEGER NOT NULL, value TEXT NOT NULL)`;
+          yield* sql`CREATE TABLE IF NOT EXISTS sync_events (generation TEXT NOT NULL, cursor INTEGER NOT NULL, value TEXT NOT NULL, PRIMARY KEY(generation, cursor))`;
+          yield* sql`CREATE TABLE IF NOT EXISTS sync_receipts (generation TEXT NOT NULL, actor TEXT NOT NULL, command TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(generation, actor, command))`;
+          yield* sql`CREATE UNIQUE INDEX IF NOT EXISTS sync_unbound_receipts ON sync_receipts(actor, command) WHERE json_extract(value, '$.command.admittedGeneration') IS NULL`;
+          yield* sql`CREATE TABLE IF NOT EXISTS sync_outbox (id TEXT PRIMARY KEY, available INTEGER NOT NULL, attempts INTEGER NOT NULL, status TEXT NOT NULL, value TEXT NOT NULL, failure TEXT)`;
+          yield* sql`CREATE INDEX IF NOT EXISTS sync_outbox_pending ON sync_outbox(status, available)`;
+          yield* sql`INSERT OR IGNORE INTO sync_metadata(singleton, version, namespace) VALUES(1, 1, ${options.namespace})`;
+        }),
+      ).pipe(Effect.mapError(failure));
 
       const arm = (atMillis: number) =>
         Effect.tryPromise({
@@ -157,14 +156,14 @@ export const layer = (options: Options) =>
       }, Effect.mapError(failure));
 
       const transaction: SourceStorage["Service"]["transaction"] = (body) =>
-        sql
-          .withTransaction(body({ readHead, initialize, readReceipt, readEvents, commit }))
-          .pipe(Effect.catchTag("SqlError", (cause) => Effect.fail(failure(cause))));
+        transact(body({ readHead, initialize, readReceipt, readEvents, commit })).pipe(
+          Effect.catchTag("SqlError", (cause) => Effect.fail(failure(cause))),
+        );
 
       const claimOutbox: SourceStorage["Service"]["claimOutbox"] = Effect.fn(
         "SqliteStorage.claimOutbox",
       )(function* (now, leaseMillis, limit) {
-        return yield* sql.withTransaction(
+        return yield* transact(
           Effect.gen(function* () {
             const rows =
               yield* sql`SELECT value FROM sync_outbox WHERE status = 'pending' AND available <= ${now} ORDER BY available, id LIMIT ${limit}`;
@@ -195,7 +194,7 @@ export const layer = (options: Options) =>
       const settleOutbox: SourceStorage["Service"]["settleOutbox"] = Effect.fn(
         "SqliteStorage.settleOutbox",
       )(function* (record, disposition) {
-        yield* sql.withTransaction(
+        yield* transact(
           Effect.gen(function* () {
             if (disposition._tag === "Delivered") {
               yield* sql`DELETE FROM sync_outbox WHERE id = ${record.id} AND attempts = ${record.attempts} AND status = 'pending'`;
@@ -223,4 +222,4 @@ export const layer = (options: Options) =>
 
       return SourceStorage.of({ transaction, claimOutbox, settleOutbox, nextOutboxTime });
     }),
-  ).pipe(Layer.provide(DurableObjectSqlite.layer()));
+  ).pipe(Layer.provide(SqliteClient.layer({ storage: native })));

@@ -1,4 +1,4 @@
-import { Effect, Schema, Stream, type Scope } from "effect";
+import { Context, Effect, Layer, Schema, Stream, type Scope } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
 
 import { ProtocolError, type SourceAddress, type SourcePosition } from "../Model.ts";
@@ -12,17 +12,22 @@ export interface Request {
 }
 
 /** JSON codecs are checked on both sides of this portable transport port. */
-export interface Transport<R = never> {
-  readonly snapshot: (request: Request) => Effect.Effect<Schema.Json, ProtocolError, R>;
+export interface Transport {
+  readonly snapshot: (request: Request) => Effect.Effect<Schema.Json, ProtocolError>;
   readonly subscribe: (
     request: Request & { readonly after?: SourcePosition },
-  ) => Stream.Stream<Schema.Json, ProtocolError, R>;
-  readonly execute: (command: EncodedCommand) => Effect.Effect<Schema.Json, ProtocolError, R>;
-  readonly result: (command: EncodedCommand) => Effect.Effect<Schema.Json, ProtocolError, R>;
+  ) => Stream.Stream<Schema.Json, ProtocolError>;
+  readonly execute: (command: EncodedCommand) => Effect.Effect<Schema.Json, ProtocolError>;
+  readonly result: (command: EncodedCommand) => Effect.Effect<Schema.Json, ProtocolError>;
   readonly publishMessage: (
     request: Request & { readonly message: Schema.Json },
-  ) => Effect.Effect<void, ProtocolError, R>;
+  ) => Effect.Effect<void, ProtocolError>;
 }
+
+/** Transport implementations capture their dependencies in their construction Layer. */
+export const Transport: Context.Service<Transport, Transport> = Context.Service(
+  "@yielded/sync/client/Transport",
+);
 
 /** The application provides RpcClient.Protocol and its HTTP/socket services. */
 export const rpcTransport = <S extends Source.Spec>(
@@ -104,3 +109,7 @@ export const rpcTransport = <S extends Source.Spec>(
         ),
     } satisfies Transport;
   });
+
+/** Requires the application's scoped RPC protocol, route, and credentials. */
+export const layerRpcTransport = <S extends Source.Spec>(contract: Source.Definition<S>) =>
+  Layer.effect(Transport, rpcTransport(contract));

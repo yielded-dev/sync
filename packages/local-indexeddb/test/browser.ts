@@ -1,4 +1,9 @@
-import type { ClientError, Persistence, PersistenceError } from "@yielded/sync/client";
+import {
+  Client,
+  type ClientError,
+  type Persistence,
+  type PersistenceError,
+} from "@yielded/sync/client";
 import { Effect, Exit, Scope } from "effect";
 
 import * as scenarios from "../../sync/test/persistence-scenarios.ts";
@@ -7,10 +12,14 @@ import { IndexedDb } from "../src/index.ts";
 export const run = (
   scenario: "exercise" | "concurrent" | "runtimeSeed" | "runtimeRestore",
   namespace: string,
-) =>
-  Effect.runPromise<unknown, PersistenceError | ClientError>(
-    scenarios[scenario](IndexedDb.open, namespace),
+) => {
+  const proof: Effect.Effect<unknown, PersistenceError | ClientError, Client.CurrentActor> =
+    scenarios[scenario](IndexedDb.open, namespace);
+
+  return Effect.runPromise(
+    proof.pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
   );
+};
 
 let held: Persistence.DurableHandle;
 let heldScope: Scope.Closeable;
@@ -18,7 +27,10 @@ let heldScope: Scope.Closeable;
 export const hold = async (namespace: string) => {
   heldScope = Scope.makeUnsafe();
   held = await Effect.runPromise(
-    IndexedDb.open({ namespace, actorId: "alice" }).pipe(Scope.provide(heldScope)),
+    IndexedDb.open({ namespace }).pipe(
+      Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+      Scope.provide(heldScope),
+    ),
   );
 };
 

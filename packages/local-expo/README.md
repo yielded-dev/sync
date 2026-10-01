@@ -1,15 +1,18 @@
 # @yielded/sync-local-expo
 
 Scoped Expo SQLite persistence for Effect Sync clients on iOS and Android.
-`ExpoSqlite.open({ namespace, actorId, directory? })` acquires a durable handle;
-`ExpoSqlite.layer(options)` provides it as `ReplicaPersistence`. Supply that handle
-to `Client.make` with `{ mode: "persistent", storage }`. Keep its scope alive for
+`ExpoSqlite.open({ namespace, directory? })` acquires a durable handle and requires
+`Client.CurrentActor`. `ExpoSqlite.layer(options)` provides it as `ReplicaPersistence`.
+`Client.make` reads that service with `{ persistence: { mode: "persistent" } }`.
+Provide `CurrentActor` once around the client, transport, and persistence Layers.
+The handle captures the actor at acquisition. Keep its scope alive for
 the authenticated actor, and await `client.flush` from the application's background
 lifecycle. Journal admission is durable before transport and does not await a flush.
 
 The application owns namespace, identity changes, logout deletion and AppState
 subscriptions. Closing the scope closes connections and retains data. `purgeSource`
 and `wipe` are explicit destructive operations; reopen after a wipe.
+Close the old session scope before building Layers for another actor.
 
 The adapter uses Expo SQLite 57's async API and private connections
 (`useNewConnection: true`). Each connection serializes operations, with

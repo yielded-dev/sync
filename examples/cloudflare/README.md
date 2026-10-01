@@ -1,7 +1,12 @@
-# Cloudflare counter
+# effect-cf Cloudflare counter
 
 A runnable authority using only public package exports: a counter, a reusable
-label plugin, private audit fields, exact action results, and hibernating RPC.
+label plugin, private audit fields, exact action results, and RPC cursor recovery.
+`EffectCf.make` supplies the Layer and handlers to native `DurableObject.make`.
+The application uses `Worker.makeFetchHandler`, its typed namespace, and
+`EffectCf.prepareRequest` after authentication, then calls the namespace client's
+`fetch` method directly. The [Alchemy example](../alchemy-cloudflare/README.md)
+reuses `src/contract.ts`, `src/server.ts`, and the local demo credentials.
 
 ```sh
 vp install
@@ -35,7 +40,7 @@ make gap recovery easy to exercise. Production hosts choose their own bounded wi
 ```sh
 vp run sync-cloudflare-example#types
 vp run sync-cloudflare-example#build
-vp run @yielded/sync-platform-cloudflare#test
+vp run @yielded/sync-platform-effect-cf#test
 vp run ready
 ```
 

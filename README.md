@@ -7,7 +7,7 @@ host choices, a complete consumer example, and client lifecycle guidance.
 
 Shared source/action/plugin contracts, Schema envelopes, exact outcome codecs, and
 derived Effect RPC contracts, the authoritative server runtime, and the Cloudflare
-SQLite/Durable Object adapter, scoped headless client, and Effect Atom bindings are
+SQLite/Durable Object runtime with effect-cf and Alchemy v2 adapters, scoped headless client, and Effect Atom bindings are
 implemented. The client includes explicit volatile and custom persistence modes and
 a process-local memory adapter. Durable IndexedDB and Expo SQLite adapters are implemented. The
 [public API document](docs/PUBLIC_API.md) defines the contract,
@@ -19,7 +19,9 @@ for the extraction.
 | Directory                      | Package                             | Responsibility                                                                                 |
 | ------------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `packages/sync`                | `@yielded/sync`                     | Shared contracts and runtimes, with explicit `./server`, `./client`, and `./atom` entry points |
-| `packages/platform-cloudflare` | `@yielded/sync-platform-cloudflare` | Server hosting and authoritative persistence                                                   |
+| `packages/platform-cloudflare` | `@yielded/sync-platform-cloudflare` | Shared Cloudflare protocol and authoritative SQLite persistence                                |
+| `packages/platform-effect-cf`  | `@yielded/sync-platform-effect-cf`  | Native effect-cf Durable Object integration                                                    |
+| `packages/platform-alchemy-cf` | `@yielded/sync-platform-alchemy-cf` | Native Alchemy v2 Durable Object integration                                                   |
 | `packages/local-indexeddb`     | `@yielded/sync-local-indexeddb`     | Browser local persistence                                                                      |
 | `packages/local-expo`          | `@yielded/sync-local-expo`          | Expo local persistence using SQLite                                                            |
 
@@ -46,7 +48,7 @@ vp run ready
 ```
 
 Installation patches TypeScript with the pinned Effect TypeScript-Go compiler and
-installs the Vite+ Git hook dispatcher. `vp run ready` builds all four packages,
+installs the Vite+ Git hook dispatcher. `vp run ready` builds all six packages,
 then runs formatting, linting, typechecking, tests, and a clean packed-consumer
 install, typecheck, and build.
 
@@ -59,22 +61,29 @@ install, typecheck, and build.
 | `vp run test`               | All workspace test suites                              |
 | `vp run build`              | All package builds and the public docs site            |
 | `vp run docs:build`         | Build the public documentation site                    |
-| `vp run release:check`      | Pack four tarballs and verify a clean consumer         |
+| `vp run release:check`      | Pack six tarballs and verify a clean consumer          |
 | `vp run ready`              | Full local and CI validation                           |
 | `vp run patch:tsgo`         | Reapply the compiler patch after a script-free install |
 | `vp run changeset`          | Record a consumer-visible change                       |
 
 The [external contracts example](examples/contracts/README.md) demonstrates typed
 public imports; the [Cloudflare counter](examples/cloudflare/README.md) is a runnable
-authority. The [list and board consumer](examples/list-board/README.md) exercises
-two clients through those public entry points. See the [client guide](docs/src/content/docs/client.md)
+effect-cf authority. The [Alchemy counter](examples/alchemy-cloudflare/README.md)
+uses the same contract and server with native Alchemy Worker and Durable Object APIs.
+The [list and board consumer](examples/list-board/README.md) has a React and Effect Atom
+frontend with live cards, board renaming, presence, and IndexedDB persistence. Run
+`vp run sync-list-board-example#dev` and open two tabs as Alice and Bob to try it.
+Its Worker check exercises two clients through the same public entry points.
+See the [client guide](docs/src/content/docs/client.md)
 for headless and Atom usage,
 [toolchain details](docs/TOOLCHAIN.md) for verification, and [contributor guidance](AGENTS.md).
 
 ## Release status
 
-The four packages are published as `0.1.0-beta.0` and export built ESM and
-declarations. The [release guide](docs/src/content/docs/RELEASE.md) lists supported hosts, the
+The original core, Cloudflare, IndexedDB, and Expo packages were published as
+`0.1.0-beta.0`. This checkout adds `platform-effect-cf` and `platform-alchemy-cf`
+and replaces the Cloudflare Worker factory for the next beta; those changes are
+unreleased. All six packages export built ESM and declarations. The [release guide](docs/src/content/docs/RELEASE.md) lists supported hosts, the
 beta compatibility policy, exact adoption versions, and the GitHub publication
 workflow.
 The standalone consumer covers convergence, rejection rollback, lost-response

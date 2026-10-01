@@ -28,7 +28,7 @@ const request = (tag: string, payload: Schema.Json) =>
   stub().fetch("https://example.test/", {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ _tag: "Request", id: "1", tag, payload }),
+    body: JSON.stringify({ _tag: "Request", id: "1", tag, payload, headers: [] }),
   });
 
 const rpc = async (tag: string, payload: Schema.Json) => {
@@ -80,6 +80,7 @@ const connect = async (failure = "none", after?: SourcePosition) => {
       id: "stream",
       tag: "subscribe",
       payload: { ...header, after },
+      headers: [],
     }),
   );
 
@@ -104,12 +105,12 @@ it("disconnects all subscribers after a committed command's publication is inter
     payload: 1,
   };
 
-  const status = await request("execute/$source/set", command).then(
-    (response) => response.status,
-    () => 500,
-  );
+  const response = await request("execute/$source/set", command);
 
-  expect(status).toBeGreaterThanOrEqual(500);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject([
+    { _tag: "Exit", exit: { _tag: "Failure", cause: [{ _tag: "Interrupt" }] } },
+  ]);
   expect(await snapshot()).toMatchObject({ position: { cursor: 1 }, snapshot: { source: 1 } });
   expect(await Promise.all([affected.closed, peer.closed])).toEqual([1013, 1013]);
   expect(await rpc("execute/$source/set", command)).toMatchObject({

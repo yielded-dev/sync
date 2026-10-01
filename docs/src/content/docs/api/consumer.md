@@ -155,40 +155,110 @@ changing state. A successful plan atomically commits state, event, and full resu
 For example, retrying a successful set from 0 to 7 still returns
 `{ previous: 0, current: 7 }` even if another command has since changed the counter.
 
-## Cloudflare assembly (`worker.ts`)
+## effect-cf assembly (`worker.ts`)
 
 ```ts
-import { Cloudflare } from "@yielded/sync-platform-cloudflare";
+import { ProtocolError } from "@yielded/sync";
+import { EffectCf } from "@yielded/sync-platform-effect-cf";
+import { Server } from "@yielded/sync/server";
+import { Context, Effect } from "effect";
+import { DurableObject, DurableObjectNamespace, Worker } from "effect-cf";
 import { CounterServer } from "./counter-server";
 import { AccessLive, authenticate } from "./application-auth";
 
-export const CounterObject = Cloudflare.durableObject(CounterServer, {
-  services: AccessLive,
+const sync = EffectCf.make(Server.provide(CounterServer, AccessLive), {
   storageNamespace: "counter-v1",
   replay: { maxEvents: 512, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 100, bufferSize: 256 },
 });
 
-export default Cloudflare.worker(CounterServer.contract, {
-  binding: "COUNTERS",
-  path: "/sync/counters/:id",
-  objectName: (id) => `counter:${id}`,
-  authenticate,
-});
+export const CounterObject = DurableObject.make(sync.layer, sync.handlers);
+
+class Counters extends Context.Service<
+  Counters,
+  DurableObjectNamespace.DurableObjectNamespaceEffectClient<InstanceType<typeof CounterObject>>
+>()("Counters") {
+  static readonly layer = DurableObjectNamespace.layer(this, { binding: "COUNTERS" });
+}
+
+const fetch = Effect.gen(function* () {
+  const request = yield* Worker.NativeRequest;
+  const match = /^\/sync\/counters\/([^/]+)\/?$/.exec(new URL(request.url).pathname);
+  if (match === null) return new Response("Not found", { status: 404 });
+
+  const id = yield* Effect.try({
+    try: () => decodeURIComponent(match[1]),
+    catch: () => ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid id" }),
+  });
+  const identity = yield* authenticate(request);
+  const counters = yield* Counters;
+  const stub = yield* counters.getByName(`counter:${id}`);
+
+  const prepared = yield* EffectCf.prepareRequest(CounterServer.contract, {
+    request,
+    address: CounterServer.contract.address(id),
+    identity,
+  });
+
+  return yield* counters.fetch(stub, prepared);
+}).pipe(Effect.catchTag("ProtocolError", (error) => Effect.succeed(EffectCf.errorResponse(error))));
+
+export default Worker.makeFetchHandler(Counters.layer, { fetch });
 ```
 
-`COUNTERS` is the application's binding to `CounterObject`. `authenticate(request)`
-is an application Effect returning `{ actorId, principal: { actorId }, expiresAtMillis }`
-or a classified `ProtocolError`. The worker forwards a trusted bound identity;
-client headers/payloads cannot impersonate internal authorization data.
+`COUNTERS` is the application's typed binding to `CounterObject`.
+`authenticate(request)` returns `{ actorId, principal: { actorId }, expiresAtMillis }`
+or a classified `ProtocolError`. Request preparation replaces internal identity headers;
+only authenticated routes should expose the object binding. `AccessLive` is acquired
+and finalized within each source operation through `Server.provide`. The instance
+Layer owns the long-lived RPC server. Applications can use their
+own router and other Worker handlers alongside this route.
 
-The adapter derives the five RPC operations and delegates execution to the server
-runtime using JSON Effect RPC. HTTP supports unary snapshot/action/result operations;
-WebSocket RPC also carries subscriptions and ephemeral messages. It owns SQLite
-transactions, socket hibernation and outbox wakeups. This
-example has no external effects. A source needing projections adds schema-encoded
-outbox records to its plans and supplies a typed delivery Effect at this boundary;
-its destination remains application-owned.
+## Alchemy v2 assembly
+
+Use `@yielded/sync-platform-alchemy-cf` with Alchemy's native constructors:
+
+```ts
+import { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";
+import { Server } from "@yielded/sync/server";
+import * as Cloudflare from "alchemy/Cloudflare";
+import { CounterServer } from "./counter-server";
+import { AccessLive } from "./application-auth";
+
+export class CounterObject extends Cloudflare.DurableObject<CounterObject>()(
+  "CounterObject",
+  AlchemyCf.make(Server.provide(CounterServer, AccessLive), {
+    storageNamespace: "counter-v1",
+    replay: { maxEvents: 512, maxBatchBytes: 600_000 },
+    sockets: { maxConnections: 100, bufferSize: 256 },
+  }),
+) {}
+```
+
+The native Alchemy Worker resolves `CounterObject`, selects a stub with
+`getByName`, authenticates the request, and calls `AlchemyCf.prepareRequest` with
+the native Effect HTTP request, address, and identity. It then calls `stub.fetch`
+with the prepared request. The
+[runnable Alchemy counter](https://github.com/yielded-dev/sync/tree/main/examples/alchemy-cloudflare)
+shows the complete Worker and stack. Alchemy resolves infrastructure dependencies
+in the construction Effect; the returned runtime Effect initializes SQLite in the
+actual Durable Object.
+
+Both adapters delegate to the same source runtime and JSON Effect RPC protocol.
+HTTP serves unary snapshot/action/result operations; WebSockets also carry
+subscriptions and ephemeral messages. `RpcServer` owns decoding, dispatch, typed
+responses, stream acknowledgements, and interruption. effect-cf supplies its native
+RPC socket transport; Alchemy uses a Cloudflare `RpcServer.Protocol` bridge. The
+shared source implementation owns SQLite transactions, bounded publication, replay,
+and outbox wakeups. An activation lost during a subscription resets the RPC stream;
+the client reconnects and replays from its retained cursor. Keep named-object keys and
+storage namespaces stable when changing assembly. A framework migration that
+changes the Cloudflare namespace requires an explicit native migration.
+
+A source needing projections adds Schema-encoded outbox records to its plans and
+supplies a typed delivery Effect at this boundary. Its destination remains
+application-owned. Sync uses the object's alarm; compose unrelated alarm jobs
+through an explicit application scheduler.
 
 ## Client definition (`counter-client.ts`)
 
@@ -215,44 +285,58 @@ intents on the authoritative snapshot. Plugin reducers operate only on their slo
 ## Actor-scoped browser session (`session.ts`)
 
 ```ts
-import { Effect } from "effect";
-import { Client, ReplicaPersistence } from "@yielded/sync/client";
+import { Context, Layer } from "effect";
+import { Client } from "@yielded/sync/client";
 import { IndexedDb } from "@yielded/sync-local-indexeddb";
 import { Counter } from "./counter";
 import { CounterClient } from "./counter-client";
 
-export const openSession = Effect.fn("openSession")(function* (actorId: string) {
-  const storage = yield* ReplicaPersistence;
-  const transport = yield* Client.rpcTransport(Counter);
-  return yield* Client.make(CounterClient, {
-    actorId,
-    transport,
-    persistence: { mode: "persistent", storage },
-    retry: { maxAttempts: 8, initialDelay: "250 millis", maxDelay: "30 seconds" },
-    limits: { maxSources: 32, maxPendingPerSource: 100, frameBuffer: 256 },
-  });
-});
-
-// Inside the application's authenticated session scope:
-export const browserSession = (actorId: string) =>
-  openSession(actorId).pipe(
-    Effect.provide(IndexedDb.layer({ namespace: "counter-demo-v1", actorId })),
+export class CounterSession extends Context.Service<
+  CounterSession,
+  Client.Runtime<typeof Counter.spec>
+>()("app/CounterSession") {
+  static readonly layer = Layer.effect(
+    this,
+    Client.make(CounterClient, {
+      persistence: { mode: "persistent" },
+      retry: { maxAttempts: 8, initialDelay: "250 millis", maxDelay: "30 seconds" },
+      limits: { maxSources: 32, maxPendingPerSource: 100, frameBuffer: 256 },
+    }),
   );
+}
+
+export const browserSession = CounterSession.layer.pipe(
+  Layer.provide([
+    IndexedDb.layer({ namespace: "counter-demo-v1" }),
+    Client.layerRpcTransport(Counter),
+  ]),
+);
 ```
 
-`rpcTransport` uses contract-derived Effect RPC clients and requires `RpcClient.Protocol`
-and `Scope`. The application supplies a socket protocol Layer, JSON RPC serialization,
-the authenticated socket, and its lifetime. Routes and credentials belong in that Layer.
-Provide it around the session lifetime, or build it in the session scope with `Layer.build`. IndexedDB supplies only persistence. This session effect
-requires `Scope`: the caller retains that scope for the session and closes it on
-identity change. Do not return a live client from an already-completed
-`Effect.scoped` block.
+`browserSession` requires `Client.CurrentActor` and `RpcClient.Protocol`. At the
+application's session boundary, provide the authenticated socket protocol and
+the actor once:
 
-For Expo, provide `ExpoSqlite.layer({ namespace: "counter-demo-v1", actorId })` from
+```ts
+const SessionLive = browserSession.pipe(
+  Layer.provide(socketProtocol),
+  Layer.provide(Layer.succeed(Client.CurrentActor, { actorId })),
+);
+```
+
+The application owns `socketProtocol`, including the route, credentials, socket,
+and JSON RPC serialization. It can read `CurrentActor` while acquiring that
+protocol. Pass `SessionLive` to the application's Atom runtime, or provide it
+around the whole headless workflow. Layers retain their acquired resources for
+that lifetime. Close the old session before building one for another actor; do
+not return a live client from an already-completed `Effect.scoped` block.
+
+For Expo, provide `ExpoSqlite.layer({ namespace: "counter-demo-v1" })` from
 `@yielded/sync-local-expo`. Tests can provide
-`ReplicaPersistence.layerMemory({ actorId })`. A consumer deliberately choosing
-no persistence passes `{ mode: "volatile" }` to `Client.make`. Adapter failures do
-not change that choice. Logout calls `storage.wipe` only if application policy
+`ReplicaPersistence.layerMemory()`. Both read the same `CurrentActor`. A consumer
+deliberately choosing no persistence passes `{ persistence: { mode: "volatile" } }`
+to `Client.make`, which then requires no persistence service. Adapter failures do
+not change that choice. Logout calls the storage handle's `wipe` only if application policy
 requires deletion; ordinary session disposal leaves unresolved evidence intact.
 
 ## Headless use and result recovery
@@ -260,9 +344,11 @@ requires deletion; ordinary session disposal leaves unresolved evidence intact.
 ```ts
 import { Effect, Stream } from "effect";
 import { Counter } from "./counter";
+import { CounterSession } from "./session";
 
-// session is the Client.make result above. This Effect runs in its child scope.
+// Provide SessionLive around this workflow and keep its scope alive.
 const run = Effect.gen(function* () {
+  const session = yield* CounterSession;
   const replica = yield* session.open(Counter.address("demo"));
   yield* replica.ready;
   yield* replica.changes.pipe(
@@ -290,8 +376,10 @@ Reopening the session restores that evidence and queries the exact outcome.
 ```ts
 import { SourceAtom } from "@yielded/sync/atom";
 import { Counter } from "./counter";
+import { CounterSession } from "./session";
 
-// Session-owned binding; does not create another headless runtime.
+// Inside the session's acquisition Effect: shares the same headless runtime.
+const session = yield * CounterSession;
 const atoms = SourceAtom.make(session);
 const address = Counter.address("demo");
 const replicaAtom = atoms.replica(address); // Active: holds a source lease.
@@ -307,3 +395,7 @@ recovery Effects through its existing runtime. The binding creates a child scope
 for each active lease; registry unmount/disposal releases it. Headless and Atom
 leases share the same coordinator. Passive reads, snapshot eviction, and source
 unmount never silently delete pending journal evidence.
+
+For a complete frontend, see the [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board).
+It uses `@effect/atom-react`, native WebSocket RPC, and IndexedDB, with a single
+development command for both the UI and its Worker.

@@ -1,6 +1,7 @@
 import { Context, Effect, Layer, Schema, Semaphore } from "effect";
 
 import { ActorId, CommandId, SourceAddress, type SourceAddress as Address } from "../Model.ts";
+import { CurrentActor } from "./CurrentActor.ts";
 import { copyJson } from "./Model.ts";
 
 export class PersistenceError extends Schema.TaggedError<PersistenceError>()("PersistenceError", {
@@ -56,8 +57,7 @@ export interface Handle {
 export class ReplicaPersistence extends Context.Service<ReplicaPersistence, Handle>()(
   "@yielded/sync/client/ReplicaPersistence",
 ) {
-  static layerMemory(options: {
-    readonly actorId: string;
+  static layerMemory(options?: {
     readonly maxJournalRows?: number;
     readonly maxSnapshots?: number;
   }) {
@@ -163,8 +163,14 @@ export const memory = (options?: {
     }
   >();
 
-  const open = Effect.fn("ReplicaPersistence.memory.open")(function* (actorId: string) {
-    yield* Schema.decodeEffect(ActorId)(actorId).pipe(Effect.orDie);
+  const open = Effect.gen(function* () {
+    const { actorId } = yield* CurrentActor;
+
+    yield* Schema.decodeEffect(ActorId)(actorId).pipe(
+      Effect.mapError(() =>
+        PersistenceError.make({ reason: "Unavailable", message: "Invalid actor id" }),
+      ),
+    );
 
     const state = actors.get(actorId) ?? {
       generation: 0,
@@ -257,12 +263,11 @@ export const memory = (options?: {
   return { open };
 };
 
-export const layerMemory = (options: {
-  readonly actorId: string;
+export const layerMemory = (options?: {
   readonly maxJournalRows?: number;
   readonly maxSnapshots?: number;
 }) =>
   Layer.effect(
     ReplicaPersistence,
-    Effect.suspend(() => memory(options).open(options.actorId)),
+    Effect.suspend(() => memory(options).open),
   );

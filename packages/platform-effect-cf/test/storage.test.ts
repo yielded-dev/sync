@@ -1,8 +1,7 @@
 import { SqliteStorage } from "@yielded/sync-platform-cloudflare";
 import { SourceStorage, type OutboxRecord, type StoredHead } from "@yielded/sync/server";
 import { env, reset, runInDurableObject, evictDurableObject } from "cloudflare:test";
-import { Deferred, Effect, Fiber, Layer } from "effect";
-import { DurableObjectState } from "effect-cf";
+import { Deferred, Effect, Fiber } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
 import type { CounterObject } from "../../../examples/cloudflare/src/worker.ts";
@@ -22,18 +21,11 @@ const usingStorage = <A, E>(body: (storage: SourceStorage["Service"]) => Effect.
     Effect.runPromise(
       Effect.flatMap(SourceStorage, body).pipe(
         Effect.provide(
-          SqliteStorage.layer({
+          SqliteStorage.layer(state.storage, {
             namespace: "counter-v1",
             replayWindow: 4,
             maxPendingOutbox: 100,
-          }).pipe(
-            Layer.provide(
-              Layer.succeed(
-                DurableObjectState.DurableObjectState,
-                DurableObjectState.fromDurableObjectState(state),
-              ),
-            ),
-          ),
+          }),
         ),
         Effect.scoped,
       ),

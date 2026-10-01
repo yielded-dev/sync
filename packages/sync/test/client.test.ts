@@ -1,9 +1,19 @@
-import { it } from "@effect/vitest";
 import { Action, Plugin, ProtocolError, Source } from "@yielded/sync";
-import { Client, memory, type JournalRow, type PersistenceHandle } from "@yielded/sync/client";
-import { DateTime, Deferred, Effect, Exit, Fiber, Queue, Schema, Scope, Stream } from "effect";
+import { Client, memory, ReplicaPersistence, type JournalRow } from "@yielded/sync/client";
+import {
+  Context,
+  DateTime,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Queue,
+  Schema,
+  Scope,
+  Stream,
+} from "effect";
 import { TestClock } from "effect/testing";
-import { expect } from "vite-plus/test";
+import { expect, it } from "vite-plus/test";
 
 const Label = Plugin.make("label", {
   snapshot: Schema.Struct({ text: Schema.String }),
@@ -186,23 +196,23 @@ const server = Effect.sync(() => {
   };
 });
 
-const options = (transport: Client.Transport, storage?: PersistenceHandle): Client.Options => ({
-  actorId: "alice",
-  transport,
-  persistence: storage === undefined ? { mode: "volatile" } : { mode: "persistent", storage },
-  retry: { maxAttempts: 3, initialDelay: "10 millis", maxDelay: "20 millis" },
-});
+const retry: Client.Retry = { maxAttempts: 3, initialDelay: "10 millis", maxDelay: "20 millis" };
 
 const stateWhere = (
   lease: Client.Lease<typeof Counter.spec>,
   predicate: (state: Client.State<typeof Counter.spec>) => boolean,
 ) => lease.changes.pipe(Stream.filter(predicate), Stream.take(1), Stream.runCollect);
 
-it.effect("rejects a whole gapped batch before recovering authoritative state", () =>
+it("rejects a whole gapped batch before recovering authoritative state", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const remote = yield* server;
-      const client = yield* Client.make(definition, options(remote.transport));
+
+      const client = yield* Client.make(definition, {
+        persistence: { mode: "volatile" },
+        retry,
+      }).pipe(Effect.provideService(Client.Transport, remote.transport));
+
       const lease = yield* client.open(address);
 
       yield* lease.ready;
@@ -221,120 +231,133 @@ it.effect("rejects a whole gapped batch before recovering authoritative state", 
       yield* stateWhere(lease, (s) => s.authoritative?.position.cursor === 4);
       expect((yield* lease.read).value?.source.value).toBe(20);
     }),
-  ),
-);
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));
 
-it.effect(
-  "cancels a disposed lease's queued command while another lease keeps the source alive",
-  () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const remote = yield* server;
-        const storage = yield* memory().open("alice");
-        const started = yield* Deferred.make<void>();
-        const release = yield* Deferred.make<void>();
-
-        remote.pause(
-          Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release))),
-        );
-        const client = yield* Client.make(definition, options(remote.transport, storage));
-        const survivor = yield* client.open(address);
-        const leaseScope = yield* Scope.fork(yield* Effect.scope);
-        const disposed = yield* client.open(address).pipe(Scope.provide(leaseScope));
-
-        yield* survivor.ready;
-
-        const first = yield* survivor
-          .execute(Counter.actions.add, { amount: 1 })
-          .pipe(Effect.forkChild);
-
-        yield* Deferred.await(started);
-
-        const queued = yield* disposed
-          .execute(Counter.actions.add, { amount: 5 })
-          .pipe(Effect.forkChild);
-
-        yield* stateWhere(survivor, (state) => state.pending.length === 2);
-        const id = (yield* survivor.read).pending[1].commandId;
-
-        yield* Scope.close(leaseScope, Exit.void);
-        yield* Deferred.succeed(release, undefined);
-        expect(yield* Fiber.join(first)).toEqual({ before: 0, after: 1 });
-        expect((yield* Fiber.await(queued))._tag).toBe("Failure");
-        expect(remote.calls).toHaveLength(1);
-        expect(yield* storage.intentJournal.transaction((tx) => tx.get(address, id))).toBeDefined();
-        expect(yield* survivor.retry(id)).toEqual({ before: 1, after: 6 });
-        expect(remote.calls[1]?.commandId).toBe(id);
-      }),
-    ),
-);
-
-it.effect(
-  "fences an in-flight execute when its lease closes but the shared source remains open",
-  () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const remote = yield* server;
-        const storage = yield* memory().open("alice");
-        const started = yield* Deferred.make<void>();
-        const release = yield* Deferred.make<void>();
-
-        const delayed = Deferred.succeed(started, undefined).pipe(
-          Effect.andThen(Deferred.await(release)),
-        );
-
-        const client = yield* Client.make(
-          definition,
-          options(
-            {
-              ...remote.transport,
-              execute: () =>
-                delayed.pipe(
-                  Effect.as({
-                    _tag: "Succeeded",
-                    result: { before: 0, after: 3 },
-                    position: position(1),
-                  }),
-                  Effect.uninterruptible,
-                ),
-            },
-            storage,
-          ),
-        );
-
-        const survivor = yield* client.open(address);
-        const leaseScope = yield* Scope.fork(yield* Effect.scope);
-        const lease = yield* client.open(address).pipe(Scope.provide(leaseScope));
-
-        yield* lease.ready;
-
-        const response = yield* lease
-          .execute(Counter.actions.add, { amount: 3 })
-          .pipe(Effect.forkChild);
-
-        yield* Deferred.await(started);
-        const closing = yield* Scope.close(leaseScope, Exit.void).pipe(Effect.forkChild);
-
-        yield* tick;
-        yield* Deferred.succeed(release, undefined);
-        yield* Fiber.join(closing);
-        expect((yield* Fiber.await(response))._tag).toBe("Failure");
-        const pending = (yield* survivor.read).pending;
-
-        expect(pending).toHaveLength(1);
-        expect(pending[0]?.phase).toBe("Pending");
-        expect(
-          yield* storage.intentJournal.transaction((tx) => tx.get(address, pending[0].commandId)),
-        ).toMatchObject({ value: { phase: "Pending", outcome: null } });
-      }),
-    ),
-);
-
-it.effect("cancels settlement waiting on another lease's journal transaction", () =>
+it("cancels a disposed lease's queued command while another lease keeps the source alive", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const remote = yield* server;
-      const storage = yield* memory().open("alice");
+      const storage = yield* memory().open;
+      const started = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+
+      remote.pause(
+        Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release))),
+      );
+
+      const client = yield* Client.make(definition, {
+        persistence: { mode: "persistent" },
+        retry,
+      }).pipe(
+        Effect.provideService(Client.Transport, remote.transport),
+        Effect.provideService(ReplicaPersistence, storage),
+      );
+
+      const survivor = yield* client.open(address);
+      const leaseScope = yield* Scope.fork(yield* Effect.scope);
+      const disposed = yield* client.open(address).pipe(Scope.provide(leaseScope));
+
+      yield* survivor.ready;
+
+      const first = yield* survivor
+        .execute(Counter.actions.add, { amount: 1 })
+        .pipe(Effect.forkChild);
+
+      yield* Deferred.await(started);
+
+      const queued = yield* disposed
+        .execute(Counter.actions.add, { amount: 5 })
+        .pipe(Effect.forkChild);
+
+      yield* stateWhere(survivor, (state) => state.pending.length === 2);
+      const id = (yield* survivor.read).pending[1].commandId;
+
+      yield* Scope.close(leaseScope, Exit.void);
+      yield* Deferred.succeed(release, undefined);
+      expect(yield* Fiber.join(first)).toEqual({ before: 0, after: 1 });
+      expect((yield* Fiber.await(queued))._tag).toBe("Failure");
+      expect(remote.calls).toHaveLength(1);
+      expect(yield* storage.intentJournal.transaction((tx) => tx.get(address, id))).toBeDefined();
+      expect(yield* survivor.retry(id)).toEqual({ before: 1, after: 6 });
+      expect(remote.calls[1]?.commandId).toBe(id);
+    }),
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));
+
+it("fences an in-flight execute when its lease closes but the shared source remains open", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const remote = yield* server;
+      const storage = yield* memory().open;
+      const started = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+
+      const delayed = Deferred.succeed(started, undefined).pipe(
+        Effect.andThen(Deferred.await(release)),
+      );
+
+      const client = yield* Client.make(definition, {
+        persistence: { mode: "persistent" },
+        retry,
+      }).pipe(
+        Effect.provideService(Client.Transport, {
+          ...remote.transport,
+          execute: () =>
+            delayed.pipe(
+              Effect.as({
+                _tag: "Succeeded",
+                result: { before: 0, after: 3 },
+                position: position(1),
+              }),
+              Effect.uninterruptible,
+            ),
+        }),
+        Effect.provideService(ReplicaPersistence, storage),
+      );
+
+      const survivor = yield* client.open(address);
+      const leaseScope = yield* Scope.fork(yield* Effect.scope);
+      const lease = yield* client.open(address).pipe(Scope.provide(leaseScope));
+
+      yield* lease.ready;
+
+      const response = yield* lease
+        .execute(Counter.actions.add, { amount: 3 })
+        .pipe(Effect.forkChild);
+
+      yield* Deferred.await(started);
+      const closing = yield* Scope.close(leaseScope, Exit.void).pipe(Effect.forkChild);
+
+      yield* tick;
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(closing);
+      expect((yield* Fiber.await(response))._tag).toBe("Failure");
+      const pending = (yield* survivor.read).pending;
+
+      expect(pending).toHaveLength(1);
+      expect(pending[0]?.phase).toBe("Pending");
+      expect(
+        yield* storage.intentJournal.transaction((tx) => tx.get(address, pending[0].commandId)),
+      ).toMatchObject({ value: { phase: "Pending", outcome: null } });
+    }),
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));
+
+it("cancels settlement waiting on another lease's journal transaction", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const remote = yield* server;
+      const storage = yield* memory().open;
       const responding = yield* Deferred.make<void>();
       const finishResponse = yield* Deferred.make<void>();
       const writing = yield* Deferred.make<void>();
@@ -347,9 +370,12 @@ it.effect("cancels settlement waiting on another lease's journal transaction", (
         ),
       );
 
-      const client = yield* Client.make(
-        definition,
-        options(remote.transport, {
+      const client = yield* Client.make(definition, {
+        persistence: { mode: "persistent" },
+        retry,
+      }).pipe(
+        Effect.provideService(Client.Transport, remote.transport),
+        Effect.provideService(ReplicaPersistence, {
           ...storage,
           intentJournal: {
             transaction: (f) =>
@@ -405,30 +431,42 @@ it.effect("cancels settlement waiting on another lease's journal transaction", (
       expect(closedBeforeWrite).toBe(true);
       expect((yield* Fiber.await(response))._tag).toBe("Failure");
     }),
-  ),
-);
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));
 
-it.effect(
-  "refuses journal failures before I/O and never silently falls back to volatile mode",
-  () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const remote = yield* server;
-        const storage = yield* memory({ maxJournalRows: 0 }).open("alice");
-        const client = yield* Client.make(definition, options(remote.transport, storage));
-        const lease = yield* client.open(address);
+it("refuses journal failures before I/O and never silently falls back to volatile mode", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const remote = yield* server;
+      const storage = yield* memory({ maxJournalRows: 0 }).open;
 
-        yield* lease.ready;
-        const result = yield* Effect.result(lease.execute(Counter.actions.add, { amount: 1 }));
+      const client = yield* Client.make(definition, {
+        persistence: { mode: "persistent" },
+        retry,
+      }).pipe(
+        Effect.provideService(Client.Transport, remote.transport),
+        Effect.provideService(ReplicaPersistence, storage),
+      );
 
-        expect(result).toMatchObject({ _tag: "Failure", failure: { reason: "Storage" } });
-        expect(remote.calls).toEqual([]);
-        expect((yield* lease.read).pending).toEqual([]);
-      }),
-    ),
-);
+      const lease = yield* client.open(address);
 
-it.effect("preserves rich command and result codecs through lookup, journaling, and remount", () =>
+      yield* lease.ready;
+      const result = yield* Effect.result(lease.execute(Counter.actions.add, { amount: 1 }));
+
+      expect(result).toMatchObject({ _tag: "Failure", failure: { reason: "Storage" } });
+      expect(remote.calls).toEqual([]);
+      expect((yield* lease.read).pending).toEqual([]);
+    }),
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));
+
+it("preserves rich command and result codecs through lookup, journaling, and remount", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const value = Schema.Struct({ at: Schema.DateTimeUtc });
@@ -483,12 +521,19 @@ it.effect("preserves rich command and result codecs through lookup, journaling, 
         publishMessage: () => Effect.void,
       };
 
-      const storage = yield* memory().open("alice");
-      const settings = options(transport, storage);
+      const storage = yield* memory().open;
+
+      const services = Context.make(Client.Transport, transport).pipe(
+        Context.add(ReplicaPersistence, storage),
+      );
 
       const id = yield* Effect.scoped(
         Effect.gen(function* () {
-          const client = yield* Client.make(reducers, settings);
+          const client = yield* Client.make(reducers, {
+            persistence: { mode: "persistent" },
+            retry,
+          }).pipe(Effect.provideContext(services));
+
           const lease = yield* client.open(Reminder.address("demo"));
 
           yield* lease.ready;
@@ -515,24 +560,36 @@ it.effect("preserves rich command and result codecs through lookup, journaling, 
         }),
       );
 
-      const client = yield* Client.make(reducers, settings);
+      const client = yield* Client.make(reducers, {
+        persistence: { mode: "persistent" },
+        retry,
+      }).pipe(Effect.provideContext(services));
+
       const lease = yield* client.open(Reminder.address("demo"));
 
       yield* lease.ready;
       expect(DateTime.formatIso(yield* lease.retry(id))).toBe(at);
       expect(calls).toHaveLength(1);
     }),
-  ),
-);
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));
 
-it.effect("does not confirm another actor's command with the same identity", () =>
+it("does not confirm another actor's command with the same identity", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const remote = yield* server;
 
-      const client = yield* Client.make(
-        definition,
-        options({ ...remote.transport, execute: () => Effect.fail(unavailable()) }),
+      const client = yield* Client.make(definition, {
+        persistence: { mode: "volatile" },
+        retry,
+      }).pipe(
+        Effect.provideService(Client.Transport, {
+          ...remote.transport,
+          execute: () => Effect.fail(unavailable()),
+        }),
       );
 
       const lease = yield* client.open(address);
@@ -546,17 +603,25 @@ it.effect("does not confirm another actor's command with the same identity", () 
       expect((yield* lease.read).value?.source.value).toBe(7);
       expect((yield* lease.read).pending).toEqual([{ commandId: id, phase: "Pending" }]);
     }),
-  ),
-);
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));
 
-it.effect("keeps expired confirmed results unresolved without re-executing them", () =>
+it("keeps expired confirmed results unresolved without re-executing them", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const remote = yield* server;
 
       remote.drop(true);
       remote.lookup("Expired");
-      const client = yield* Client.make(definition, options(remote.transport));
+
+      const client = yield* Client.make(definition, {
+        persistence: { mode: "volatile" },
+        retry,
+      }).pipe(Effect.provideService(Client.Transport, remote.transport));
+
       const lease = yield* client.open(address);
 
       yield* lease.ready;
@@ -573,10 +638,13 @@ it.effect("keeps expired confirmed results unresolved without re-executing them"
       ]);
       expect(remote.calls).toHaveLength(1);
     }),
-  ),
-);
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));
 
-it.effect("never rebinds an ambiguous unbound command to a newly observed authority", () =>
+it("never rebinds an ambiguous unbound command to a newly observed authority", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const remote = yield* server;
@@ -589,7 +657,9 @@ it.effect("never rebinds an ambiguous unbound command to a newly observed author
           allowUnboundCommands: true,
           plugins: [label],
         }),
-        options({
+        { persistence: { mode: "volatile" }, retry },
+      ).pipe(
+        Effect.provideService(Client.Transport, {
           ...remote.transport,
           snapshot: () => Effect.never,
           subscribe: () => Stream.never,
@@ -615,10 +685,13 @@ it.effect("never rebinds an ambiguous unbound command to a newly observed author
       expect(calls).toBe(1);
       expect(remote.lookups.at(-1)?.admittedGeneration).toBeNull();
     }),
-  ),
-);
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));
 
-it.effect.each([
+it.each([
   { transition: "confirmation", lifetime: "source" },
   { transition: "admission", lifetime: "lease" },
 ] as const)(
@@ -627,7 +700,7 @@ it.effect.each([
     Effect.scoped(
       Effect.gen(function* () {
         const remote = yield* server;
-        const storage = yield* memory().open("alice");
+        const storage = yield* memory().open;
         const writing = yield* Deferred.make<Client.Intent>();
         const finishWrite = yield* Deferred.make<void>();
         const finishLookup = yield* Deferred.make<void>();
@@ -646,13 +719,16 @@ it.effect.each([
 
         remote.drop(transition === "confirmation");
 
-        const settings = options(
-          {
+        const client = yield* Client.make(definition, {
+          persistence: { mode: "persistent" },
+          retry,
+        }).pipe(
+          Effect.provideService(Client.Transport, {
             ...remote.transport,
             result: (command) =>
               Deferred.await(finishLookup).pipe(Effect.andThen(remote.transport.result(command))),
-          },
-          {
+          }),
+          Effect.provideService(ReplicaPersistence, {
             ...storage,
             intentJournal: {
               transaction: (f) =>
@@ -664,10 +740,8 @@ it.effect.each([
                   }),
                 ),
             },
-          },
+          }),
         );
-
-        const client = yield* Client.make(definition, settings);
 
         const lease = yield* client.open(address).pipe(Scope.provide(sourceScope));
 
@@ -714,19 +788,25 @@ it.effect.each([
         expect(remote.calls).toEqual([intent.command]);
         expect(yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10))).toEqual([]);
       }),
+    ).pipe(
+      Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+      Effect.provide(TestClock.layer()),
+      Effect.runPromise,
     ),
 );
 
-it.effect("ignores a late snapshot probe after live progress", () =>
+it("ignores a late snapshot probe after live progress", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const remote = yield* server;
       const loading = yield* Deferred.make<Schema.Json>();
       const probing = yield* Deferred.make<void>();
 
-      const client = yield* Client.make(
-        definition,
-        options({
+      const client = yield* Client.make(definition, {
+        persistence: { mode: "volatile" },
+        retry,
+      }).pipe(
+        Effect.provideService(Client.Transport, {
           ...remote.transport,
           snapshot: () =>
             Deferred.succeed(probing, undefined).pipe(Effect.andThen(Deferred.await(loading))),
@@ -749,5 +829,8 @@ it.effect("ignores a late snapshot probe after live progress", () =>
         snapshot: { source: { value: 23 }, plugins: { label: { text: "original" } } },
       });
     }),
-  ),
-);
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));

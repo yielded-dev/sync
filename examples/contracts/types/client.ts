@@ -29,15 +29,16 @@ export const definition = Client.provide(
   ),
 );
 
-declare const transport: Client.Transport;
-
 const client = Client.make(definition, {
-  actorId: "actor",
-  transport,
   persistence: { mode: "volatile" },
 });
 
-export type Requirements = Assert<Equal<Effect.Services<typeof client>, Session | Scope.Scope>>;
+export type Requirements = Assert<
+  Equal<
+    Effect.Services<typeof client>,
+    Session | Client.CurrentActor | Client.Transport | Scope.Scope
+  >
+>;
 
 declare const lease: Client.Lease<typeof Counter.spec>;
 const result = lease.execute(Counter.actions.set, { value: 7 });

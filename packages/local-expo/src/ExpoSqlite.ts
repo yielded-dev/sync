@@ -1,5 +1,10 @@
-import { Persistence, ReplicaPersistence } from "@yielded/sync/client";
-import { Effect, Layer, Schema, Semaphore } from "effect";
+import {
+  Persistence,
+  ReplicaPersistence,
+  type Client,
+  type PersistenceError,
+} from "@yielded/sync/client";
+import { Effect, Layer, Schema, Semaphore, type Scope } from "effect";
 
 export interface Options extends Persistence.Options {
   readonly directory?: string;
@@ -120,7 +125,13 @@ const store = Effect.fn("ExpoSqlite.store")(function* (
   } satisfies Persistence.AtomicStore;
 });
 
-export const open = Effect.fn("ExpoSqlite.open")(function* (options: Options) {
+export const open = Effect.fn("ExpoSqlite.open")(function* (
+  options: Options,
+): Effect.fn.Return<
+  Persistence.DurableHandle,
+  PersistenceError,
+  Client.CurrentActor | Scope.Scope
+> {
   const names = yield* Effect.try({
     try: () => databaseNames(options.namespace),
     catch: Persistence.storageError,
@@ -132,4 +143,7 @@ export const open = Effect.fn("ExpoSqlite.open")(function* (options: Options) {
   });
 });
 
-export const layer = (options: Options) => Layer.effect(ReplicaPersistence, open(options));
+export const layer = (
+  options: Options,
+): Layer.Layer<ReplicaPersistence, PersistenceError, Client.CurrentActor> =>
+  Layer.effect(ReplicaPersistence, open(options));

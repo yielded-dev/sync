@@ -1,11 +1,16 @@
 import { Action, ProtocolError, Source } from "@yielded/sync";
-import { Client, type Persistence, type PersistenceError } from "@yielded/sync/client";
+import {
+  Client,
+  ReplicaPersistence,
+  type Persistence,
+  type PersistenceError,
+} from "@yielded/sync/client";
 import { Deferred, Effect, Exit, Fiber, Schema, type Scope, Stream } from "effect";
 import * as TestClock from "effect/testing/TestClock";
 
 export type Open = (
   options: Persistence.Options,
-) => Effect.Effect<Persistence.DurableHandle, PersistenceError, Scope.Scope>;
+) => Effect.Effect<Persistence.DurableHandle, PersistenceError, Client.CurrentActor | Scope.Scope>;
 
 const address = { kind: "counter", id: "room/one" } as const;
 
@@ -17,7 +22,6 @@ export const evidence = {
 
 const options = (namespace: string) => ({
   namespace,
-  actorId: "alice",
   maxSnapshots: 1,
   maxJournalRows: 2,
 });
@@ -218,22 +222,20 @@ export const runtimeSeed = (open: Open, namespace: string) =>
       };
 
       const client = yield* Client.make(definition, {
-        actorId: "alice",
-        transport,
-        persistence: {
-          mode: "persistent",
-          storage: {
-            ...storage,
-            snapshotCache: {
-              ...storage.snapshotCache,
-              put: (target, value) =>
-                storage.snapshotCache
-                  .put(target, value)
-                  .pipe(Effect.tap(() => Deferred.succeed(saved, undefined))),
-            },
+        persistence: { mode: "persistent" },
+      }).pipe(
+        Effect.provideService(Client.Transport, transport),
+        Effect.provideService(ReplicaPersistence, {
+          ...storage,
+          snapshotCache: {
+            ...storage.snapshotCache,
+            put: (target, value) =>
+              storage.snapshotCache
+                .put(target, value)
+                .pipe(Effect.tap(() => Deferred.succeed(saved, undefined))),
           },
-        },
-      });
+        }),
+      );
 
       const source = yield* client.open(address);
 
@@ -278,10 +280,11 @@ export const runtimeRestore = (open: Open, namespace: string) =>
       };
 
       const client = yield* Client.make(definition, {
-        actorId: "alice",
-        transport,
-        persistence: { mode: "persistent", storage },
-      });
+        persistence: { mode: "persistent" },
+      }).pipe(
+        Effect.provideService(Client.Transport, transport),
+        Effect.provideService(ReplicaPersistence, storage),
+      );
 
       const source = yield* client.open(address);
 

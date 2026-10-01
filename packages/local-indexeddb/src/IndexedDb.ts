@@ -1,5 +1,10 @@
-import { Persistence, ReplicaPersistence, type PersistenceError } from "@yielded/sync/client";
-import { Effect, Layer, Schema } from "effect";
+import {
+  Persistence,
+  ReplicaPersistence,
+  type Client,
+  type PersistenceError,
+} from "@yielded/sync/client";
+import { Effect, Layer, Schema, type Scope } from "effect";
 
 export type Options = Persistence.Options;
 
@@ -129,7 +134,13 @@ const store = Effect.fn("IndexedDb.store")(function* (name: string, version: 1 |
   } satisfies Persistence.AtomicStore;
 });
 
-export const open = Effect.fn("IndexedDb.open")(function* (options: Options) {
+export const open = Effect.fn("IndexedDb.open")(function* (
+  options: Options,
+): Effect.fn.Return<
+  Persistence.DurableHandle,
+  PersistenceError,
+  Client.CurrentActor | Scope.Scope
+> {
   const names = yield* Effect.try({
     try: () => databaseNames(options.namespace),
     catch: Persistence.storageError,
@@ -141,4 +152,7 @@ export const open = Effect.fn("IndexedDb.open")(function* (options: Options) {
   });
 });
 
-export const layer = (options: Options) => Layer.effect(ReplicaPersistence, open(options));
+export const layer = (
+  options: Options,
+): Layer.Layer<ReplicaPersistence, PersistenceError, Client.CurrentActor> =>
+  Layer.effect(ReplicaPersistence, open(options));

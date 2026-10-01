@@ -1,6 +1,7 @@
 import { Clock, Effect, Exit, Schema, Scope, Semaphore } from "effect";
 
 import { ActorId, SourceAddress, type SourceAddress as Address } from "../Model.ts";
+import { CurrentActor } from "./CurrentActor.ts";
 import { JournalRow, PersistenceError, stageJournal, type Handle } from "./ReplicaPersistence.ts";
 
 /** A scoped driver. modify must commit the callback's result atomically or fail. */
@@ -14,7 +15,6 @@ export interface AtomicStore {
 
 export interface Options {
   readonly namespace: string;
-  readonly actorId: string;
   readonly maxJournalRows?: number;
   readonly maxSnapshots?: number;
   readonly maxBytes?: number;
@@ -32,12 +32,18 @@ const Configuration = Schema.Struct({
 });
 
 const configuration = (options: Options) =>
-  Schema.decodeEffect(Configuration)({
-    maxJournalRows: 4096,
-    maxSnapshots: 128,
-    maxBytes: 8 * 1024 * 1024,
-    ...options,
-  }).pipe(Effect.mapError(() => failure("Unavailable", "Invalid persistence configuration")));
+  CurrentActor.pipe(
+    Effect.flatMap(({ actorId }) =>
+      Schema.decodeEffect(Configuration)({
+        maxJournalRows: 4096,
+        maxSnapshots: 128,
+        maxBytes: 8 * 1024 * 1024,
+        ...options,
+        actorId,
+      }),
+    ),
+    Effect.mapError(() => failure("Unavailable", "Invalid persistence configuration")),
+  );
 
 const Journal = Schema.Struct({
   format: Schema.Literal(1),
@@ -154,7 +160,7 @@ export const make = Effect.fn("Persistence.make")(function* <R1, R2>(
   );
 
   const stores = { journal, cache };
-  const key = JSON.stringify([options.actorId]);
+  const key = JSON.stringify([limits.actorId]);
 
   const initial = yield* stores.journal.modify(key, (stored) => {
     const value =
@@ -251,7 +257,7 @@ export const make = Effect.fn("Persistence.make")(function* <R1, R2>(
     });
 
   const handle: DurableHandle = {
-    actorId: options.actorId,
+    actorId: limits.actorId,
     generation,
     intentJournal: { transaction },
     snapshotCache: {
