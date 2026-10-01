@@ -16,6 +16,7 @@ import {
 import type * as Action from "../Action.ts";
 import { ActorId, type ActionOutcome, type ProtocolError, type SourceAddress } from "../Model.ts";
 import type * as Source from "../Source.ts";
+import { CurrentActor } from "./CurrentActor.ts";
 import type { Definition, Slot } from "./Definition.ts";
 import {
   ClientError,
@@ -29,8 +30,8 @@ import {
   type Replica,
 } from "./Model.ts";
 import * as ReplicaState from "./replica.ts";
-import { type Handle, type PersistenceError } from "./ReplicaPersistence.ts";
-import type { Request, Transport } from "./Transport.ts";
+import { ReplicaPersistence, type PersistenceError } from "./ReplicaPersistence.ts";
+import { Transport, type Request } from "./Transport.ts";
 
 type SourceActions<S extends Source.Spec> =
   | (S["actions"][number] & { readonly namespace: "$source" })
@@ -62,12 +63,8 @@ export interface Retry {
   readonly maxDelay: Duration.Input;
 }
 
-export interface Options<R = never> {
-  readonly actorId: string;
-  readonly transport: Transport<R>;
-  readonly persistence:
-    | { readonly mode: "volatile" }
-    | { readonly mode: "persistent"; readonly storage: Handle };
+export interface Options {
+  readonly persistence: { readonly mode: "volatile" | "persistent" };
   readonly limits?: Limits;
   readonly retry?: Retry;
 }
@@ -155,14 +152,38 @@ const operationError = (failure: ProtocolError, commandId?: string) =>
     commandId,
   );
 
-export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R, T>(
+export function make<S extends Source.Spec, R>(
   definition: Definition<S, R>,
-  options: Options<T>,
-): Effect.fn.Return<Runtime<S>, ClientError, R | T | Scope.Scope> {
+  options: Options & { readonly persistence: { readonly mode: "volatile" } },
+): Effect.Effect<Runtime<S>, ClientError, R | CurrentActor | Transport | Scope.Scope>;
+
+export function make<S extends Source.Spec, R>(
+  definition: Definition<S, R>,
+  options: Options,
+): Effect.Effect<
+  Runtime<S>,
+  ClientError,
+  R | CurrentActor | Transport | ReplicaPersistence | Scope.Scope
+>;
+
+export function make<S extends Source.Spec, R>(definition: Definition<S, R>, options: Options) {
+  return makeRuntime(definition, options);
+}
+
+const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R>(
+  definition: Definition<S, R>,
+  options: Options,
+): Effect.fn.Return<
+  Runtime<S>,
+  ClientError,
+  R | CurrentActor | Transport | ReplicaPersistence | Scope.Scope
+> {
   const contract = definition.contract;
   const wire = contract as unknown as Source.Definition;
 
-  const actorId = yield* Schema.decodeEffect(ActorId)(options.actorId).pipe(
+  const actor = yield* CurrentActor;
+
+  const actorId = yield* Schema.decodeEffect(ActorId)(actor.actorId).pipe(
     Effect.mapError(() => error("InvalidValue", "Invalid actor id")),
   );
 
@@ -194,12 +215,12 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     return yield* error("InvalidValue", "Client durations must be finite and positive");
   }
 
-  const storage =
-    options.persistence.mode === "persistent" ? options.persistence.storage : undefined;
+  const remote = yield* Transport;
+  const storage = options.persistence.mode === "persistent" ? yield* ReplicaPersistence : undefined;
 
   if (storage !== undefined && storage.actorId !== actorId)
     return yield* error("InvalidValue", "Persistence belongs to a different actor");
-  const context = yield* Effect.context<R | T>();
+  const context = yield* Effect.context<R>();
   const sessionScope = yield* Effect.scope;
   const entries = new Map<string, Entry>();
   const leases = Semaphore.makeUnsafe(1);
@@ -256,7 +277,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         : Effect.void,
     );
 
-  const transport = <A>(effect: Effect.Effect<A, ProtocolError, T>, id?: string) =>
+  const transport = <A>(effect: Effect.Effect<A, ProtocolError>, id?: string) =>
     Effect.flatMap(Effect.scope, (scope) =>
       bounded(
         effect.pipe(
@@ -632,10 +653,9 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
       if (intent.outcome !== null) return yield* decode(action.outcome, intent.outcome);
       if (lookup) {
-        const result = yield* transport(
-          options.transport.result(copyJson(intent.command)),
-          id,
-        ).pipe(Effect.flatMap((value) => decode(action.lookup, value)));
+        const result = yield* transport(remote.result(copyJson(intent.command)), id).pipe(
+          Effect.flatMap((value) => decode(action.lookup, value)),
+        );
 
         if (result._tag === "Found")
           return yield* settle(entry, sourceScope, action, intent, result.outcome, leaseScope);
@@ -653,10 +673,9 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       }
       yield* assertOpen(entry, sourceScope, leaseScope);
 
-      const outcome = yield* transport(
-        options.transport.execute(copyJson(intent.command)),
-        id,
-      ).pipe(Effect.flatMap((value) => decode(action.outcome, value)));
+      const outcome = yield* transport(remote.execute(copyJson(intent.command)), id).pipe(
+        Effect.flatMap((value) => decode(action.outcome, value)),
+      );
 
       return yield* settle(entry, sourceScope, action, intent, outcome, leaseScope);
     },
@@ -670,7 +689,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     entry: Entry,
     sourceScope: Scope.Closeable,
   ) {
-    const value = yield* transport(options.transport.snapshot(request(entry.address)));
+    const value = yield* transport(remote.snapshot(request(entry.address)));
 
     const frame = yield* decode(wire.envelope.snapshotFrame, value);
 
@@ -706,7 +725,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       strategy: "dropping",
     });
 
-    const producer = options.transport
+    const producer = remote
       .subscribe({ ...request(entry.address), ...(after === undefined ? {} : { after }) })
       .pipe(
         Stream.provideContext(Context.add(context, Scope.Scope, connectionScope)),
@@ -1032,9 +1051,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
           } as typeof wire.message.Type);
 
           yield* active;
-          yield* transport(
-            options.transport.publishMessage({ ...request(address), message: encoded }),
-          );
+          yield* transport(remote.publishMessage({ ...request(address), message: encoded }));
         }),
       );
 

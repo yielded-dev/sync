@@ -1,0 +1,22 @@
+{
+  "name": "sync-alchemy-cloudflare-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --bun alchemy dev",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yielded/sync": "workspace:*",
+    "@yielded/sync-platform-alchemy-cf": "workspace:*",
+    "alchemy": "catalog:",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@effect/platform-bun": "catalog:",
+    "@effect/platform-node": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

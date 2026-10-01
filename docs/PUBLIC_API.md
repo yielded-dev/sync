@@ -6,7 +6,7 @@ shared identities, envelopes, exact outcome codecs, and derived Effect RPC contr
 The server and Cloudflare adapter implement authoritative execution. The headless
 client and Atom bindings are implemented, with a persistence port and process-local
 memory adapter. Durable IndexedDB and Expo SQLite adapters implement separate
-cache/journal storage and generation fencing. The four packages have built beta
+cache/journal storage and generation fencing. The six packages have built beta
 exports and share a prerelease version; see the [release guide](src/content/docs/RELEASE.md).
 
 Read the [complete consumer sketch](src/content/docs/api/consumer.md) alongside these decisions.
@@ -33,18 +33,55 @@ and [persistence contracts](https://github.com/reve-ai/kommunikasie/blob/b13ca58
 | `@yielded/sync/server`              | `Server` definitions and runtime; `SourceStorage`, authorization, commit plans, outbox delivery contracts                                 |
 | `@yielded/sync/client`              | `Client` definitions and scoped headless runtime; replica transitions, transport/recovery ports, `ReplicaPersistence`, memory persistence |
 | `@yielded/sync/atom`                | `SourceAtom` bindings to the same headless runtime and its lifecycle                                                                      |
-| `@yielded/sync-platform-cloudflare` | `Cloudflare` Durable Object hosting, SQLite storage, sockets, alarms, migrations, request mounting                                        |
-| `@yielded/sync-local-indexeddb`     | `IndexedDb.layer({ namespace, actorId })` for client persistence                                                                          |
-| `@yielded/sync-local-expo`          | `ExpoSqlite.layer({ namespace, actorId })` for client persistence                                                                         |
+| `@yielded/sync-platform-cloudflare` | Shared Cloudflare protocol handlers, SQLite storage, socket attachments, and outbox alarms; no Worker or framework constructors           |
+| `@yielded/sync-platform-effect-cf`  | Handler and Layer composition with native `effect-cf` Durable Objects                                                                     |
+| `@yielded/sync-platform-alchemy-cf` | Constructor Effects and handlers for native Alchemy v2 Cloudflare Durable Objects                                                         |
+| `@yielded/sync-local-indexeddb`     | `IndexedDb.layer({ namespace })` for actor-scoped client persistence                                                                      |
+| `@yielded/sync-local-expo`          | `ExpoSqlite.layer({ namespace })` for actor-scoped client persistence                                                                     |
 
 Root imports are safe for a shared browser/server contract. Root and client never
 re-export server implementations. Core uses Effect's portable services and RPC;
 applications supply platform HTTP/socket layers. React is not a core dependency.
 `SourceAtom` uses Effect Atom; a consuming application chooses its UI bindings.
-Adapters depend inward on core and never on each other.
+Adapters depend inward on core. The framework adapters also share the lower-level
+Cloudflare package; local persistence adapters are independent.
+
+The two Cloudflare framework adapters share `sync-platform-cloudflare`; neither
+imports the other framework. Applications construct Workers and Durable Objects
+with their framework's own APIs. Sync does not create Workers, choose routes,
+look up string-named bindings, or acquire an authentication provider. The
+application selects a typed object stub, authenticates the caller, and supplies
+the request, source address, and identity to the adapter's `prepareRequest`
+operation. It validates and replaces internal identity headers, returning a
+native request. The application calls its selected stub's `fetch` directly;
+Sync does not accept a fetch implementation in its request options.
+Only this authenticated application boundary may expose the object binding.
+
+The shared Cloudflare runtime owns one source per Durable Object and returns
+fetch, WebSocket lifecycle, and outbox alarm handlers. Effect `RpcServer` owns
+request dispatch, codecs, RPC failures, stream chunks, acknowledgements and
+interruption. HTTP uses its native HTTP implementation. The effect-cf adapter
+supplies its native `DurableObjectRpcWebSocket` protocol; Alchemy uses a Cloudflare
+socket bridge implementing `RpcServer.Protocol`. Neither transport implements
+source actions or manufactures RPC response envelopes.
+
+The instance scope owns the RPC server and application service Layers. Use
+`Server.provide` for services acquired within each source operation's scope.
+Subscription registration, bootstrap, commits and publication share the source
+gate. Buffers remain bounded. A lost activation resets ordinary in-flight RPC
+streams; clients reconnect and recover from their last source position. Operations
+racing that reset can fail with `Unavailable`; retained command identities remain
+available for retry after recovery. Restored
+identities are checked before dispatch or delivery. Socket state is disposable;
+authority, receipts and unresolved outbox evidence remain durable.
+
+Framework adapters translate native request, response, socket, state, and scope
+representations. They preserve storage format and object names. A Sync source
+owns its object's alarm; sharing that alarm with unrelated application jobs
+requires an explicit host scheduler.
 
 The repository remains `yielded-dev/sync`, with explicit built exports for the
-four beta packages. This design adds no
+six beta packages. This design adds no
 compatibility re-exports under `@kommunikasie/*`.
 
 ## Source, action, and plugin composition
@@ -236,8 +273,11 @@ Policy failures park a client instead of reconnecting forever.
 
 `Client.definition` supplies root and plugin reducers, optional merge/history
 policies, and explicit pre-authority admission policy. `Client.make` acquires an
-actor-scoped runtime from that definition, transport, retry/buffer limits, and an
-explicit persistence choice. `open(address)` is scoped and exposes the replica
+actor-scoped runtime from that definition, retry/buffer limits, and an explicit
+persistence choice. Construction requires `Client.CurrentActor` and
+`Client.Transport`; persistent clients also require `ReplicaPersistence`.
+Applications provide these services through Layers at their session boundary.
+`open(address)` is scoped and exposes the replica
 stream, correlated `execute`/`retry`, `recover`, and ephemeral messaging.
 
 There is one coordinator per address per actor runtime. Concurrent scoped opens
@@ -255,16 +295,31 @@ at typecheck time. Definite rejection removes the
 optimistic overlay; an uncertain result retains retry evidence. Dismissal hides a
 terminal failure from the UI without deleting unresolved work.
 
-Persistence is required as one of `{ mode: "persistent", storage }` or
+Persistence is required as one of `{ mode: "persistent" }` or
 `{ mode: "volatile" }`; there is no implicit fallback. Memory storage is an explicit
 adapter for tests/process-local use and does not promise restart durability.
+Volatile construction does not require `ReplicaPersistence`. Transport Layers
+capture their implementation dependencies during construction;
+`Client.layerRpcTransport(contract)` provides `Client.Transport` from
+`RpcClient.Protocol`. Contracts, addresses, payloads, namespaces, and limits remain
+explicit values.
+
+`Client.CurrentActor` contains the application-selected `actorId` without a
+default. Both client and persistence constructors capture and validate that
+identity once; existing handles never follow a later context change. The client
+still rejects a persistence handle belonging to another actor. Authentication
+and credentials remain application concerns: this service selects the local
+partition and correlates server-stamped actor identities; it grants no authority.
 
 The table describes the implemented persistence boundary. The port and adapters
 are documented in the [client guide](src/content/docs/client.md); physical formats and migration
 limits are documented in each adapter README.
 
-Durable adapters expose scoped `open({ namespace, actorId, ...limits })` and
-`layer(options)` constructors. Their handles add `snapshotCache.scan(limit)`,
+Durable adapters expose scoped `open({ namespace, ...limits })` and
+`layer(options)` constructors requiring `Client.CurrentActor`. Layers provide
+`ReplicaPersistence`; `memory(options).open` also reads `CurrentActor` on each
+acquisition, while reusing the factory retains its process-local records.
+Their handles add `snapshotCache.scan(limit)`,
 returning oldest-first address, save-time and encoded-size metadata. The existing
 minimal handle remains valid for custom storage. Default limits are 4,096 journal
 rows, 128 snapshots, and 8 MiB of encoded JSON per actor per database.
@@ -327,28 +382,28 @@ Paths below refer to the pinned source tree. Rows cover the modules re-exported
 by the existing `realtime-extension` root/client/server/rpc and `realtime-state`
 root barrels; they do not promise every helper a new public export.
 
-| Existing module / export family                                              | Destination and treatment                                                                                                      |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `realtime-extension/RealtimeExtension` (`Spec`, `Contract`, `make`)          | Root `Source`; actions/plugins add correlated schemas, routing stays outside                                                   |
-| `realtime-extension/catalog`                                                 | Root `SourceCatalog`; preserve registration collision checks                                                                   |
-| `realtime-extension/envelope`                                                | Root Schema envelopes and derived RPC contracts; codec helpers private where possible                                          |
-| `realtime-extension/protocol`, `source-command`, shared `errors`             | Root identities, fingerprints, exact outcomes; connection constants/error classification to client/server owner                |
-| `realtime-extension/rpc/source-methods`, `source-checkpoint`                 | Root contract-derived RPC; generic snapshot/recovery operations retained, application checkpoint payloads stay in Kommunikasie |
-| `realtime-state/model`                                                       | Shared address/position/frames to root; replica state/transitions and local evidence types to client                           |
-| `realtime-state/ports`, `replica`, `ReplicaStore`                            | Client transport/store ports, pure transitions and observations; internal store helpers need not be public                     |
-| `realtime-state/IntentDispatcher`, `CommandExecutionGate`, `SyncCoordinator` | Headless client execution, retry/gating and scoped synchronization                                                             |
-| `realtime-state/ReplicaPersistence`, `PersistenceRuntime`                    | Client persistence contracts, memory implementation, restore/reconcile and flush scheduling                                    |
-| `realtime-extension/client/definition`, `SnapshotLoadError`                  | Client reducer definitions and typed operational errors                                                                        |
-| `realtime-extension/client/SourceClient`                                     | Split headless `Client` from `SourceAtom`; remove registry-global persistence configuration                                    |
-| `realtime-extension/client/SourceSocketTransport`, `SourceWebSocket`         | Client portable transport/recovery; platform socket constructor supplied through Effect services                               |
-| `realtime-extension/server/mount`, `source-durable-object`                   | Portable authorization/execution to server; HTTP/DO mounting and bindings to Cloudflare adapter                                |
-| `realtime-extension/server/source-event-log`, `source-outbox`                | Server storage/delivery contracts; SQL implementations to Cloudflare adapter                                                   |
-| `realtime-extension/server/source-socket-hub`, `SourceSocketAuthorization`   | Server subscription/auth lifecycle; socket attachments and hibernation to Cloudflare adapter                                   |
-| `realtime-extension/server/alarm-jobs`, `migrations`                         | Cloudflare alarm/migration implementation; application jobs and schemas stay with the application                              |
-| `realtime-extension/server/source-checkpoint`, `SourceCheckpointDelivery`    | Generic recovery seam only; product checkpoint delivery/reporting remains in Kommunikasie                                      |
-| `server/initialization-failure-latch` (internal dependency)                  | Private server implementation detail, not a new consumer API                                                                   |
-| `apps/web/src/data/replica-persistence.ts`                                   | IndexedDB adapter; remove fixed product database/channel names                                                                 |
-| `apps/mobile/src/data/replica-persistence.ts`                                | Expo SQLite adapter; explicit namespace, scoped connections, no native imports in core                                         |
+| Existing module / export family                                              | Destination and treatment                                                                                                         |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `realtime-extension/RealtimeExtension` (`Spec`, `Contract`, `make`)          | Root `Source`; actions/plugins add correlated schemas, routing stays outside                                                      |
+| `realtime-extension/catalog`                                                 | Root `SourceCatalog`; preserve registration collision checks                                                                      |
+| `realtime-extension/envelope`                                                | Root Schema envelopes and derived RPC contracts; codec helpers private where possible                                             |
+| `realtime-extension/protocol`, `source-command`, shared `errors`             | Root identities, fingerprints, exact outcomes; connection constants/error classification to client/server owner                   |
+| `realtime-extension/rpc/source-methods`, `source-checkpoint`                 | Root contract-derived RPC; generic snapshot/recovery operations retained, application checkpoint payloads stay in Kommunikasie    |
+| `realtime-state/model`                                                       | Shared address/position/frames to root; replica state/transitions and local evidence types to client                              |
+| `realtime-state/ports`, `replica`, `ReplicaStore`                            | Client transport/store ports, pure transitions and observations; internal store helpers need not be public                        |
+| `realtime-state/IntentDispatcher`, `CommandExecutionGate`, `SyncCoordinator` | Headless client execution, retry/gating and scoped synchronization                                                                |
+| `realtime-state/ReplicaPersistence`, `PersistenceRuntime`                    | Client persistence contracts, memory implementation, restore/reconcile and flush scheduling                                       |
+| `realtime-extension/client/definition`, `SnapshotLoadError`                  | Client reducer definitions and typed operational errors                                                                           |
+| `realtime-extension/client/SourceClient`                                     | Split headless `Client` from `SourceAtom`; remove registry-global persistence configuration                                       |
+| `realtime-extension/client/SourceSocketTransport`, `SourceWebSocket`         | Client portable transport/recovery; platform socket constructor supplied through Effect services                                  |
+| `realtime-extension/server/mount`, `source-durable-object`                   | Portable authorization/execution to server; protocol handlers to Cloudflare adapters; routing and bindings stay application-owned |
+| `realtime-extension/server/source-event-log`, `source-outbox`                | Server storage/delivery contracts; SQL implementations to Cloudflare adapter                                                      |
+| `realtime-extension/server/source-socket-hub`, `SourceSocketAuthorization`   | Server subscription/auth lifecycle; socket attachments and hibernation to Cloudflare adapter                                      |
+| `realtime-extension/server/alarm-jobs`, `migrations`                         | Cloudflare alarm/migration implementation; application jobs and schemas stay with the application                                 |
+| `realtime-extension/server/source-checkpoint`, `SourceCheckpointDelivery`    | Generic recovery seam only; product checkpoint delivery/reporting remains in Kommunikasie                                         |
+| `server/initialization-failure-latch` (internal dependency)                  | Private server implementation detail, not a new consumer API                                                                      |
+| `apps/web/src/data/replica-persistence.ts`                                   | IndexedDB adapter; remove fixed product database/channel names                                                                    |
+| `apps/mobile/src/data/replica-persistence.ts`                                | Expo SQLite adapter; explicit namespace, scoped connections, no native imports in core                                            |
 
 Domain models, auth providers, projection sinks/reactivity keys, application alarm
 jobs, telemetry reporting policy, and UI remain in consuming applications. Extraction

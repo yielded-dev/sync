@@ -1,0 +1,49 @@
+{
+  "name": "@yielded/sync-platform-effect-cf",
+  "version": "0.1.0-beta.0",
+  "description": "effect-cf Cloudflare integration for Effect Sync.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yielded-dev/sync.git",
+    "directory": "packages/platform-effect-cf"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vp test"
+  },
+  "dependencies": {
+    "@yielded/sync": "workspace:*",
+    "@yielded/sync-platform-cloudflare": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/workers-types": "catalog:",
+    "effect": "catalog:",
+    "effect-cf": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "catalog:",
+    "effect-cf": "^0.51.0"
+  }
+}

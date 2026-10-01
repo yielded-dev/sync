@@ -40,20 +40,29 @@
     "vite-plus": "catalog:",
     "wrangler": "catalog:"
   },
+  "overrides": {
+    "@effect/platform-node-shared": "catalog:",
+    "@effect/sql-d1": "catalog:",
+    "@effect/sql-sqlite-do": "catalog:",
+    "@effect/vitest": "catalog:",
+    "effect": "catalog:",
+    "vite": "catalog:"
+  },
   "engines": {
     "node": "^22.18.0 || >=24.11.0"
   },
   "packageManager": "bun@1.4.2",
   "catalog": {
+    "@cloudflare/vite-plugin": "1.54.11",
     "@cloudflare/vitest-pool-workers": "0.22.0",
-    "@cloudflare/workers-types": "5.20260825.1",
-    "@effect/sql-d1": "4.0.0-rc.112",
-    "@effect/sql-sqlite-do": "4.0.0-rc.112",
+    "@cloudflare/workers-types": "5.20260926.1",
+    "@effect/atom-react": "4.0.0-rc.115",
+    "@effect/sql-d1": "4.0.0-rc.115",
+    "@effect/sql-sqlite-do": "4.0.0-rc.115",
     "@effect/tsgo": "0.45.0",
-    "@effect/vitest": "4.0.0-rc.112",
     "@types/node": "26.1.2",
-    "effect": "4.0.0-rc.112",
-    "effect-cf": "0.42.1",
+    "effect": "4.0.0-rc.115",
+    "effect-cf": "0.51.0",
     "typescript": "7.0.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3",
     "vite-plus": "0.3.3",
@@ -62,11 +71,19 @@
     "playwright": "1.58.2",
     "expo": "57.0.24",
     "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
     "@astrojs/starlight": "0.42.4",
     "astro": "7.3.5",
     "starlight-links-validator": "0.26.0",
-    "@yielded/starlight-theme": "0.1.1"
+    "@yielded/starlight-theme": "0.1.1",
+    "alchemy": "2.0.0-beta.79",
+    "@effect/platform-node": "4.0.0-rc.115",
+    "@effect/platform-bun": "4.0.0-rc.115",
+    "@effect/platform-node-shared": "4.0.0-rc.115",
+    "@effect/vitest": "4.0.0-rc.115"
   }
 }

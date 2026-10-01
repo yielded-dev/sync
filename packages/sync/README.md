@@ -29,13 +29,18 @@ state must have an event. Native host operations use the runtime's Schema-encode
 
 `@yielded/sync/client` exports `Client`, `ReplicaPersistence`, and typed operational
 errors. `Client.definition`/`plugin` register pure reducers; `Client.make` acquires
-an actor runtime with an explicit transport and persistence choice. Scoped
+an actor runtime requiring `Client.CurrentActor` and `Client.Transport` services.
+Persistence is explicit: `{ mode: "persistent" }` additionally requires
+`ReplicaPersistence`; `{ mode: "volatile" }` does not. Scoped
 `open(address)` leases share one coordinator. `ready` waits for authority, then
 `execute(action, payload)` returns that action's exact result or rejection.
 Ambiguous outcomes retain a command id for `retry(id)` without a replacement payload.
 
-`Client.rpcTransport` consumes the application's `RpcClient.Protocol` Layer. It
-adds no platform adapter imports. `@yielded/sync/atom` exports `SourceAtom.make`,
+`Client.layerRpcTransport` provides transport from the application's
+`RpcClient.Protocol` Layer. `Client.rpcTransport` also supports scoped acquisition
+and decoration. Both add no platform adapter imports. Provide the actor once at
+the session boundary; storage and client capture it for their lifetime.
+`@yielded/sync/atom` exports `SourceAtom.make`,
 whose active atoms acquire the same source leases and whose passive atoms never
 connect. Registry disposal releases its leases.
 

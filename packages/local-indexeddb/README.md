@@ -1,23 +1,39 @@
 # @yielded/sync-local-indexeddb
 
 Scoped browser persistence for Effect Sync clients. Import `IndexedDb` from this
-package and acquire `IndexedDb.open({ namespace, actorId })` in the actor's scope.
-`IndexedDb.layer(options)` provides the same handle as `ReplicaPersistence`.
+package and acquire `IndexedDb.open({ namespace })` in the actor's scope.
+It requires `Client.CurrentActor`; `IndexedDb.layer(options)` provides the same
+handle as `ReplicaPersistence`.
 
 ```ts
-const storage = yield * IndexedDb.open({ namespace: "my-app:production", actorId });
-const client =
-  yield *
-  Client.make(definition, {
-    actorId,
-    transport,
-    persistence: { mode: "persistent", storage },
-  });
-// Await when the application backgrounds; initial journal writes are already durable.
-yield * client.flush;
+import { IndexedDb } from "@yielded/sync-local-indexeddb";
+import { Client } from "@yielded/sync/client";
+import { Context, Layer } from "effect";
+
+class Session extends Context.Service<Session, Client.Runtime<typeof contract.spec>>()(
+  "app/Session",
+) {
+  static readonly layer = Layer.effect(
+    this,
+    Client.make(definition, { persistence: { mode: "persistent" } }),
+  );
+}
+
+const SessionLive = Session.layer.pipe(
+  Layer.provide([
+    IndexedDb.layer({ namespace: "my-app:production" }),
+    Client.layerRpcTransport(contract),
+  ]),
+  Layer.provide(socketProtocol),
+  Layer.provide(Layer.succeed(Client.CurrentActor, { actorId })),
+);
 ```
 
-The application owns authentication, namespace selection and logout policy.
+The application owns `contract`, its client `definition`, `socketProtocol`,
+authentication, namespace selection and logout policy. Provide `SessionLive`
+around the whole workflow or to the Atom runtime. Await `client.flush` when the
+application backgrounds; initial journal writes are already durable. Constructors
+capture the actor once. Close the old session before building one for another actor.
 Disposal closes connections and retains data. `purgeSource(address)` and `wipe`
 are explicit destructive operations. Reopen after a wipe to capture its new generation.
 Closing the scope or an IndexedDB version change makes that handle unusable.

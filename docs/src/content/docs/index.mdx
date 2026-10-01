@@ -32,16 +32,20 @@ import { Card, CardGrid } from "@astrojs/starlight/components";
   </Card>
 </CardGrid>
 
-## Published beta
+## Packages
 
-The four packages share version **`{{SYNC_VERSION}}`**. Pin exact versions while the
-API and persisted formats are in beta. Start with the [installation guide](./guide/getting-started.md)
+The package family shares one beta version. The original four packages are
+published as **`0.1.0-beta.0`**; the effect-cf and Alchemy split in this checkout is
+pending the next release. Pin exact versions while the API and persisted formats
+are in beta. Start with the [installation guide](./guide/getting-started.md)
 and choose the adapters for your host.
 
 | Package                             | Use it for                                                      |
 | ----------------------------------- | --------------------------------------------------------------- |
 | `@yielded/sync`                     | Shared contracts, server and client runtimes, and Atom bindings |
-| `@yielded/sync-platform-cloudflare` | Cloudflare Workers and SQLite Durable Objects                   |
+| `@yielded/sync-platform-cloudflare` | Shared Cloudflare protocol and SQLite storage                   |
+| `@yielded/sync-platform-effect-cf`  | Native effect-cf integration                                    |
+| `@yielded/sync-platform-alchemy-cf` | Native Alchemy v2 integration                                   |
 | `@yielded/sync-local-indexeddb`     | Browser persistence                                             |
 | `@yielded/sync-local-expo`          | Expo SQLite persistence                                         |
 

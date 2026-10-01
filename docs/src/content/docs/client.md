@@ -18,8 +18,6 @@ concerns.
 const session =
   yield *
   Client.make(definition, {
-    actorId,
-    transport,
     persistence: { mode: "volatile" },
   });
 const source = yield * session.open(contract.address("demo"));
@@ -27,7 +25,9 @@ yield * source.ready;
 const result = yield * source.execute(contract.actions.set, { value: 7 });
 ```
 
-Both construction and opening require `Scope`. Keep the session scope alive for
+Construction requires `Client.CurrentActor`, `Client.Transport`, and `Scope`.
+Persistent mode additionally requires `ReplicaPersistence`. Opening requires
+`Scope`. Keep the session scope alive for
 the authenticated actor. Close it before constructing a different actor's session.
 Effect scopes own actor, source, and lease lifetimes. Each open holds a source lease;
 concurrent opens share a coordinator until the
@@ -87,23 +87,34 @@ Inactive sources without unresolved work may be evicted to admit a new source.
 
 ## Transport and persistence
 
-`Client.Transport<R>` is the portable JSON transport port. Its snapshot, execute,
+`Client.Transport` is the service for the portable JSON transport port. Its snapshot, execute,
 result and publish operations return typed Effects; subscription returns a Stream.
 Transport implementations must include bootstrap/replay in subscription and scope
 their resources to stream consumption. The subscription supplies initial authority;
-snapshot requests serve recovery and periodic probes. Runtime construction captures their Effect
-requirements. The client performs its own Schema decoding and address checks.
+snapshot requests serve recovery and periodic probes. Custom transport Layers
+capture their implementation services during construction, so port methods have
+no remaining Effect requirements. Use `Layer.effect(Client.Transport, makeTransport)`
+to expose those construction requirements. The client performs its own Schema
+decoding and address checks.
 
-`Client.rpcTransport(contract)` implements the port through native Effect RPC and
-requires `RpcClient.Protocol` and `Scope`. The application supplies its socket
+`Client.layerRpcTransport(contract)` provides this service through native Effect
+RPC and requires `RpcClient.Protocol`. `Client.rpcTransport(contract)` remains
+available for scoped acquisition or transport decoration. The application supplies its socket
 protocol, JSON serialization, route, and credentials. Build those Layers in the
 session scope, or provide them around the whole session lifetime. A protocol bound
 to one route serves that route's source address; applications hosting several
 addresses can implement a routing transport. Core imports no browser, Node, Expo,
 or Cloudflare implementation.
 
+`Client.CurrentActor` carries `{ actorId }`, selected by the application's session
+and provided once to its client, transport, and persistence Layers. It has no
+default and does not authenticate the actor. Constructors capture that identity;
+later operations use the captured owner even when called from another context.
+Changing actors closes the old session scope before building a new one.
+
 Persistence must be explicit: `{ mode: "volatile" }` or
-`{ mode: "persistent", storage }`. Failure never changes that selection.
+`{ mode: "persistent" }`. Failure never changes that selection. Persistent mode
+reads `ReplicaPersistence` from context; volatile mode does not require it.
 `ReplicaPersistence` is the actor-scoped service; its handle captures a generation
 and exposes a disposable snapshot cache, transactional intent journal,
 `purgeSource`, and `wipe`. Journal admission commits before transport. Storage or
@@ -117,14 +128,15 @@ reserving their identity and capacity. Cache corruption discards only the cache.
 Snapshot saves coalesce for 100 ms; `session.flush` reports save failure explicitly.
 The journal's first write never depends on a background save or unload callback.
 
-`memory().open(actorId)` supplies bounded process-local storage. Reuse a memory
-factory to retain records across scopes. `ReplicaPersistence.layerMemory({ actorId })`
+`memory().open` supplies bounded process-local storage and requires `CurrentActor`.
+Reuse a memory factory to retain records across scopes. `ReplicaPersistence.layerMemory()`
 is a convenience Layer. A wipe invalidates old handles; reopen the factory to
 capture the new generation. The memory adapter is not restart durability.
 
-`IndexedDb.open({ namespace, actorId })` and `ExpoSqlite.open({ namespace, actorId })`
-acquire durable storage in an Effect scope. Their `layer(options)` constructors
-provide `ReplicaPersistence`. Durable handles add bounded oldest-write-first
+`IndexedDb.open({ namespace })` and `ExpoSqlite.open({ namespace })` acquire durable
+storage in an Effect scope and require `Client.CurrentActor`. Their `layer(options)`
+constructors provide `ReplicaPersistence` with the same identity requirement.
+The client rejects a handle captured for a different actor. Durable handles add bounded oldest-write-first
 `snapshotCache.scan(limit)` metadata. Configure `maxJournalRows`, `maxSnapshots`
 and `maxBytes` explicitly when the defaults do not fit the application.
 
@@ -157,3 +169,10 @@ several registries hold leases. Registry unmount/disposal releases its leases.
 a temporary lease for the operation and wait for authority. React only reads atoms
 and dispatches these Effects through the application's runtime; it owns no socket,
 retry loop, cursor or second replica store.
+
+The [React board example](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
+connects these bindings to `@effect/atom-react`. One `RegistryProvider` owns an
+`Atom.runtime` session with native Effect RPC and IndexedDB persistence. Components
+read the replica with `useAtomValue` and dispatch `runtime.fn` workflows for cards,
+board titles, exact retries, and reconnection. Its ephemeral presence stream shares
+the same headless client and stays outside the durable replica.

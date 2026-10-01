@@ -1,6 +1,4 @@
-import { IndexedDb } from "@yielded/sync-local-indexeddb";
 import { Client } from "@yielded/sync/client";
-import { Effect } from "effect";
 
 import { Board, Cards } from "./contract.ts";
 
@@ -33,17 +31,4 @@ export const BoardClient = Client.definition(Cards, {
       optimistic: { rename: (_snapshot, title) => ({ title }) },
     }),
   ],
-});
-
-export const openBrowserSession = Effect.fn("Board.openBrowserSession")(function* (
-  actorId: string,
-) {
-  const storage = yield* IndexedDb.open({ namespace: "list-board-demo-v1", actorId });
-  const transport = yield* Client.rpcTransport(Cards);
-
-  return yield* Client.make(BoardClient, {
-    actorId,
-    transport,
-    persistence: { mode: "persistent", storage },
-  });
 });

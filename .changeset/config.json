@@ -6,6 +6,8 @@
     [
       "@yielded/sync",
       "@yielded/sync-platform-cloudflare",
+      "@yielded/sync-platform-effect-cf",
+      "@yielded/sync-platform-alchemy-cf",
       "@yielded/sync-local-indexeddb",
       "@yielded/sync-local-expo"
     ]

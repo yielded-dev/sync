@@ -9,16 +9,22 @@ The root `package.json` catalog is the source of truth for exact shared versions
 | Vite+                       | `0.3.3`              |
 | TypeScript                  | `7.0.2`              |
 | Effect TypeScript-Go        | `0.45.0`             |
-| effect-cf                   | `0.42.1`             |
+| effect-cf                   | `0.51.0`             |
+| Alchemy                     | `2.0.0-beta.79`      |
 | Cloudflare Worker test pool | `0.22.0`             |
-| Cloudflare Workers types    | `5.20260825.1`       |
+| Cloudflare Workers types    | `5.20260926.1`       |
 | Wrangler                    | `4.133.0`            |
 | Expo / Expo SQLite          | `57.0.24` / `57.0.3` |
 | React / React Native        | `19.2.3` / `0.86.3`  |
 | Playwright                  | `1.58.2`             |
 
 Exact Effect-family versions belong in the root catalog. Upgrade the family
-together and verify compatibility with Vite+'s bundled Vitest runner.
+together and verify compatibility with Vite+'s bundled Vitest runner. Catalog-backed
+root overrides align transitive Effect packages with the catalog: current Alchemy and
+effect-cf still use the `effect/unstable/*` paths removed by newer Effect releases. These select
+published releases and do not patch dependency code. Library Effect peers also use
+the catalog so published packages require the verified release instead of admitting
+incompatible later release candidates.
 
 Workspace manifests inherit shared versions through `catalog:` and refer to core
 through `workspace:*`. `bunfig.toml` disables implicit workspace linking. Commit
@@ -48,11 +54,11 @@ Copied skills and generated hook internals have explicit tool ignores.
 
 ## Builds and tests
 
-Every package has its own `vite.config.ts`, pure `typecheck` task, test task, and
-`vp pack` build. Builds produce ESM, declarations, and source maps in ignored `dist/`
+Every library package has its own `vite.config.ts`, pure `typecheck` task, and
+`vp pack` build. Existing suites remain at their meaningful runtime boundaries. Builds produce ESM, declarations, and source maps in ignored `dist/`
 directories. Core's root entry point contains the shared contracts; runtime and
 adapter entry points implement authoritative execution through `./server` and
-the Cloudflare package. Client and Atom entry points implement scoped replicas,
+the shared Cloudflare runtime and its framework adapters. Client and Atom entry points implement scoped replicas,
 transport/recovery, persistence ports, and view bindings. Local persistence adapter
 entry points provide scoped IndexedDB and Expo SQLite handles. The external contracts example participates in
 workspace typechecking and has a separate `start` task that displays a codec round trip.
@@ -61,17 +67,28 @@ workspace typechecking and has a separate `start` task that displays a codec rou
 ESM/declaration exports, then runs static checks, workspace tests, and a clean
 packed-consumer install, typecheck, and build. The build task also generates the
 Starlight documentation site from the `docs/` workspace.
-Tests use Vite+'s Vitest runner; Effect tests can use the catalog-pinned
-`@effect/vitest`. Core retains focused client admission, recovery and lifecycle races.
-The Cloudflare package uses the released Worker pool in its Vite
+Tests use Vite+'s Vitest 4 runner, as required by the released Cloudflare test pool.
+Core uses Effect's `TestClock.layer()` with that runner; `@effect/vitest` is only
+a transitive Alchemy dependency and requires Vitest 5. Core retains focused client
+admission, recovery and lifecycle races.
+The effect-cf adapter uses the released Worker pool in its Vite
 configuration and runs tests against the public Cloudflare example. Workerd and
 SQLite provide storage, interruption, eviction, hibernation, and native RPC proof.
 The example's build is a Wrangler dry run and participates in `ready`. Its `types`
 task generates binding declarations; pinned Workers types supply the runtime
 declarations. Generated bindings are excluded from formatting and linting.
-The list and board example adds a separate public-consumer Worker test and dry-run
-build, including two-client recovery after Durable Object eviction and a forced
-subscription disconnect.
+The list and board example serves a React and Effect Atom frontend and its local
+Worker together with `vp run sync-list-board-example#dev`. Its Vite configuration
+uses the React and Cloudflare plugins for development and builds, and the Worker
+pool for tests. The build produces the frontend assets and Worker before a Wrangler
+dry run using the generated configuration. The existing public-consumer test
+includes two-client recovery after Durable Object eviction and a forced
+subscription disconnect. The root `vite` override keeps plugins and Vitest on
+the catalog's Vite+ core alias.
+The Alchemy counter in `examples/alchemy-cloudflare` reuses the same public source
+and runs with `vp run sync-alchemy-cloudflare-example#dev`. Its native Alchemy stack
+uses local state and participates in workspace typechecking; the development
+command builds and runs the Worker locally.
 The IndexedDB suite runs Chromium with Playwright through Vite+; install Chromium
 with `vp -C packages/local-indexeddb exec playwright install chromium`. CI installs
 the browser and its system dependencies explicitly. The Expo adapter suite uses
@@ -111,9 +128,9 @@ workflow dispatch accepts a PR number and starts a full review.
 The privileged review job checks out only default-branch guidance and never runs
 PR code or dependency installation. It uses `GITHUB_TOKEN` to publish feedback and
 the `Effect Agent review` check, with `AGENTS.md` as repository guidance. No GitHub
-App secrets are required. Reviews use `gpt-6-sol` with high reasoning and
-Fast mode, at most five automatic attempts per PR, a $1 base allowance,
-and a $2.50 ceiling per attempt. Manual attempts have the same spending ceiling.
+App secrets are required. Reviews use `gpt-6.1-sol` with high reasoning and
+Fast mode, at most five automatic attempts per PR, a $20 base allowance,
+and a $25 ceiling per attempt. Manual attempts have the same spending ceiling.
 The check reports blockers and incomplete coverage; it is separate from the
 required `ready` CI job.
 

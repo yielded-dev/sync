@@ -13,6 +13,8 @@ const fromRegistry = process.argv.includes("--registry");
 const packages = [
   ["sync", "@yielded/sync"],
   ["platform-cloudflare", "@yielded/sync-platform-cloudflare"],
+  ["platform-effect-cf", "@yielded/sync-platform-effect-cf"],
+  ["platform-alchemy-cf", "@yielded/sync-platform-alchemy-cf"],
   ["local-indexeddb", "@yielded/sync-local-indexeddb"],
   ["local-expo", "@yielded/sync-local-expo"],
 ];
@@ -77,6 +79,8 @@ try {
   );
 
   dependencies.effect = rootManifest.catalog.effect;
+  dependencies["effect-cf"] = rootManifest.catalog["effect-cf"];
+  dependencies.alchemy = rootManifest.catalog.alchemy;
   dependencies["expo-sqlite"] = rootManifest.catalog["expo-sqlite"];
 
   await writeFile(
@@ -89,10 +93,15 @@ try {
         packageManager: rootManifest.packageManager,
         scripts: { typecheck: "tsc --noEmit", build: "vp pack" },
         dependencies,
-        ...(!fromRegistry && {
-          overrides: { "@yielded/sync": dependencies["@yielded/sync"] },
-        }),
+        overrides: {
+          ...Object.fromEntries(
+            Object.keys(rootManifest.overrides).map((name) => [name, rootManifest.catalog[name]]),
+          ),
+          ...(!fromRegistry &&
+            Object.fromEntries(packages.map(([, name]) => [name, dependencies[name]]))),
+        },
         devDependencies: {
+          "@cloudflare/workers-types": rootManifest.catalog["@cloudflare/workers-types"],
           typescript: rootManifest.catalog.typescript,
           "vite-plus": rootManifest.catalog["vite-plus"],
         },
@@ -112,6 +121,7 @@ try {
           strict: true,
           skipLibCheck: true,
           noEmit: true,
+          types: ["@cloudflare/workers-types"],
         },
         include: ["src", "vite.config.ts"],
       },
@@ -132,6 +142,8 @@ try {
       'export { Client, ReplicaPersistence } from "@yielded/sync/client";',
       'export { SourceAtom } from "@yielded/sync/atom";',
       'export { Cloudflare, SqliteStorage } from "@yielded/sync-platform-cloudflare";',
+      'export { EffectCf } from "@yielded/sync-platform-effect-cf";',
+      'export { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";',
       'export { IndexedDb } from "@yielded/sync-local-indexeddb";',
       'export { ExpoSqlite } from "@yielded/sync-local-expo";',
       "",

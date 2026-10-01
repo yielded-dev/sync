@@ -1,7 +1,7 @@
 import { ProtocolError } from "@yielded/sync";
 import { Client, ClientError } from "@yielded/sync/client";
 import { SELF, env, evictDurableObject, reset } from "cloudflare:test";
-import { Effect, Fiber, Layer, Schema, Stream } from "effect";
+import { Context, Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { Socket } from "effect/unstable/socket";
 import { afterEach, expect, it } from "vite-plus/test";
@@ -17,7 +17,7 @@ const stub = () => bindings.BOARDS.getByName("board:shared");
 const unavailable = () =>
   ProtocolError.make({ reason: "Unavailable", message: "Response lost after commit" });
 
-const socketProtocol = (actorId: string, onConnect?: (socket: WebSocket) => void) =>
+const socketProtocol = (onConnect?: (socket: WebSocket) => void) =>
   RpcClient.layerProtocolSocket({ retryTransientErrors: false }).pipe(
     Layer.provide(
       Layer.effect(
@@ -25,6 +25,8 @@ const socketProtocol = (actorId: string, onConnect?: (socket: WebSocket) => void
         Socket.fromWebSocket(
           Effect.acquireRelease(
             Effect.gen(function* () {
+              const { actorId } = yield* Client.CurrentActor;
+
               const response = yield* Effect.promise(() =>
                 SELF.fetch("https://example.test/sync/boards/shared", {
                   headers: {
@@ -56,18 +58,21 @@ it("runs two public clients against a durable board with exact retry, rollback, 
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
-        const services = yield* Layer.build(socketProtocol("alice"));
-
-        const aliceTransport = yield* Client.rpcTransport(Cards).pipe(
-          Effect.provideContext(services),
+        const services = yield* Layer.build(
+          Client.layerRpcTransport(Cards).pipe(
+            Layer.provide(socketProtocol()),
+            Layer.provideMerge(Layer.succeed(Client.CurrentActor, { actorId: "alice" })),
+          ),
         );
+
+        const aliceTransport = Context.get(services, Client.Transport);
 
         let loseResponse = true;
 
         const alice = yield* Client.make(BoardClient, {
-          actorId: "alice",
           persistence: { mode: "volatile" },
-          transport: {
+        }).pipe(
+          Effect.provideService(Client.Transport, {
             ...aliceTransport,
             execute: (command) =>
               aliceTransport.execute(command).pipe(
@@ -78,26 +83,26 @@ it("runs two public clients against a durable board with exact retry, rollback, 
                   return Effect.fail(unavailable());
                 }),
               ),
-          },
-        });
+          }),
+          Effect.provideContext(services),
+        );
 
         let bobSocket: WebSocket | undefined;
 
         const bobServices = yield* Layer.build(
-          socketProtocol("bob", (socket) => {
-            bobSocket = socket;
-          }),
-        );
-
-        const bobTransport = yield* Client.rpcTransport(Cards).pipe(
-          Effect.provideContext(bobServices),
+          Client.layerRpcTransport(Cards).pipe(
+            Layer.provide(
+              socketProtocol((socket) => {
+                bobSocket = socket;
+              }),
+            ),
+            Layer.provideMerge(Layer.succeed(Client.CurrentActor, { actorId: "bob" })),
+          ),
         );
 
         const bob = yield* Client.make(BoardClient, {
-          actorId: "bob",
           persistence: { mode: "volatile" },
-          transport: bobTransport,
-        });
+        }).pipe(Effect.provideContext(bobServices));
 
         const aliceLease = yield* alice.open(address);
         const bobLease = yield* bob.open(address);
@@ -123,6 +128,20 @@ it("runs two public clients against a durable board with exact retry, rollback, 
         );
         yield* bobLease.execute(Cards.actions.add, { id: "two", title: "Second" });
         yield* Effect.promise(() => evictDurableObject(stub()));
+        if (bobSocket === undefined) return yield* Effect.die("Bob did not connect");
+        // Wake the new activation, then let native RPC reset and reconnect its lost streams.
+        bobSocket.send(JSON.stringify({ _tag: "Ping" }));
+        yield* Effect.forEach(
+          [aliceLease, bobLease],
+          (lease) =>
+            lease.changes.pipe(
+              Stream.filter((state) => state.connection === "recovering"),
+              Stream.take(1),
+              Stream.runDrain,
+              Effect.andThen(lease.ready),
+            ),
+          { concurrency: 2, discard: true },
+        );
         expect(yield* aliceLease.retry(first.failure.commandId)).toEqual({ id: "one", count: 1 });
         yield* bobLease.execute(Cards.plugins.board.actions.rename, "Planning");
         yield* aliceLease.changes.pipe(
