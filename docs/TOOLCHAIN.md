@@ -128,9 +128,9 @@ workflow dispatch accepts a PR number and starts a full review.
 The privileged review job checks out only default-branch guidance and never runs
 PR code or dependency installation. It uses `GITHUB_TOKEN` to publish feedback and
 the `Effect Agent review` check, with `AGENTS.md` as repository guidance. No GitHub
-App secrets are required. Reviews use `gpt-6-sol` with high reasoning and
-Fast mode, at most five automatic attempts per PR, a $1 base allowance,
-and a $2.50 ceiling per attempt. Manual attempts have the same spending ceiling.
+App secrets are required. Reviews use `gpt-6.1-sol` with high reasoning and
+Fast mode, at most five automatic attempts per PR, a $20 base allowance,
+and a $25 ceiling per attempt. Manual attempts have the same spending ceiling.
 The check reports blockers and incomplete coverage; it is separate from the
 required `ready` CI job.
 
