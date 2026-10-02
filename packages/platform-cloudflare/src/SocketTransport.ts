@@ -1,6 +1,6 @@
 import type { ProtocolError } from "@yielded/sync";
 import { Effect, Queue, type Scope } from "effect";
-import { type RpcMessage, RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { type RpcMessage, RpcSerialization, RpcServer } from "effect/rpc";
 
 import { invalid } from "./SourceHub.ts";
 

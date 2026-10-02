@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Schema, Stream, type Scope } from "effect";
-import { RpcClient } from "effect/unstable/rpc";
+import { RpcClient } from "effect/rpc";
 
 import { ProtocolError, type SourceAddress, type SourcePosition } from "../Model.ts";
 import type * as Source from "../Source.ts";

@@ -13,8 +13,8 @@ This checkout adds `@yielded/sync-platform-effect-cf` and
 here are unreleased and replace the first beta's `Cloudflare.worker` and
 `Cloudflare.durableObject` factories. All six packages remain in one fixed version
 group. The supported combination is declared in the root catalog and package peer ranges, including
-effect-cf 0.51.0 and Alchemy
-2.0.0-beta.79; keep transitive Effect packages on the same RC.
+effect-cf 0.53.0 and Alchemy
+2.0.0-beta.80, using stable Effect module paths without compatibility overrides.
 
 | Package                             | Host and validation                                                                                                                                                               |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

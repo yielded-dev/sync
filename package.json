@@ -41,11 +41,6 @@
     "wrangler": "catalog:"
   },
   "overrides": {
-    "@effect/platform-node-shared": "catalog:",
-    "@effect/sql-d1": "catalog:",
-    "@effect/sql-sqlite-do": "catalog:",
-    "@effect/vitest": "catalog:",
-    "effect": "catalog:",
     "vite": "catalog:"
   },
   "engines": {
@@ -56,13 +51,12 @@
     "@cloudflare/vite-plugin": "1.54.11",
     "@cloudflare/vitest-pool-workers": "0.22.0",
     "@cloudflare/workers-types": "5.20260926.1",
-    "@effect/atom-react": "4.0.0-rc.115",
-    "@effect/sql-d1": "4.0.0-rc.115",
-    "@effect/sql-sqlite-do": "4.0.0-rc.115",
+    "@effect/atom-react": "4.0.0",
+    "@effect/sql-sqlite-do": "4.0.0",
     "@effect/tsgo": "0.45.0",
     "@types/node": "26.1.2",
-    "effect": "4.0.0-rc.115",
-    "effect-cf": "0.51.0",
+    "effect": "4.0.0",
+    "effect-cf": "0.53.0",
     "typescript": "7.0.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3",
     "vite-plus": "0.3.3",
@@ -80,10 +74,8 @@
     "astro": "7.3.5",
     "starlight-links-validator": "0.26.0",
     "@yielded/starlight-theme": "0.2.1",
-    "alchemy": "2.0.0-beta.79",
-    "@effect/platform-node": "4.0.0-rc.115",
-    "@effect/platform-bun": "4.0.0-rc.115",
-    "@effect/platform-node-shared": "4.0.0-rc.115",
-    "@effect/vitest": "4.0.0-rc.115"
+    "alchemy": "2.0.0-beta.80",
+    "@effect/platform-node": "4.0.0",
+    "@effect/platform-bun": "4.0.0"
   }
 }

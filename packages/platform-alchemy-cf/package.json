@@ -41,7 +41,7 @@
     "vite-plus": "catalog:"
   },
   "peerDependencies": {
-    "alchemy": "^2.0.0-beta.79",
+    "alchemy": "^2.0.0-beta.80",
     "effect": "catalog:"
   }
 }

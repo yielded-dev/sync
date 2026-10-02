@@ -1,6 +1,6 @@
 import { Action, type ProtocolError } from "@yielded/sync";
 import { Context, Effect, Layer, Schema, Stream } from "effect";
-import { type Rpc } from "effect/unstable/rpc";
+import { type Rpc } from "effect/rpc";
 
 import { Counter } from "../src/counter.ts";
 

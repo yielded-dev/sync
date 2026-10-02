@@ -1,6 +1,6 @@
 import { ProtocolError, type Source, type SourceAddress, type SourcePosition } from "@yielded/sync";
 import { Context, Deferred, Effect, Schema, Stream } from "effect";
-import { type Rpc, type RpcGroup, RpcSerialization, type RpcServer } from "effect/unstable/rpc";
+import { type Rpc, type RpcGroup, RpcSerialization, type RpcServer } from "effect/rpc";
 
 import { unavailable, type Connection, type Hub } from "./SourceHub.ts";
 

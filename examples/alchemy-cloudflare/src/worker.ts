@@ -2,7 +2,7 @@ import { ProtocolError } from "@yielded/sync";
 import { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";
 import * as Cloudflare from "alchemy/Cloudflare";
 import { Effect } from "effect";
-import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
+import { HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { authenticate } from "../../cloudflare/src/auth.ts";
 import { Counter } from "../../cloudflare/src/contract.ts";
