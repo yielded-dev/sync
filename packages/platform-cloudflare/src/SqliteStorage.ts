@@ -11,7 +11,7 @@ import {
   type StorageCommit,
 } from "@yielded/sync/server";
 import { Effect, Layer, Schema, Scheduler } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 export interface Options {
   readonly namespace: string;

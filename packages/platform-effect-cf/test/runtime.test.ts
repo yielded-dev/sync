@@ -1,8 +1,8 @@
 import { ProtocolError } from "@yielded/sync";
 import { SELF, env, reset, runInDurableObject, evictDurableObject } from "cloudflare:test";
 import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { Counter } from "../../../examples/cloudflare/src/contract.ts";

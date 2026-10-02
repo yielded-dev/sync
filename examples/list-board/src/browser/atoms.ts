@@ -2,9 +2,9 @@ import { IndexedDb } from "@yielded/sync-local-indexeddb";
 import { SourceAtom } from "@yielded/sync/atom";
 import { Client, type ClientError, type PersistenceError } from "@yielded/sync/client";
 import { Clock, Context, Effect, Layer, Option, Schedule, Schema, Stream } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import { Socket } from "effect/unstable/socket";
+import { AsyncResult, Atom } from "effect/reactivity";
+import { RpcClient, RpcSerialization } from "effect/rpc";
+import { Socket } from "effect/socket";
 
 import { BoardClient } from "../client.ts";
 import { type CardRejected, Cards, type Lane } from "../contract.ts";
@@ -148,25 +148,28 @@ export const peersAtom = runtime
     Stream.unwrap(Effect.map(BoardSession, ({ lease }) => lease.messages)).pipe(
       Stream.merge(Stream.fromSchedule(Schedule.spaced("5 seconds")).pipe(Stream.map(() => null))),
       Stream.mapEffect((frame) => Effect.map(Clock.currentTimeMillis, (now) => ({ frame, now }))),
-      Stream.scan([] as ReadonlyArray<Peer>, (peers, { frame, now }) => {
-        const current = peers.filter(
-          (peer) => peer.expiresAtMillis > now && peer.connectionId !== frame?.connectionId,
-        );
+      Stream.scan(
+        (): ReadonlyArray<Peer> => [],
+        (peers, { frame, now }) => {
+          const current = peers.filter(
+            (peer) => peer.expiresAtMillis > now && peer.connectionId !== frame?.connectionId,
+          );
 
-        if (frame === null || frame._tag === "MessageLeave" || frame.actorId === actorId)
-          return current;
-        if (frame.message.namespace !== "$source") return current;
+          if (frame === null || frame._tag === "MessageLeave" || frame.actorId === actorId)
+            return current;
+          if (frame.message.namespace !== "$source") return current;
 
-        return [
-          ...current.slice(-31),
-          {
-            actorId: frame.actorId,
-            connectionId: frame.connectionId,
-            editingCardId: frame.message.payload.editingCardId,
-            expiresAtMillis: now + 25_000,
-          },
-        ];
-      }),
+          return [
+            ...current.slice(-31),
+            {
+              actorId: frame.actorId,
+              connectionId: frame.connectionId,
+              editingCardId: frame.message.payload.editingCardId,
+              expiresAtMillis: now + 25_000,
+            },
+          ];
+        },
+      ),
     ),
     { initialValue: [] },
   )

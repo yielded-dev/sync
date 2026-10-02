@@ -9,8 +9,8 @@ The root `package.json` catalog is the source of truth for exact shared versions
 | Vite+                       | `0.3.3`              |
 | TypeScript                  | `7.0.2`              |
 | Effect TypeScript-Go        | `0.45.0`             |
-| effect-cf                   | `0.51.0`             |
-| Alchemy                     | `2.0.0-beta.79`      |
+| effect-cf                   | `0.53.0`             |
+| Alchemy                     | `2.0.0-beta.80`      |
 | Cloudflare Worker test pool | `0.22.0`             |
 | Cloudflare Workers types    | `5.20260926.1`       |
 | Wrangler                    | `4.133.0`            |
@@ -19,12 +19,10 @@ The root `package.json` catalog is the source of truth for exact shared versions
 | Playwright                  | `1.58.2`             |
 
 Exact Effect-family versions belong in the root catalog. Upgrade the family
-together and verify compatibility with Vite+'s bundled Vitest runner. Catalog-backed
-root overrides align transitive Effect packages with the catalog: current Alchemy and
-effect-cf still use the `effect/unstable/*` paths removed by newer Effect releases. These select
-published releases and do not patch dependency code. Library Effect peers also use
-the catalog so published packages require the verified release instead of admitting
-incompatible later release candidates.
+together and verify compatibility with Vite+'s bundled Vitest runner. Alchemy and
+effect-cf use Effect's stable module paths directly, without dependency patches or
+Effect overrides. Library Effect peers also use the catalog so published packages
+require the verified release.
 
 Workspace manifests inherit shared versions through `catalog:` and refer to core
 through `workspace:*`. `bunfig.toml` disables implicit workspace linking. Commit
@@ -68,8 +66,7 @@ ESM/declaration exports, then runs static checks, workspace tests, and a clean
 packed-consumer install, typecheck, and build. The build task also generates the
 Starlight documentation site from the `docs/` workspace.
 Tests use Vite+'s Vitest 4 runner, as required by the released Cloudflare test pool.
-Core uses Effect's `TestClock.layer()` with that runner; `@effect/vitest` is only
-a transitive Alchemy dependency and requires Vitest 5. Core retains focused client
+Core uses Effect's `TestClock.layer()` with that runner and retains focused client
 admission, recovery and lifecycle races.
 The effect-cf adapter uses the released Worker pool in its Vite
 configuration and runs tests against the public Cloudflare example. Workerd and

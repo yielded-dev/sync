@@ -2,8 +2,8 @@ import { ProtocolError } from "@yielded/sync";
 import { Client, ClientError } from "@yielded/sync/client";
 import { SELF, env, evictDurableObject, reset } from "cloudflare:test";
 import { Context, Effect, Fiber, Layer, Schema, Stream } from "effect";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import { Socket } from "effect/unstable/socket";
+import { RpcClient, RpcSerialization } from "effect/rpc";
+import { Socket } from "effect/socket";
 import { afterEach, expect, it } from "vite-plus/test";
 
 import { BoardClient } from "../src/client.ts";

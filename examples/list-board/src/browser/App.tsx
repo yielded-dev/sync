@@ -1,7 +1,7 @@
 import { useAtom, useAtomMount, useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Client } from "@yielded/sync/client";
 import { Cause, Option, Schema } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import type { ReactNode } from "react";
 
 import { type Card, Lane } from "../contract.ts";

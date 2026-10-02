@@ -3,7 +3,7 @@ import { Cloudflare } from "@yielded/sync-platform-cloudflare";
 import type { Server } from "@yielded/sync/server";
 import { DurableObjectState, type WebSocket } from "alchemy/Cloudflare/Workers";
 import { Context, Effect, Scope } from "effect";
-import { type HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
+import { type HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 export type Options<R = never> = Cloudflare.Options<R>;
 export type Identity = Cloudflare.Identity;

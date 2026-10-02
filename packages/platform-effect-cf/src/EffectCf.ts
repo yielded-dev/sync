@@ -8,7 +8,7 @@ import {
   DurableObjectWebSocket,
   Worker,
 } from "effect-cf";
-import { RpcServer } from "effect/unstable/rpc";
+import { RpcServer } from "effect/rpc";
 
 export type Options<R = never> = Cloudflare.Options<R>;
 export type Identity = Cloudflare.Identity;

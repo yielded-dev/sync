@@ -1,8 +1,9 @@
 import { type ProtocolError, SourceAddress, type Source } from "@yielded/sync";
 import { Server, ServerCrypto, StorageError } from "@yielded/sync/server";
-import { DateTime, Effect, Encoding, Layer, Schema, type Scope } from "effect";
-import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
-import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { DateTime, Effect, Layer, Schema, type Scope } from "effect";
+import { Hex } from "effect/encoding";
+import { HttpServerRequest, HttpServerResponse } from "effect/http";
+import { RpcSerialization, RpcServer } from "effect/rpc";
 
 import * as RpcHost from "./RpcHost.ts";
 import * as SocketTransport from "./SocketTransport.ts";
@@ -24,7 +25,7 @@ const CryptoLive = Layer.succeed(ServerCrypto, {
   sha256: (text) =>
     Effect.tryPromise({
       try: async () =>
-        Encoding.encodeHex(
+        Hex.encode(
           new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))),
         ),
       catch: (cause) => StorageError.make({ message: "SHA-256 failed", cause }),

@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { Rpc } from "effect/unstable/rpc";
+import { Rpc } from "effect/rpc";
 
 import type * as Action from "../Action.ts";
 import {

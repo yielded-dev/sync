@@ -26,7 +26,6 @@ HTTP serves snapshot, action, and result lookup; WebSockets also support
 subscriptions and ephemeral messages. The contract, server, and demo auth code
 are imported from `examples/cloudflare/src` so both hosts run the same behavior.
 
-The repository pins the Effect family in the root catalog, Alchemy to `2.0.0-beta.79`, and
-the CLI's Node/Bun platform peers to compatible releases. Catalog-backed overrides
-also align transitive Effect packages; Alchemy's broad RC ranges otherwise select
-releases with different module paths.
+The root catalog pins the Effect family, Alchemy, and the CLI's Node/Bun platform
+peers. Alchemy and Sync use Effect's stable module paths directly; no Effect
+compatibility overrides or dependency patches are needed.
