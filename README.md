@@ -1,4 +1,23 @@
-# Effect Sync
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/lockup-sync-paper.svg" />
+    <img src=".github/assets/lockup-sync-ink.svg" alt="Effect Sync" height="48" />
+  </picture>
+</h1>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@yielded/sync"><img alt="npm" src="https://img.shields.io/npm/v/@yielded/sync/beta?label=npm&labelColor=121310&color=c6f36a" /></a>
+  <a href="https://github.com/yielded-dev/sync/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/yielded-dev/sync/ci.yml?branch=main&label=ci&labelColor=121310" /></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f3f1e8?labelColor=121310" /></a>
+</p>
+
+<p align="center">
+  <a href="https://yielded.dev/sync/"><b>Documentation</b></a>
+  ·
+  <a href="https://yielded.dev/sync/guide/getting-started/">Getting started</a>
+  ·
+  <a href="https://yielded.dev">yielded.dev</a>
+</p>
 
 Reusable Effect-native realtime synchronization, owned by [Yielded](https://github.com/yielded-dev).
 
