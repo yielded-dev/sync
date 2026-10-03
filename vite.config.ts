@@ -141,5 +141,20 @@ export default defineConfig({
     ],
   },
   test: { cache: false, silent: "passed-only" },
-  run: { cache: { scripts: true } },
+  run: {
+    cache: { scripts: true },
+    tasks: {
+      "ci:format": {
+        command: "vp fmt --check",
+      },
+      "ci:docs": {
+        command: "vp check docs && vp run docs:build",
+      },
+      "release:check": {
+        // Recreate the tarballs and verify a clean install, including registry mode.
+        cache: false,
+        command: "node scripts/release-check.mjs",
+      },
+    },
+  },
 });

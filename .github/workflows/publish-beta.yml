@@ -33,7 +33,6 @@ jobs:
         with:
           node-version: "24"
           registry-url: https://registry.npmjs.org
-          package-manager-cache: false
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2

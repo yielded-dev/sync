@@ -22,7 +22,6 @@
     "docs:preview": "vp run @yielded/sync-docs#preview",
     "docs:deploy": "vp run docs:build && vp exec wrangler deploy --config site/wrangler.jsonc",
     "ready": "vp run build && vp run check && vp run test && vp run release:check",
-    "release:check": "node scripts/release-check.mjs",
     "changeset": "changeset",
     "changeset:pre": "changeset pre",
     "changeset:version": "changeset version"
