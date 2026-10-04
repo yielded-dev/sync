@@ -40,7 +40,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out trusted repository guidance
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # This job has secrets and write permissions. Never execute PR-head code.
           ref: ${{ github.event.repository.default_branch }}
