@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp build && wrangler deploy --dry-run",
+    "build": "vp build && vp run check:worker",
     "dev": "vp dev",
     "test": "vp test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
