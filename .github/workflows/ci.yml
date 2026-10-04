@@ -66,6 +66,10 @@ jobs:
                       // the full gate. Other workflows get actionlint below.
                       if (path === '.github/workflows/ci.yml' || path.startsWith('.github/actions/')) {
                         full = true;
+                      } else if (/^packages\/[^/]+\/README\.md$/.test(path) &&
+                          (file.status === 'removed' || path === file.previous_filename)) {
+                        // release:check requires README.md in every library tarball.
+                        full = true;
                       } else if (passive.test(path) || /^(?:\.agents|\.claude|\.opencode)\//.test(path) ||
                           /^\.github\/(?:workflows\/[^/]+\.ya?ml|assets\/.*|[^/]+\.md)$/.test(path)) {
                         continue;

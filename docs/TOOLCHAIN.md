@@ -110,7 +110,8 @@ Every pull request reports the required `ready` check. Contributor docs, changes
 and auxiliary workflows need formatting and workflow validation; published docs
 also get a docs check/build. Source, dependencies, CI setup, unknown paths, release
 PRs, and pushes to `main` run the full gate. Renames and incomplete diffs select
-the full gate conservatively.
+the full gate conservatively. Package README removals or renames retain the
+packed-consumer check.
 
 GitHub Actions uses Vite+ for installation and commands, suppresses install scripts,
 and patches the compiler explicitly. Package downloads and successful Vite Task
