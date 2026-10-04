@@ -106,8 +106,23 @@ investigating a cache concern.
 clone's hook path. The committed `.vite-hooks/pre-commit` runs `vp staged`.
 Inspect the installation with `vp hooks status`.
 
-GitHub Actions installs dependencies with lifecycle scripts suppressed, explicitly
-patches the compiler, and runs `vp run ready`. The `ready` job is the CI gate.
+Every pull request reports the required `ready` check. Contributor docs, changesets,
+and auxiliary workflows need formatting and workflow validation; published docs
+also get a docs check/build. Source, dependencies, CI setup, unknown paths, release
+PRs, and pushes to `main` run the full gate. Renames and incomplete diffs select
+the full gate conservatively. Package README removals or renames retain the
+packed-consumer check.
+
+GitHub Actions uses Vite+ for installation and commands, suppresses install scripts,
+and patches the compiler explicitly. Package downloads and successful Vite Task
+results are cached, including work completed before a later failure. Vite validates
+task inputs before reuse; Astro's cached outputs include generated types. Full CI
+keeps `ready`'s order: build, static checks, tests, and a fresh packed-consumer check.
+Timed-out commands restart once. Isolated tests retry only timeout errors, up to
+twice; browser, SQLite, and Durable Object suites restart once in a fresh process
+on failure so retries do not inherit failed-case state. Setup downloads also get
+one retry. A second command failure still fails `ready`.
+
 `ci.yml` does not deploy or publish packages. The manually dispatched
 `publish-beta.yml` runs the same `ready` gate and publishes its validated tarballs
 through npm trusted publishing. It verifies the registry install and records the
