@@ -174,6 +174,14 @@ local Wrangler OAuth session, unset any unrelated `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` values before running it. Check the deployed home page,
 a guide page, and an asset URL after publication.
 
+## Changesets
+
+Use `vp run changeset` to add release notes, `vp run changeset status` to inspect
+pending releases, and `vp run changeset:version` to advance the fixed beta group.
+Consumed beta notes live in `.changeset/pre/`; `pre.json` keeps only the
+prerelease mode and tag. Retain those notes for the eventual stable release.
+Changesets uses the repository's Oxfmt formatter for generated metadata.
+
 ## Contributor skills
 
 Dev Kit 2.0.2 supplied the setup, Effect development, testing, Cloudflare Workers,
