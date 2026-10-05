@@ -8,7 +8,7 @@ The root `package.json` catalog is the source of truth for exact shared versions
 | Bun                         | `1.4.2`              |
 | Vite+                       | `0.3.3`              |
 | TypeScript                  | `7.0.2`              |
-| Effect TypeScript-Go        | `0.45.0`             |
+| Effect TypeScript-Go        | `0.48.1`             |
 | effect-cf                   | `0.53.0`             |
 | Alchemy                     | `2.0.0-beta.80`      |
 | Cloudflare Worker test pool | `0.22.0`             |
@@ -43,6 +43,11 @@ network access to the upstream compiler release on a fresh machine.
 Effect diagnostic warnings are configured in the shared compiler plugin, including
 `preferTypedSchemaDecoder` and the recommended simplification rules.
 `unsafeEffectTypeAssertion` is a warning; `schemaSync` stays off.
+
+Unknown diagnostic names fail compilation. The shared plugin also checks tag-specific
+error handling and ignored `flatMap` inputs. Stability diagnostics stay enabled;
+`allowedUnstableApis` records the Effect modules this repository intentionally uses.
+Review new unstable or experimental dependencies before extending those allowances.
 
 `vite.config.ts` owns Oxfmt and Oxlint configuration. It enables type-aware linting,
 typechecking, import checks, exhaustive switches, test hygiene, and Effect Agent's

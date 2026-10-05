@@ -18,7 +18,19 @@
     "plugins": [
       {
         "name": "@effect/language-service",
+        "allowedUnstableApis": [
+          "@effect/sql-sqlite-do",
+          "effect/http",
+          "effect/reactivity",
+          "effect/rpc",
+          "effect/socket",
+          "effect/sql"
+        ],
         "diagnosticSeverity": {
+          "unknownRuleName": "error",
+          "catchIfTagToCatchTag": "warning",
+          "catchRefailToTapError": "warning",
+          "flatMapIgnoredParamToAndThen": "warning",
           "allOfMapToForEach": "warning",
           "anyUnknownInErrorContext": "suggestion",
           "catchAllTagDispatchToCatchTag": "warning",
