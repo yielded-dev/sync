@@ -168,7 +168,8 @@ library switcher, and Markdown helpers come from `@yielded/starlight-theme`
 manifest, so installation guidance follows Changesets version bumps.
 `site/wrangler.jsonc` deploys a separate static asset Worker
 on the `yielded.dev/sync*` route; its handler removes that path prefix before
-reading assets. The existing `/auth` route is owned separately.
+reading assets and restores it on asset redirects. Requests for the 404 document
+are returned with status 404. The existing `/auth` route is owned separately.
 
 `deploy-docs.yml` runs after a successful `Publish beta` workflow and checks out
 the validated release revision. It skips deployment if `main` has advanced, so

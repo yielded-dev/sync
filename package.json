@@ -72,7 +72,7 @@
     "@astrojs/starlight": "0.42.4",
     "astro": "7.3.5",
     "starlight-links-validator": "0.26.0",
-    "@yielded/starlight-theme": "0.2.1",
+    "@yielded/starlight-theme": "0.2.2",
     "alchemy": "2.0.0-beta.80",
     "@effect/platform-node": "4.0.0",
     "@effect/platform-bun": "4.0.0"
