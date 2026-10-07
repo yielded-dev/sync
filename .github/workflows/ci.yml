@@ -167,7 +167,10 @@ jobs:
         if: needs.changes.outputs.full == 'true'
         uses: ./.github/actions/run-ci
         with:
-          timeout: 2m
+          # A warm image finishes in seconds. A cold --with-deps install fetches
+          # fonts through apt and then the browser; 2m dies mid-download, and
+          # the retry then loses the still-held dpkg lock.
+          timeout: 10m
           retry-errors: "true"
           command: vp -C packages/local-indexeddb exec playwright install --with-deps chromium
 

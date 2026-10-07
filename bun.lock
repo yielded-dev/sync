@@ -235,7 +235,7 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.7",
     "@vitejs/plugin-react": "6.1.1",
-    "@yielded/starlight-theme": "0.2.1",
+    "@yielded/starlight-theme": "0.2.2",
     "alchemy": "2.0.0-beta.80",
     "astro": "7.3.5",
     "effect": "4.0.0",
@@ -1369,7 +1369,7 @@
 
     "@yielded/example-contracts": ["@yielded/example-contracts@workspace:examples/contracts"],
 
-    "@yielded/starlight-theme": ["@yielded/starlight-theme@0.2.1", "", { "dependencies": { "@fontsource-variable/ibm-plex-sans": "^5.3.0", "@fontsource/ibm-plex-mono": "^5.3.0", "@fontsource/ibm-plex-sans": "^5.3.0", "@resvg/resvg-js": "^2.6.2", "github-slugger": "^2.0.0", "mdast-util-from-markdown": "^2.0.3", "mdast-util-gfm": "^3.1.0", "mermaid": "^12.0.0", "micromark-extension-gfm": "^3.0.0", "satori": "^0.33.5" }, "peerDependencies": { "@astrojs/starlight": ">=0.42.0", "astro": ">=7.2.10" } }, "sha512-5csuMGafOaOJFe43+M883Njv+RhXioHxCBpQz+OyJC8b/6DGu9BjwqXMS5MYsEqQJDE1TbNC7cTPKLFeuvk6aw=="],
+    "@yielded/starlight-theme": ["@yielded/starlight-theme@0.2.2", "", { "dependencies": { "@fontsource-variable/ibm-plex-sans": "^5.3.0", "@fontsource/ibm-plex-mono": "^5.3.0", "@fontsource/ibm-plex-sans": "^5.3.0", "@resvg/resvg-js": "^2.6.2", "github-slugger": "^2.0.0", "mdast-util-from-markdown": "^2.0.3", "mdast-util-gfm": "^3.1.0", "mermaid": "^12.0.0", "micromark-extension-gfm": "^3.0.0", "satori": "^0.33.5" }, "peerDependencies": { "@astrojs/starlight": ">=0.42.0", "astro": ">=7.2.10" } }, "sha512-Jq/l7INND8IYYAwpIy5T9oACEoVlYtSdGzgBI1ArJefHAroF/E5S+BZ7BoYukksZFqBoz3H4Wnc6/lFWiIPM2Q=="],
 
     "@yielded/sync": ["@yielded/sync@workspace:packages/sync"],
 

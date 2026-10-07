@@ -44,4 +44,14 @@ runs:
           fi
           echo "::warning::Attempt $attempt exited $status; retrying once in 5 seconds."
           sleep 5
+          # timeout does not reap root helpers such as apt-get. Wait them out so
+          # the retry does not lose the dpkg lock.
+          if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+            for _ in $(seq 1 48); do
+              if ! pgrep -x apt-get >/dev/null 2>&1 && ! pgrep -x dpkg >/dev/null 2>&1; then
+                break
+              fi
+              sleep 10
+            done
+          fi
         done
