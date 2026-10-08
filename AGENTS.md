@@ -94,3 +94,11 @@ Contributor skills in `.agents/skills` are repository tooling, not runtime modul
 Dev Kit copies record their source in `.dev-kit-origin.json`. Update them explicitly with
 the transient Dev Kit CLI when requested; the repository does not depend on Dev Kit
 for installation, checks, builds, or CI.
+
+## Worktree startup
+
+Create worktrees from cached refs; fetch explicitly when a newer base is needed.
+Run `vp install` when dependencies or `node_modules/effect/AGENTS.md` are needed.
+Installation uses Bun's shared store and keeps project-specific packages local.
+Start only the development services needed for the task, explicitly. Worktree
+creation itself should not install dependencies or start servers.
