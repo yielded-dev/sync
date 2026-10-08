@@ -30,8 +30,8 @@ The Expo adapter targets native SQLite. Expo web uses the IndexedDB adapter.
 registered actions. Effect Schema owns values that cross the wire or are persisted.
 
 ```ts
-import { Schema } from "effect";
 import { Action, Source } from "@yielded/sync";
+import { Schema } from "effect";
 
 export const Counter = Source.make({
   kind: "counter",

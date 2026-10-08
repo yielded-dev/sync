@@ -18,8 +18,8 @@ The example has two composed capabilities: a counter and a reusable label.
 ## Shared contract (`counter.ts`)
 
 ```ts
-import { Schema } from "effect";
 import { Action, Plugin, Source } from "@yielded/sync";
+import { Schema } from "effect";
 
 export class InvalidValue extends Schema.TaggedError<InvalidValue>()("InvalidValue", {
   maximum: Schema.Number,
@@ -63,8 +63,8 @@ export const Counter = Source.make({
 ## Application auth services (`access.ts`)
 
 ```ts
-import { Context, Effect, Schema } from "effect";
 import type { Server } from "@yielded/sync/server";
+import { Context, Effect, Schema } from "effect";
 
 export const Principal = Schema.Struct({ actorId: Schema.String });
 export type Principal = typeof Principal.Type;
@@ -90,11 +90,12 @@ export class Access extends Context.Service<
 ## Private server definition (`counter-server.ts`)
 
 ```ts
-import { Effect, Schema } from "effect";
-import { Server } from "@yielded/sync/server";
 import { ProtocolError } from "@yielded/sync";
-import { Counter, InvalidValue, Label } from "./counter";
+import { Server } from "@yielded/sync/server";
+import { Effect, Schema } from "effect";
+
 import { Access, Principal } from "./access";
+import { Counter, InvalidValue, Label } from "./counter";
 
 const LabelServer = Server.plugin(Label, {
   state: Schema.Struct({ text: Schema.String, changedBy: Schema.NullOr(Schema.String) }),
@@ -163,8 +164,9 @@ import { EffectCf } from "@yielded/sync-platform-effect-cf";
 import { Server } from "@yielded/sync/server";
 import { Context, Effect } from "effect";
 import { DurableObject, DurableObjectNamespace, Worker } from "effect-cf";
-import { CounterServer } from "./counter-server";
+
 import { AccessLive, authenticate } from "./application-auth";
+import { CounterServer } from "./counter-server";
 
 const sync = EffectCf.make(Server.provide(CounterServer, AccessLive), {
   storageNamespace: "counter-v1",
@@ -222,8 +224,9 @@ Use `@yielded/sync-platform-alchemy-cf` with Alchemy's native constructors:
 import { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";
 import { Server } from "@yielded/sync/server";
 import * as Cloudflare from "alchemy/Cloudflare";
-import { CounterServer } from "./counter-server";
+
 import { AccessLive } from "./application-auth";
+import { CounterServer } from "./counter-server";
 
 export class CounterObject extends Cloudflare.DurableObject<CounterObject>()(
   "CounterObject",
@@ -264,6 +267,7 @@ through an explicit application scheduler.
 
 ```ts
 import { Client } from "@yielded/sync/client";
+
 import { Counter, Label } from "./counter";
 
 const LabelClient = Client.plugin(Label, {
@@ -285,9 +289,10 @@ intents on the authoritative snapshot. Plugin reducers operate only on their slo
 ## Actor-scoped browser session (`session.ts`)
 
 ```ts
-import { Context, Layer } from "effect";
-import { Client } from "@yielded/sync/client";
 import { IndexedDb } from "@yielded/sync-local-indexeddb";
+import { Client } from "@yielded/sync/client";
+import { Context, Layer } from "effect";
+
 import { Counter } from "./counter";
 import { CounterClient } from "./counter-client";
 
@@ -343,6 +348,7 @@ requires deletion; ordinary session disposal leaves unresolved evidence intact.
 
 ```ts
 import { Effect, Stream } from "effect";
+
 import { Counter } from "./counter";
 import { CounterSession } from "./session";
 
@@ -375,6 +381,7 @@ Reopening the session restores that evidence and queries the exact outcome.
 
 ```ts
 import { SourceAtom } from "@yielded/sync/atom";
+
 import { Counter } from "./counter";
 import { CounterSession } from "./session";
 

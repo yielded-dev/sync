@@ -7,5 +7,8 @@ export default defineConfig({
     format: ["esm"],
     sourcemap: true,
   },
-  test: { cache: false, silent: "passed-only" },
+  test: {
+    cache: false,
+    silent: "passed-only",
+  },
 });

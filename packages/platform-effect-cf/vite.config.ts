@@ -1,4 +1,4 @@
-import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
+import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
@@ -17,5 +17,8 @@ export default defineConfig({
     format: ["esm"],
     sourcemap: true,
   },
-  test: { cache: false, silent: "passed-only" },
+  test: {
+    cache: false,
+    silent: "passed-only",
+  },
 });

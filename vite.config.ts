@@ -140,7 +140,10 @@ export default defineConfig({
       },
     ],
   },
-  test: { cache: false, silent: "passed-only" },
+  test: {
+    cache: false,
+    silent: "passed-only",
+  },
   run: {
     cache: { scripts: true },
     tasks: {

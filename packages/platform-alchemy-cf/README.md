@@ -5,6 +5,7 @@ Sync handlers for Alchemy v2 Cloudflare Workers and SQLite Durable Objects.
 ```ts
 import { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";
 import * as Cloudflare from "alchemy/Cloudflare";
+
 import { CounterServer } from "./server";
 
 export class CounterObject extends Cloudflare.DurableObject<CounterObject>()(

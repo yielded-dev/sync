@@ -35,12 +35,14 @@
     "@yielded/sync-platform-cloudflare": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/vitest-plugin": "catalog:",
     "@cloudflare/workers-types": "catalog:",
     "effect": "catalog:",
     "effect-cf": "catalog:",
     "typescript": "catalog:",
-    "vite-plus": "catalog:"
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "effect": "catalog:",

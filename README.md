@@ -58,7 +58,7 @@ remain bounded and scoped.
 ## Development
 
 Install [Vite+](https://viteplus.dev/guide/) and use Node.js 22.18+ or 24.11+.
-The repository pins Bun 1.4.2 and Vite+ 0.3.3, matching the other Yielded repositories.
+The repository pins Bun 1.4.2 and Vite+ 1.1.0, matching the other Yielded repositories.
 
 ```sh
 vp install
