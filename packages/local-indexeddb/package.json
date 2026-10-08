@@ -38,6 +38,7 @@
     "effect": "catalog:",
     "playwright": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "peerDependencies": {

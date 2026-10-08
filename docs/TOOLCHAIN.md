@@ -3,20 +3,20 @@
 This repository follows Effect Agent's Bun workspace and Vite+ conventions.
 The root `package.json` catalog is the source of truth for exact shared versions.
 
-| Tool                        | Version              |
-| --------------------------- | -------------------- |
-| Bun                         | `1.4.2`              |
-| Vite+                       | `0.3.3`              |
-| TypeScript                  | `7.0.2`              |
-| Effect TypeScript-Go        | `0.48.1`             |
-| effect-cf                   | `0.53.0`             |
-| Alchemy                     | `2.0.0-beta.80`      |
-| Cloudflare Worker test pool | `0.22.0`             |
-| Cloudflare Workers types    | `5.20260926.1`       |
-| Wrangler                    | `4.133.0`            |
-| Expo / Expo SQLite          | `57.0.24` / `57.0.3` |
-| React / React Native        | `19.2.3` / `0.86.3`  |
-| Playwright                  | `1.58.2`             |
+| Tool                     | Version              |
+| ------------------------ | -------------------- |
+| Bun                      | `1.4.2`              |
+| Vite+                    | `1.1.0`              |
+| TypeScript               | `7.0.2`              |
+| Effect TypeScript-Go     | `0.48.1`             |
+| effect-cf                | `0.53.0`             |
+| Alchemy                  | `2.0.0-beta.80`      |
+| Cloudflare Vitest plugin | `1.4.0`              |
+| Cloudflare Workers types | `5.20260926.1`       |
+| Wrangler                 | `4.133.0`            |
+| Expo / Expo SQLite       | `57.0.24` / `57.0.3` |
+| React / React Native     | `19.2.3` / `0.86.3`  |
+| Playwright               | `1.58.2`             |
 
 Exact Effect-family versions belong in the root catalog. Upgrade the family
 together and verify compatibility with Vite+'s bundled Vitest runner. Alchemy and
@@ -70,7 +70,7 @@ workspace typechecking and has a separate `start` task that displays a codec rou
 ESM/declaration exports, then runs static checks, workspace tests, and a clean
 packed-consumer install, typecheck, and build. The build task also generates the
 Starlight documentation site from the `docs/` workspace.
-Tests use Vite+'s Vitest 4 runner, as required by the released Cloudflare test pool.
+Tests use Vite+'s bundled Vitest 5.0.3 runner and Cloudflare Vitest plugin 1.4.0.
 Core uses Effect's `TestClock.layer()` with that runner and retains focused client
 admission, recovery and lifecycle races.
 The effect-cf adapter uses the released Worker pool in its Vite
