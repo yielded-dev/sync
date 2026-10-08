@@ -15,11 +15,6 @@ export default defineConfig(({ mode }) => ({
       : [...react(), ...cloudflare()],
   server: { host: "127.0.0.1" },
   test: {
-    // Vitest v4 compatibility: preserve mock call history.
-    // Remove after tests no longer rely on calls from setup or earlier tests.
-    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
-    clearMocks: false,
     cache: false,
     silent: "passed-only",
   },
