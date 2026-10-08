@@ -118,9 +118,9 @@ PRs, and pushes to `main` run the full gate. Renames and incomplete diffs select
 the full gate conservatively. Package README removals or renames retain the
 packed-consumer check.
 
-Opening, reopening, updating, marking ready, or retargeting a PR runs CI. Title and
-description edits create only a skipped run; they do not cancel active CI or replace
-its required `ready` result.
+Opening, reopening, updating, or marking a PR ready runs CI. Title and description
+edits do not start a run. After retargeting a PR, close and reopen it to validate
+the new base before merging.
 
 GitHub Actions uses Vite+ for installation and commands, suppresses install scripts,
 and patches the compiler explicitly. Package downloads and successful Vite Task

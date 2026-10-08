@@ -5,17 +5,15 @@ on:
   push:
     branches: [main]
   pull_request:
-    # Retargeting changes the diff without changing the head commit.
-    # The jobs below ignore title and description edits.
-    types: [opened, reopened, synchronize, ready_for_review, edited]
+    # Metadata-only runs can supersede the real required check.
+    types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
   contents: read
 
 concurrency:
   # Complete main baselines; supersede older runs only on the same PR.
-  # Metadata edits must not cancel a run that is validating the PR.
-  group: ci-${{ github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base) && github.ref || github.run_id }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: true
 
 env:
@@ -26,7 +24,6 @@ env:
 jobs:
   changes:
     name: Select required checks
-    if: github.event.action != 'edited' || github.event.changes.base
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -97,11 +94,10 @@ jobs:
               'Formatting and workflow validation required.').write();
 
   ready:
-    # A skipped metadata edit must not replace the required check's real result.
-    name: ${{ github.event.action == 'edited' && !github.event.changes.base && 'PR metadata edit' || 'ready' }}
+    name: ready
     needs: changes
     # A failed classifier must fail the required check, not silently skip it.
-    if: ${{ always() && (github.event.action != 'edited' || github.event.changes.base) }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
