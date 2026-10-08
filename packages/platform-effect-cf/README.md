@@ -5,6 +5,7 @@ Sync handlers for native effect-cf Workers and SQLite Durable Objects.
 ```ts
 import { EffectCf } from "@yielded/sync-platform-effect-cf";
 import { DurableObject } from "effect-cf";
+
 import { CounterServer } from "./server";
 
 const sync = EffectCf.make(CounterServer, {
