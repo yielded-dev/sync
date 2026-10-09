@@ -140,20 +140,25 @@ publication triggers `deploy-docs.yml` for that same revision. See the
 [release guide](src/content/docs/RELEASE.md) for host support and credential setup.
 
 `pr-review.yml` uses the published Effect Agent review action and the repository's
-`OPENAI_API_KEY` secret. It reviews non-draft, same-repository PRs on opening,
-reopening, readiness, and new commits. Fork PRs require an owner, member, or
-collaborator to request review with `@effect-agent review full`. The same command
-starts a full retry; `@effect-agent review` requests an incremental pass. A manual
-workflow dispatch accepts a PR number and starts a full review.
+`OPENAI_API_KEY` secret. It reviews non-draft PRs, including forks, on opening,
+reopening, readiness, and new commits, alongside CI. Fork CI may still require
+GitHub workflow approval independently of review. An owner, member, or collaborator
+can request a full retry with `@effect-agent review full`; `@effect-agent review`
+requests an incremental pass. A manual workflow dispatch accepts a PR number and
+starts a full review.
 
-The privileged review job checks out only default-branch guidance and never runs
-PR code or dependency installation. It uses `GITHUB_TOKEN` to publish feedback and
-the `Effect Agent review` check, with `AGENTS.md` as repository guidance. No GitHub
+The privileged review job uses a pinned Action, checks out only default-branch
+guidance, and never runs PR code or dependency installation. It uses `GITHUB_TOKEN`
+to publish feedback and the `Effect Agent review` check, with `AGENTS.md` as
+repository guidance. No GitHub
 App secrets are required. Reviews use `gpt-6.1-sol` with high reasoning and
 Fast mode, at most five automatic attempts per PR, a $20 base allowance,
 and a $25 ceiling per attempt. Manual attempts have the same spending ceiling.
-The check reports blockers and incomplete coverage; it is separate from the
-required `ready` CI job.
+Require both `ready` and `Effect Agent review` from GitHub Actions in the main branch
+ruleset. The review check reports progress on the inspected PR commit and passes only
+after complete review without unresolved blockers. Missing, failed, incomplete, or
+paused reviews block merging; use a full retry after the automatic allowance is spent.
+Stale event heads are skipped; a newer commit needs its own review.
 
 ## Documentation site
 
