@@ -19,10 +19,6 @@ permissions:
   issues: write
   checks: write
 
-concurrency:
-  group: pr-review-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull-request }}
-  cancel-in-progress: false
-
 jobs:
   review:
     # The Action parses the first command line; keep this filter broad enough
@@ -36,6 +32,10 @@ jobs:
          github.event.comment.author_association == 'COLLABORATOR') &&
         contains(github.event.comment.body, '@effect-agent')) ||
       github.event_name == 'workflow_dispatch'
+    # Rejected comments must not displace an admitted review waiting for this PR.
+    concurrency:
+      group: pr-review-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull-request }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
