@@ -45,6 +45,25 @@ Effect TypeScript-Go compiler installation is toolchain setup.
 Before handoff, run `vp run ready`. CI runs the same command after a frozen install
 and explicit compiler setup.
 
+## Compiler diagnostics
+
+Keep `preferTypedSchemaDecoder` and these simplification diagnostics at warning
+severity in the shared Effect language-service configuration:
+
+- `catchAllTagDispatchToCatchTag`
+- `catchConditionalRefailToCatchIf`
+- `provideLayerSucceedToProvideService`
+- `allOfMapToForEach`
+- `flatMapConditionalToFilterOrFail`
+- `optionMatchToFromOption`
+- `timeoutCatchTagToTimeoutOrElse`
+- `runOfExitToRunExit`
+
+Keep smaller simplification rules at their default suggestion severity,
+`schemaSync` off, and `unsafeEffectTypeAssertion` at warning severity. Apply
+suggested rewrites only when they preserve failure, interruption, and resource
+behavior. The root catalog owns compiler versions.
+
 ## Boundaries
 
 - Framework code lives in `packages/*`; runnable consumers live in `examples/*`.
@@ -86,14 +105,24 @@ Use [simplify](.agents/skills/simplify/SKILL.md) to consider removing unnecessar
 mechanisms within the affected workflow. Preserve required contracts, authority,
 durability and retry guarantees; complexity alone does not justify unrelated cleanup.
 
-Use [open-pull-request](.agents/skills/open-pull-request/SKILL.md) for concise PR
+Use [pull-requests](.agents/skills/pull-requests/SKILL.md) for concise PR
 descriptions. Include diagrams only for meaningful architecture changes and code
 examples only when they clarify the change. Opening a PR does not authorize merging it.
+
+This is a public library. Keep PR descriptions self-contained and follow any
+required PR template. Omit private tracker links and issue IDs, including Linear
+references; link to public code or guides when useful. Keep company/customer
+names, account identifiers, and private workspace links out of PR text and linked
+evidence unless the user explicitly requests them.
 
 Contributor skills in `.agents/skills` are repository tooling, not runtime modules.
 Dev Kit copies record their source in `.dev-kit-origin.json`. Update them explicitly with
 the transient Dev Kit CLI when requested; the repository does not depend on Dev Kit
 for installation, checks, builds, or CI.
+
+Keep shared Dev Kit skills identical to their published source. Put
+repository-specific commands, gates, and constraints in this file or linked
+guidance. Keep contributor skills committed so fresh checkouts are self-contained.
 
 ## Worktree startup
 
