@@ -199,10 +199,6 @@ Changesets uses the repository's Oxfmt formatter for generated metadata.
 
 ## Contributor skills
 
-Dev Kit 2.0.2 supplied the setup, Effect development, testing, Cloudflare Workers,
-pull request, and visual explanation skills. They are normal tracked files with individual origin
-receipts; `.claude/skills` links to the same content. `AGENTS.md` is the only
-agent guidance file.
+Shared contributor skills are authored in [danieljvdm/skills](https://github.com/danieljvdm/skills) and distributed by Dev Kit into `.agents/skills`. They are normal tracked files with individual origin receipts; `.claude/skills` links to the same content. `AGENTS.md` owns repository commands, gates, and constraints. Keep shared copies identical to their pinned source and upstream reusable improvements before refreshing local edits. Load exact repository paths rather than assuming precedence over a user skill with the same name.
 
-Dev Kit is a transient setup tool. There is no Dev Kit dependency, runtime import,
-managed project manifest, reconciliation step, or lifecycle command.
+Dev Kit is a transient distribution tool. There is no Dev Kit dependency, runtime import, managed project manifest, reconciliation step, or lifecycle command.

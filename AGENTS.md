@@ -23,7 +23,7 @@ Before writing Effect code, read `node_modules/effect/AGENTS.md` completely and
 follow its relevant links. For APIs not covered there, inspect
 `node_modules/effect/src`. Do not copy library guidance into this file.
 
-Use `.agents/skills/effect-development` for focused setup, Atom, API, and CLI work.
+Use [Effect](.agents/skills/effect/SKILL.md) for focused setup, Atom, API, and CLI work.
 Keep asynchronous public operations in `Effect` or `Stream`, with typed errors and
 requirements. Effect Schema owns transported and persisted values. Resources must
 be bounded and scoped.
@@ -99,11 +99,11 @@ recovery and authority checks at their strongest boundary; remove redundant
 matrices and implementation mirrors. Preserve blocked required proof explicitly.
 The final `vp run ready` gate still applies.
 
+For a new regression, cite its pre-existing public issue or offending commit beside the test. For an explicit human test request, record the requested seam before implementation. A current PR, invented incident, or private customer identifier is not evidence; provenance does not waive necessity or failure-first order. Keep tests under the owning package's `test/` directory and reuse its runner and the actual runtime boundary. Every E2E run, including a failed or interrupted run, must leave sanitized, inspectable evidence and concise replay instructions with the tested revision, environment, setup/cleanup, and expected and observed results. Keep evidence in the task artifacts or approved store, link it from the handoff, and keep credentials, cookies, private payloads, and capability URLs out of it.
+
 ## Skills and pull requests
 
-Use [simplify](.agents/skills/simplify/SKILL.md) to consider removing unnecessary
-mechanisms within the affected workflow. Preserve required contracts, authority,
-durability and retry guarantees; complexity alone does not justify unrelated cleanup.
+Implement the minimum behavior the current request requires. Preserve required contracts, authority, durability and retry guarantees; avoid unrelated cleanup and machinery for hypothetical uses. Load [simplify](.agents/skills/simplify/SKILL.md) only when explicitly requested; ordinary changes do not require a separate simplification pass.
 
 Use [pull-requests](.agents/skills/pull-requests/SKILL.md) for concise PR
 descriptions. Include diagrams only for meaningful architecture changes and code
@@ -115,14 +115,9 @@ references; link to public code or guides when useful. Keep company/customer
 names, account identifiers, and private workspace links out of PR text and linked
 evidence unless the user explicitly requests them.
 
-Contributor skills in `.agents/skills` are repository tooling, not runtime modules.
-Dev Kit copies record their source in `.dev-kit-origin.json`. Update them explicitly with
-the transient Dev Kit CLI when requested; the repository does not depend on Dev Kit
-for installation, checks, builds, or CI.
+Shared contributor skills are authored in [danieljvdm/skills](https://github.com/danieljvdm/skills); Dev Kit distributes them into `.agents/skills`. These are repository tooling, not runtime modules. Keep committed copies identical to their pinned source, with provenance in each `.dev-kit-origin.json` receipt. Use `bunx @danieljvdm/dev-kit@latest skills status` before an explicit update; put repository-specific commands, gates, and constraints in this file or linked guidance, and upstream reusable improvements before refreshing a locally modified copy. The repository does not depend on Dev Kit for installation, checks, builds, or CI.
 
-Keep shared Dev Kit skills identical to their published source. Put
-repository-specific commands, gates, and constraints in this file or linked
-guidance. Keep contributor skills committed so fresh checkouts are self-contained.
+Load the exact repository skill paths linked here, including [Cloudflare](.agents/skills/cloudflare/SKILL.md). User and project skill catalogs may expose the same names; do not assume either scope overrides the other. Keep contributor skills committed so fresh checkouts are self-contained.
 
 ## Worktree startup
 
