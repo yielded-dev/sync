@@ -6,7 +6,9 @@ Use [platform-effect-cf](../platform-effect-cf/README.md) or
 [platform-alchemy-cf](../platform-alchemy-cf/README.md) with your framework's native
 Worker and Durable Object APIs. This package contains their shared implementation.
 `Cloudflare.make(server, state, options)` acquires a SQLite-backed source once per
-object and returns fetch, WebSocket lifecycle, and alarm handlers. The instance
+object and returns fetch and WebSocket lifecycle handlers plus an `alarm` Effect.
+Run the same alarm Effect for each alarm notification; framework adapters supply
+the native callback. The instance
 scope owns the RPC server; each source operation acquires its own scoped runtime.
 `Cloudflare.prepareRequest` validates and attaches an authenticated identity to a
 native request. The application passes it to its typed stub's `fetch` method.

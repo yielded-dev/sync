@@ -61,7 +61,7 @@ export interface Hub {
     message: Schema.Json,
   ) => Effect.Effect<void, ProtocolError>;
   readonly departure: (connection: Connection) => Effect.Effect<void, ProtocolError>;
-  readonly alarm: () => Effect.Effect<void, ProtocolError | StorageError>;
+  readonly alarm: Effect.Effect<void, ProtocolError | StorageError>;
 }
 
 /** Source ordering and recovery policy, independent of RPC framing and acknowledgement. */
@@ -258,53 +258,52 @@ export const make = Effect.fn("Cloudflare.SourceHub.make")(function* <
       }),
     );
 
-  const alarm = () =>
-    finish(
-      Effect.gen(function* () {
-        const delivery = options.outbox;
+  const alarm = finish(
+    Effect.gen(function* () {
+      const delivery = options.outbox;
 
-        if (delivery === undefined) return;
-        const now = DateTime.toEpochMillis(yield* DateTime.now);
+      if (delivery === undefined) return;
+      const now = DateTime.toEpochMillis(yield* DateTime.now);
 
-        yield* Effect.tryPromise({
-          try: () => state.storage.setAlarm(now + delivery.retryMillis),
-          catch: unavailable,
-        });
-        const records = yield* storage.claimOutbox(now, delivery.retryMillis, delivery.batchSize);
+      yield* Effect.tryPromise({
+        try: () => state.storage.setAlarm(now + delivery.retryMillis),
+        catch: unavailable,
+      });
+      const records = yield* storage.claimOutbox(now, delivery.retryMillis, delivery.batchSize);
 
-        const retry = (_tag: "Retry" | "Indeterminate") =>
-          Effect.map(DateTime.now, (time) => ({
-            _tag,
-            atMillis: DateTime.toEpochMillis(time) + delivery.retryMillis,
-          }));
+      const retry = (_tag: "Retry" | "Indeterminate") =>
+        Effect.map(DateTime.now, (time) => ({
+          _tag,
+          atMillis: DateTime.toEpochMillis(time) + delivery.retryMillis,
+        }));
 
-        for (const record of records) {
-          const disposition = yield* delivery.deliver(record).pipe(
-            Effect.timeoutOrElse({
-              duration: delivery.retryMillis / 2,
-              orElse: () => retry("Indeterminate"),
-            }),
-            Effect.catch(() => retry("Retry")),
-          );
-
-          yield* storage.settleOutbox(record, disposition);
-        }
-        yield* locked(
-          Effect.gen(function* () {
-            const next = yield* storage.nextOutboxTime;
-            const finishedAt = DateTime.toEpochMillis(yield* DateTime.now);
-
-            yield* Effect.tryPromise({
-              try: () =>
-                next === undefined
-                  ? state.storage.deleteAlarm()
-                  : state.storage.setAlarm(Math.max(finishedAt + 1, next)),
-              catch: unavailable,
-            });
+      for (const record of records) {
+        const disposition = yield* delivery.deliver(record).pipe(
+          Effect.timeoutOrElse({
+            duration: delivery.retryMillis / 2,
+            orElse: () => retry("Indeterminate"),
           }),
+          Effect.catch(() => retry("Retry")),
         );
-      }),
-    );
+
+        yield* storage.settleOutbox(record, disposition);
+      }
+      yield* locked(
+        Effect.gen(function* () {
+          const next = yield* storage.nextOutboxTime;
+          const finishedAt = DateTime.toEpochMillis(yield* DateTime.now);
+
+          yield* Effect.tryPromise({
+            try: () =>
+              next === undefined
+                ? state.storage.deleteAlarm()
+                : state.storage.setAlarm(Math.max(finishedAt + 1, next)),
+            catch: unavailable,
+          });
+        }),
+      );
+    }),
+  );
 
   return { contract, run, subscribe, dispatch, publishMessage, departure, alarm };
 });

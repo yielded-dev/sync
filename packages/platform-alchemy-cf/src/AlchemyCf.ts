@@ -34,48 +34,48 @@ export const make: <S extends Source.Spec, R, DeliveryR = never>(
   Effect.Effect<Handlers, never, Scope.Scope>,
   never,
   DurableObjectState | R | DeliveryR
-> = Effect.fn("AlchemyCf.make")(function* <S extends Source.Spec, R, DeliveryR = never>(
-  definition: Server.Definition<S, R>,
-  options: Options<DeliveryR>,
-): Effect.fn.Return<
-  Effect.Effect<Handlers, never, Scope.Scope>,
-  never,
-  DurableObjectState | R | DeliveryR
-> {
-  const state = yield* DurableObjectState;
-  const services = yield* Effect.context<R | DeliveryR>();
+> = Effect.fn("AlchemyCf.make")(
+  <S extends Source.Spec, R, DeliveryR = never>(
+    definition: Server.Definition<S, R>,
+    options: Options<DeliveryR>,
+  ) =>
+    Effect.map(
+      Effect.all([DurableObjectState, Effect.context<R | DeliveryR>()]),
+      ([state, services]) =>
+        Effect.gen(function* () {
+          const scope = yield* Scope.Scope;
 
-  return Effect.gen(function* () {
-    const scope = yield* Scope.Scope;
+          // Alchemy constructors have no typed failure channel; initialization failure aborts activation.
+          const source = yield* Cloudflare.make(definition, state.raw, options).pipe(
+            Effect.provideContext(Context.add(services, Scope.Scope, scope)),
+            Effect.orDie,
+          );
 
-    // Alchemy constructors have no typed failure channel; initialization failure aborts activation.
-    const source = yield* Cloudflare.make(definition, state.raw, options).pipe(
-      Effect.provideContext(Context.add(services, Scope.Scope, scope)),
-      Effect.orDie,
-    );
+          return {
+            fetch: Effect.gen(function* () {
+              const request = yield* HttpServerRequest.toWeb(
+                yield* HttpServerRequest.HttpServerRequest,
+              );
 
-    return {
-      fetch: Effect.gen(function* () {
-        const request = yield* HttpServerRequest.toWeb(yield* HttpServerRequest.HttpServerRequest);
-
-        return response(
-          yield* source
-            .fetch(request)
-            .pipe(
-              Effect.catchTag("ProtocolError", (error) =>
-                Effect.succeed(Cloudflare.errorResponse(error)),
-              ),
-            ),
-        );
-      }),
-      webSocketMessage: (socket: WebSocket, message: string | ArrayBuffer) =>
-        source.webSocketMessage(socket.ws, message),
-      webSocketClose: (socket: WebSocket) => source.webSocketClose(socket.ws),
-      webSocketError: (socket: WebSocket) => source.webSocketError(socket.ws),
-      alarm: () => source.alarm().pipe(Effect.orDie),
-    };
-  });
-});
+              return response(
+                yield* source
+                  .fetch(request)
+                  .pipe(
+                    Effect.catchTag("ProtocolError", (error) =>
+                      Effect.succeed(Cloudflare.errorResponse(error)),
+                    ),
+                  ),
+              );
+            }),
+            webSocketMessage: (socket: WebSocket, message: string | ArrayBuffer) =>
+              source.webSocketMessage(socket.ws, message),
+            webSocketClose: (socket: WebSocket) => source.webSocketClose(socket.ws),
+            webSocketError: (socket: WebSocket) => source.webSocketError(socket.ws),
+            alarm: () => source.alarm.pipe(Effect.orDie),
+          };
+        }),
+    ),
+);
 
 /** Prepare the native request for the application's authenticated Alchemy route. */
 export interface RequestOptions<Kind extends string> {

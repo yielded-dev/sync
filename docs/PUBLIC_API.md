@@ -58,7 +58,9 @@ Sync does not accept a fetch implementation in its request options.
 Only this authenticated application boundary may expose the object binding.
 
 The shared Cloudflare runtime owns one source per Durable Object and returns
-fetch, WebSocket lifecycle, and outbox alarm handlers. Effect `RpcServer` owns
+fetch and WebSocket lifecycle handlers plus a reusable outbox alarm Effect.
+Framework adapters expose their native alarm callbacks by running that Effect.
+Effect `RpcServer` owns
 request dispatch, codecs, RPC failures, stream chunks, acknowledgements and
 interruption. HTTP uses its native HTTP implementation. The effect-cf adapter
 supplies its native `DurableObjectRpcWebSocket` protocol; Alchemy uses a Cloudflare

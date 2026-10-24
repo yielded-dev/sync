@@ -87,7 +87,7 @@ export const make = <S extends Source.Spec, R, DeliveryR = never>(
       Effect.flatMap(runtime, (source) => source.webSocketClose(socket.raw)),
     webSocketError: (socket: DurableObjectWebSocket.DurableWebSocket) =>
       Effect.flatMap(runtime, (source) => source.webSocketError(socket.raw)),
-    alarm: () => Effect.flatMap(runtime, (source) => source.alarm()),
+    alarm: () => Effect.flatMap(runtime, (source) => source.alarm),
   };
 
   return { layer, handlers };

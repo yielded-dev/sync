@@ -134,7 +134,11 @@ const acquireSlot = <S extends Plugin.Spec, State extends WireSchema, P extends 
           payload: unknown;
           principal: P["Type"];
           address: SourceAddress;
-        }) => Effect.Effect<Commit<State["Type"], S["event"]["Type"], unknown>, unknown, R>
+        }) => Effect.Effect<
+          Commit<State["Type"], S["event"]["Type"], Action.Success<S["actions"][number]>>,
+          Action.Error<S["actions"][number]> | ProtocolError,
+          R
+        >
       >
     >;
 
