@@ -118,7 +118,7 @@ export const addCardAtom = runtime.fn<void>()(
 
     if (title.length === 0) return;
     const { atoms } = yield* BoardSession;
-    const id = yield* webCrypto.randomUUIDv4.pipe(Effect.orDie);
+    const id = yield* webCrypto.randomUUIDv4().pipe(Effect.orDie);
 
     yield* atoms.execute(address, Cards.actions.add, { id, title });
     get.set(cardDraftAtom, "");

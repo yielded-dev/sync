@@ -36,7 +36,7 @@ const webCrypto = Crypto.make({
 });
 
 const CryptoLive = Layer.succeed(ServerCrypto, {
-  generation: webCrypto.randomUUIDv4.pipe(Effect.orDie),
+  generation: webCrypto.randomUUIDv4().pipe(Effect.orDie),
   sha256: (text) =>
     Effect.tryPromise({
       try: async () =>
@@ -317,7 +317,7 @@ export const prepareRequest: <S extends Source.Spec>(
 
   const session = yield* decode(Server.Session, {
     ...input.identity,
-    connectionId: yield* webCrypto.randomUUIDv4.pipe(Effect.orDie),
+    connectionId: yield* webCrypto.randomUUIDv4().pipe(Effect.orDie),
   });
 
   const request = new Request(input.request);
