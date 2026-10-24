@@ -15,8 +15,7 @@ const stub = () => bindings.COUNTERS.getByName("counter:test");
 const Json = Schema.decodeUnknownSync(Schema.Json);
 
 const RpcExit = Schema.Array(
-  Schema.Struct({
-    _tag: Schema.Literal("Exit"),
+  Schema.TaggedStruct("Exit", {
     requestId: Schema.Union([Schema.String, Schema.Int]),
     exit: Schema.Union([
       Schema.TaggedStruct("Success", { value: Schema.optionalKey(Schema.Json) }),
