@@ -45,9 +45,9 @@ remains available for editor language-service features.
 with `effect-tsrs diagnostics --project tsconfig.json --type-check --strict`. That command checks both
 TypeScript types and Effect diagnostics. The packed-consumer check uses
 `tsrs --noEmit`; the docs workspace retains its Astro build.
-Effect diagnostic warnings are configured in the shared compiler plugin, including
-`preferTypedSchemaDecoder` and the recommended simplification rules.
-`unsafeEffectTypeAssertion` is a warning; `schemaSync` stays off.
+Effect diagnostic severities are configured in the shared compiler plugin.
+`preferTypedSchemaDecoder`, the configured simplification rules, and
+`unsafeEffectTypeAssertion` are errors; `schemaSync` stays off.
 
 Unknown diagnostic names fail compilation. The shared plugin also checks tag-specific
 error handling and ignored `flatMap` inputs. Stability diagnostics stay enabled;

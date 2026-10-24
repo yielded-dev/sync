@@ -47,7 +47,7 @@ with optional platform binaries enabled.
 
 ## Compiler diagnostics
 
-Keep `preferTypedSchemaDecoder` and these simplification diagnostics at warning
+Keep `preferTypedSchemaDecoder` and these simplification diagnostics at error
 severity in the shared Effect language-service configuration:
 
 - `catchAllTagDispatchToCatchTag`
@@ -59,8 +59,8 @@ severity in the shared Effect language-service configuration:
 - `timeoutCatchTagToTimeoutOrElse`
 - `runOfExitToRunExit`
 
-Keep smaller simplification rules at their default suggestion severity,
-`schemaSync` off, and `unsafeEffectTypeAssertion` at warning severity. Apply
+Keep unconfigured simplification rules at their default severity,
+`schemaSync` off, and `unsafeEffectTypeAssertion` at error severity. Apply
 suggested rewrites only when they preserve failure, interruption, and resource
 behavior. The root catalog owns compiler versions.
 
