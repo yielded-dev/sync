@@ -288,9 +288,7 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       ),
     );
 
-  const signal = Effect.gen(function* () {
-    yield* PubSub.publish(changed, undefined);
-  });
+  const signal = Effect.asVoid(PubSub.publish(changed, undefined));
 
   const present = (entry: Entry): State<S> =>
     ReplicaState.view(entry.state, (snapshot, intent) => {
