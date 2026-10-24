@@ -3,20 +3,21 @@
 This repository follows Effect Agent's Bun workspace and Vite+ conventions.
 The root `package.json` catalog is the source of truth for exact shared versions.
 
-| Tool                     | Version              |
-| ------------------------ | -------------------- |
-| Bun                      | `1.4.2`              |
-| Vite+                    | `1.1.0`              |
-| TypeScript               | `7.0.2`              |
-| Effect TypeScript-Go     | `0.48.1`             |
-| effect-cf                | `0.53.0`             |
-| Alchemy                  | `2.0.0-beta.80`      |
-| Cloudflare Vitest plugin | `1.4.0`              |
-| Cloudflare Workers types | `5.20260926.1`       |
-| Wrangler                 | `4.133.0`            |
-| Expo / Expo SQLite       | `57.0.24` / `57.0.3` |
-| React / React Native     | `19.2.3` / `0.86.3`  |
-| Playwright               | `1.58.2`             |
+| Tool                      | Version              |
+| ------------------------- | -------------------- |
+| Bun                       | `1.4.2`              |
+| Vite+                     | `1.1.0`              |
+| TypeScript                | `7.0.2`              |
+| Effect diagnostics (Rust) | Root catalog         |
+| tsrs                      | Root catalog         |
+| effect-cf                 | `0.53.0`             |
+| Alchemy                   | `2.0.0-beta.80`      |
+| Cloudflare Vitest plugin  | `1.4.0`              |
+| Cloudflare Workers types  | `5.20260926.1`       |
+| Wrangler                  | `4.133.0`            |
+| Expo / Expo SQLite        | `57.0.24` / `57.0.3` |
+| React / React Native      | `19.2.3` / `0.86.3`  |
+| Playwright                | `1.58.2`             |
 
 Exact Effect-family versions belong in the root catalog. Upgrade the family
 together and verify compatibility with Vite+'s bundled Vitest runner. Alchemy and
@@ -34,12 +35,16 @@ through `workspace:*`. `bunfig.toml` disables implicit workspace linking. Commit
 diagnostics. The IndexedDB adapter adds browser libraries locally. Root tooling has
 Node types; core has no ambient Node or DOM types.
 
-`prepare` invokes the upstream `effect-tsgo patch --typescript` command, which
-installs the matching native compiler, then configures Vite+ hooks. The explicit
-`patch:tsgo` task supports installs that suppress lifecycle scripts. This needs
-network access to the upstream compiler release on a fresh machine.
+`prepare` configures Vite+ hooks. The Rust compilers arrive through platform
+optional dependencies, so keep optional dependencies enabled during installation.
+No compiler patch or post-install download is required. TypeScript stays installed
+for declaration builds; `@effect/tsgo` supplies the shared configuration schema and
+remains available for editor language-service features.
 
-`vp run typecheck` checks root tooling and every workspace with the patched compiler.
+`vp run typecheck` checks root tooling, all six libraries, and all five examples
+with `effect-tsrs diagnostics --project tsconfig.json`. That command checks both
+TypeScript types and Effect diagnostics. The packed-consumer check uses
+`tsrs --noEmit`; the docs workspace retains its Astro build.
 Effect diagnostic warnings are configured in the shared compiler plugin, including
 `preferTypedSchemaDecoder` and the recommended simplification rules.
 `unsafeEffectTypeAssertion` is a warning; `schemaSync` stays off.
@@ -123,7 +128,7 @@ edits do not start a run. After retargeting a PR, close and reopen it to validat
 the new base before merging.
 
 GitHub Actions uses Vite+ for installation and commands, suppresses install scripts,
-and patches the compiler explicitly. Package downloads and successful Vite Task
+with optional platform binaries enabled. Package downloads and successful Vite Task
 results are cached, including work completed before a later failure. Vite validates
 task inputs before reuse; Astro's cached outputs include generated types. Full CI
 keeps `ready`'s order: build, static checks, tests, and a fresh packed-consumer check.

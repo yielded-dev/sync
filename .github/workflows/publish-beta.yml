@@ -42,9 +42,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Patch Effect TypeScript-Go
-        run: ./node_modules/.bin/vp run patch:tsgo
-
       - name: Install Chromium for persistence tests
         run: ./node_modules/.bin/vp -C packages/local-indexeddb exec playwright install --with-deps chromium
 

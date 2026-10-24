@@ -9,11 +9,10 @@
   ],
   "type": "module",
   "scripts": {
-    "prepare": "effect-tsgo patch --typescript && vp config --no-agent --hooks-dir .vite-hooks",
-    "patch:tsgo": "effect-tsgo patch --typescript",
+    "prepare": "vp config --no-agent --hooks-dir .vite-hooks",
     "fmt": "vp fmt",
     "lint": "vp lint",
-    "typecheck": "tsc --noEmit -p tsconfig.json && vp run -r typecheck",
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json && vp run -r typecheck",
     "check": "vp check && vp run typecheck",
     "test": "vp run -r --concurrency-limit 4 test",
     "build": "vp run -r build",
@@ -31,9 +30,11 @@
     "@effect/tsgo": "catalog:",
     "@stylistic/eslint-plugin": "5.10.0",
     "@types/node": "catalog:",
+    "@yielded/effect-tsrs": "catalog:",
     "effect": "catalog:",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
+    "tsrs": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",
@@ -77,7 +78,9 @@
     "alchemy": "2.0.0-beta.80",
     "@effect/platform-node": "4.0.0",
     "@effect/platform-bun": "4.0.0",
-    "vitest": "5.0.3"
+    "vitest": "5.0.3",
+    "@yielded/effect-tsrs": "0.2.1",
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929"
   },
   "trustedDependencies": [
     "@effect/tsgo-darwin-arm64",

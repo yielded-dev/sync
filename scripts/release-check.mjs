@@ -91,7 +91,7 @@ try {
         private: true,
         type: "module",
         packageManager: rootManifest.packageManager,
-        scripts: { typecheck: "tsc --noEmit", build: "vp pack" },
+        scripts: { typecheck: "tsrs --noEmit", build: "vp pack" },
         dependencies,
         overrides: {
           ...Object.fromEntries(
@@ -103,6 +103,7 @@ try {
         devDependencies: {
           "@cloudflare/workers-types": rootManifest.catalog["@cloudflare/workers-types"],
           typescript: rootManifest.catalog.typescript,
+          tsrs: rootManifest.catalog.tsrs,
           "vite-plus": rootManifest.catalog["vite-plus"],
         },
       },

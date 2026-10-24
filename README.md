@@ -66,24 +66,23 @@ vp -C packages/local-indexeddb exec playwright install chromium
 vp run ready
 ```
 
-Installation patches TypeScript with the pinned Effect TypeScript-Go compiler and
-installs the Vite+ Git hook dispatcher. `vp run ready` builds all six packages,
+Installation installs the Vite+ Git hook dispatcher. Typechecking uses the pinned
+Rust-based Effect diagnostics compiler. `vp run ready` builds all six packages,
 then runs formatting, linting, typechecking, tests, and a clean packed-consumer
 install, typecheck, and build.
 
-| Command                     | Purpose                                                |
-| --------------------------- | ------------------------------------------------------ |
-| `vp fmt` / `vp fmt --check` | Format files / check formatting                        |
-| `vp lint`                   | Type-aware linting                                     |
-| `vp run typecheck`          | Pure TypeScript and Effect diagnostic checks           |
-| `vp run check`              | Formatting, linting, and all workspace typechecks      |
-| `vp run test`               | All workspace test suites                              |
-| `vp run build`              | All package builds and the public docs site            |
-| `vp run docs:build`         | Build the public documentation site                    |
-| `vp run release:check`      | Pack six tarballs and verify a clean consumer          |
-| `vp run ready`              | Full local and CI validation                           |
-| `vp run patch:tsgo`         | Reapply the compiler patch after a script-free install |
-| `vp run changeset`          | Record a consumer-visible change                       |
+| Command                     | Purpose                                           |
+| --------------------------- | ------------------------------------------------- |
+| `vp fmt` / `vp fmt --check` | Format files / check formatting                   |
+| `vp lint`                   | Type-aware linting                                |
+| `vp run typecheck`          | Pure TypeScript and Effect diagnostic checks      |
+| `vp run check`              | Formatting, linting, and all workspace typechecks |
+| `vp run test`               | All workspace test suites                         |
+| `vp run build`              | All package builds and the public docs site       |
+| `vp run docs:build`         | Build the public documentation site               |
+| `vp run release:check`      | Pack six tarballs and verify a clean consumer     |
+| `vp run ready`              | Full local and CI validation                      |
+| `vp run changeset`          | Record a consumer-visible change                  |
 
 The [external contracts example](examples/contracts/README.md) demonstrates typed
 public imports; the [Cloudflare counter](examples/cloudflare/README.md) is a runnable

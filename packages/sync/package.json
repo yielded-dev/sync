@@ -39,7 +39,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json",
     "test": "vp test"
   },
   "devDependencies": {
