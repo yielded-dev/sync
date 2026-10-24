@@ -6,7 +6,7 @@ The root `package.json` catalog is the source of truth for exact shared versions
 | Tool                     | Version              |
 | ------------------------ | -------------------- |
 | Bun                      | `1.4.2`              |
-| Vite+                    | `1.1.0`              |
+| Vite+                    | `1.4.0`              |
 | TypeScript               | `7.0.2`              |
 | Effect TypeScript-Go     | `0.48.1`             |
 | effect-cf                | `0.53.0`             |
@@ -70,7 +70,7 @@ workspace typechecking and has a separate `start` task that displays a codec rou
 ESM/declaration exports, then runs static checks, workspace tests, and a clean
 packed-consumer install, typecheck, and build. The build task also generates the
 Starlight documentation site from the `docs/` workspace.
-Tests use Vite+'s bundled Vitest 5.0.3 runner and Cloudflare Vitest plugin 1.4.0.
+Tests use Vite+'s bundled Vitest 5.0.5 runner and Cloudflare Vitest plugin 1.4.0.
 Core uses Effect's `TestClock.layer()` with that runner and retains focused client
 admission, recovery and lifecycle races.
 The effect-cf adapter uses the released Worker pool in its Vite
@@ -102,8 +102,9 @@ Use the [testing skill](../.agents/skills/testing/SKILL.md) to choose proof for 
 change. These existing entrypoints do not require new tests or a scenario matrix.
 
 Vite Task caches successful script results. Vitest's mutable result cache is
-disabled to avoid invalidating task inputs. Use `vp run --no-cache <task>` when
-investigating a cache concern.
+disabled to avoid invalidating task inputs. The workerd suites also disable
+Vitest's filesystem module cache because the Worker runtime cannot read the host
+cache. Use `vp run --no-cache <task>` when investigating a cache concern.
 
 ## Git hooks and CI
 
