@@ -1,19 +1,16 @@
 # Shared contracts example
 
-This external workspace imports only public `@yielded/sync` exports. A counter and
-reusable label capability compose a snapshot, namespaced events/messages, and
-action-specific RPCs. The counter's timestamp uses `Schema.DateTimeUtc` with the
-canonical JSON codec.
+A counter and reusable label capability using public Sync exports. The example
+shows composed snapshots, namespaced events, action-specific RPCs, and a timestamp
+encoded with `Schema.DateTimeUtc`.
 
 From the repository root:
 
 ```sh
-vp run --filter @yielded/example-contracts typecheck
-vp run --filter @yielded/example-contracts start
+vp run @yielded/example-contracts#typecheck
+vp run @yielded/example-contracts#start
 ```
 
-Typechecking verifies action result/error correlation and service requirements
-through native RPC and Layer composition, headless client action types, and Atom
-mutations. `start` displays the encoded and decoded public snapshot. `vp run ready`
-includes these typechecks. Runtime behavior and persistence boundaries are covered
-in the [client guide](../../docs/src/content/docs/client.md).
+`start` prints the encoded and decoded snapshot. The typecheck covers public action,
+service, client, and Atom types and runs as part of `vp run ready`. For runtime
+setup, see the [counter](../cloudflare/README.md) or [client guide](../../docs/src/content/docs/client.md).

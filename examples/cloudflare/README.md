@@ -1,51 +1,35 @@
 # effect-cf Cloudflare counter
 
-A runnable authority using only public package exports: a counter, a reusable
-label plugin, private audit fields, exact action results, and RPC cursor recovery.
-`EffectCf.make` supplies the Layer and handlers to native `DurableObject.make`.
-The application uses `Worker.makeFetchHandler`, its typed namespace, and
-`EffectCf.prepareRequest` after authentication, then calls the namespace client's
-`fetch` method directly. The [Alchemy example](../alchemy-cloudflare/README.md)
-reuses `src/contract.ts`, `src/server.ts`, and the local demo credentials.
+A counter and label plugin hosted in a SQLite Durable Object. It demonstrates
+private server state, exact action results, and RPC subscriptions. The
+[Alchemy counter](../alchemy-cloudflare/README.md) reuses the same domain code.
+
+From the repository root, after `vp install` and `vp run build`:
 
 ```sh
-vp install
 vp run sync-cloudflare-example#dev
 ```
 
-The endpoint is `/sync/counters/:id`. The local demonstration recognizes
-`Authorization: Bearer alice-local` and `Authorization: Bearer bob-local`.
-Replace this authentication function with the application's provider before
-deployment. The outbox delivery function acknowledges demonstration records;
-replace it with the destination's idempotent delivery Effect when adding a projection.
+Connect to `/sync/counters/:id` using the source's Effect RPC contract and
+`RpcSerialization.layerJson`. Use HTTP for snapshot, execute, and result lookup;
+use WebSockets for subscriptions and ephemeral messages. The example retains four
+events so replay gaps are easy to exercise.
 
-Use `RpcClient.make(Counter.rpc, { flatten: true })` with
-`RpcSerialization.layerJson`. Supply `RpcClient.layerProtocolHttp` for unary
-operations, or `RpcClient.layerProtocolSocket` for all operations including
-subscription and ephemeral messages. The application supplies HTTP/socket layers
-and credentials. A socket carries one active subscription.
+Demo authentication accepts `Authorization: Bearer alice-local` or
+`Authorization: Bearer bob-local`. Replace it with the application's auth provider
+before deployment. The outbox handler only acknowledges demo records; replace it
+with idempotent destination delivery before adding a projection.
 
-First request `snapshot` with `{ protocolVersion: 1, schemaVersion: 1, address }`.
-Use its authority generation in the action's command envelope. Allocate a command
-id once and retain the exact payload for retry. `execute/$source/set` returns
-the original previous/current values, including after another command changes state.
-`execute/label/rename` changes only the label slot. Neither private audit field
-appears in the public snapshot.
+| File                           | Responsibility                                              |
+| ------------------------------ | ----------------------------------------------------------- |
+| [contract.ts](src/contract.ts) | Public counter, label, and action schemas                   |
+| [server.ts](src/server.ts)     | Private state, authorization, handlers, and outbox plans    |
+| [worker.ts](src/worker.ts)     | Native effect-cf routing, bindings, and request preparation |
 
-`subscribe` accepts an optional `after` position. A fresh connection gets a snapshot;
-a retained position gets ordered events; a gap produces `ResyncRequired`, after
-which a new snapshot supplies current state. This example retains four events to
-make gap recovery easy to exercise. Production hosts choose their own bounded window.
+Allocate a command id once and retain its payload for retry. A retried set returns
+its original previous/current values, even after later edits. The
+[client runtime](../../docs/src/content/docs/client.md) manages this automatically.
 
-```sh
-vp run sync-cloudflare-example#types
-vp run sync-cloudflare-example#build
-vp run @yielded/sync-platform-effect-cf#test
-vp run ready
-```
-
-The build is a Wrangler dry run. Checks run local workerd and SQLite, including
-eviction/hibernation, exact retries, transaction rollback, and outbox lease recovery.
-No command above publishes a Worker. The compatibility date matches the supported
-test runtime. The generated binding file contains environment declarations; runtime
-types come from the pinned Workers types package.
+`vp run sync-cloudflare-example#build` is a deployment dry run.
+`vp run @yielded/sync-platform-effect-cf#test` runs the local workerd checks.
+Use `vp run sync-cloudflare-example#types` after changing Worker bindings.

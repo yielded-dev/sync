@@ -1,57 +1,50 @@
 # @yielded/sync-local-expo
 
-Scoped Expo SQLite persistence for Effect Sync clients on iOS and Android.
-`ExpoSqlite.open({ namespace, directory? })` acquires a durable handle and requires
-`Client.CurrentActor`. `ExpoSqlite.layer(options)` provides it as `ReplicaPersistence`.
-`Client.make` reads that service with `{ persistence: { mode: "persistent" } }`.
-Provide `CurrentActor` once around the client, transport, and persistence Layers.
-The handle captures the actor at acquisition. Keep its scope alive for
-the authenticated actor, and await `client.flush` from the application's background
-lifecycle. Journal admission is durable before transport and does not await a flush.
+Scoped SQLite persistence for Sync clients on native Expo. Use the
+[IndexedDB adapter](../local-indexeddb/README.md) for Expo web.
 
-The application owns namespace, identity changes, logout deletion and AppState
-subscriptions. Closing the scope closes connections and retains data. `purgeSource`
-and `wipe` are explicit destructive operations; reopen after a wipe.
-Close the old session scope before building Layers for another actor.
+```ts
+import { ExpoSqlite } from "@yielded/sync-local-expo";
 
-The adapter uses Expo SQLite 57's async API and private connections
-(`useNewConnection: true`). Each connection serializes operations, with
-`BEGIN IMMEDIATE`, a five-second busy timeout, and `synchronous = FULL`.
-Transactions finish or roll back before interruption releases the connection.
+const PersistenceLive = ExpoSqlite.layer({ namespace: "my-app:production" });
+```
 
-## Format and recovery
+Provide this Layer to a persistent client session. It requires `Client.CurrentActor`;
+provide the actor once around the client, transport, and persistence Layers.
+`ExpoSqlite.open(options)` acquires the handle directly in an Effect scope.
+See the [client guide](../../docs/src/content/docs/client.md#persistence).
 
-`databaseNames(namespace)` returns
-`yielded-sync-<encodeURIComponent(namespace)>-journal.sqlite` and `-cache.sqlite`.
-The journal uses `PRAGMA user_version = 1` and
-`records(key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)`. The cache uses
-`PRAGMA user_version = 2` and a `snapshots` table with the same columns.
-The default directory is Expo's document SQLite directory. The databases are
-separate so cache recovery never drops the journal file.
+## Options and lifecycle
 
-Schema JSON records, keys, capacity limits, snapshot metadata, revision conflicts,
-quarantine and generation fencing follow the portable
-[persistence format](../local-indexeddb/README.md#format-and-recovery). Default
-limits are 4,096 journal rows, 128 snapshots and 8 MiB per actor per store. Writes
-operate on one bounded actor document. Independent connections/processes serialize
-at SQLite's database lock and check the durable revision and generation.
+| Option           | Default / meaning                                         |
+| ---------------- | --------------------------------------------------------- |
+| `namespace`      | Required, application/environment storage boundary        |
+| `directory`      | Expo's document SQLite directory                          |
+| `maxJournalRows` | 4,096 unresolved entries per actor                        |
+| `maxSnapshots`   | 128 cached snapshots per actor                            |
+| `maxBytes`       | 8 MiB per actor per store, including JSON record overhead |
 
-Malformed cache records can be discarded and replaced. An unavailable cache opens
-cacheless: reads miss and saves/flush report failure while journal operations remain
-available. Opening the known cache version 1 atomically drops its legacy `records`
-table, creates `snapshots`, and advances its version to 2. This discards only
-disposable cache data and leaves the journal unchanged. The distinct table name
-prevents already-open old connections from restoring legacy cache rows. Neither
-database file is deleted automatically, and the journal is never reset. Unknown
-physical versions, nonempty unversioned databases and undecodable journals require
-explicit recovery or migration and remain untouched. Unknown intent formats retain
-their exact JSON and reserved identities for client quarantine. Wipe rotates the
-journal fence first; cleanup failure can be reported after invalidation. Changing
-namespace is not migration: reconcile old unresolved evidence before switching.
+Keep the handle alive for the actor's session and close it before switching actors.
+The application owns AppState subscriptions and logout policy. Await `client.flush`
+when backgrounding to report cache-save failures; journal admission is already
+durable. Disposal closes connections and retains data.
 
-`vp run test` verifies real file-backed SQLite transactions through a Node SQLite
-implementation of the Expo API subset. It verifies SQL and recovery behavior, not
-the native bridge. The [Expo persistence probe](../../examples/persistence-expo/README.md)
-runs the same public-contract scenarios through actual Expo SQLite and supports
-process termination/relaunch proof. Expo web persistence is not a supported target;
-use the IndexedDB package for browsers.
+## Recovery
+
+`databaseNames(namespace)` returns separate journal and cache filenames. Cache
+records may be discarded and rebuilt. An unavailable cache leaves the journal
+usable, but cache saves and flush report failure. Unsupported database versions,
+nonempty unversioned databases, and unreadable journals remain untouched for
+explicit recovery. Unknown intent formats retain their identities for quarantine.
+
+A full journal refuses work instead of evicting unresolved commands. Concurrent
+journal changes can return `Conflict` without replaying the transaction callback.
+`purgeSource` and `wipe` are explicit destructive operations; reopen after a wipe,
+even if it reports a cache-cleanup failure. Changing namespaces does not migrate
+old data. Reconcile unresolved work before switching.
+
+Physical database versions and connection settings live in
+[ExpoSqlite.ts](src/ExpoSqlite.ts); record schemas live in
+[Persistence.ts](../sync/src/client/Persistence.ts). The
+[native probe](../../examples/persistence-expo/README.md) provides a repeatable
+process-restart check. Android execution remains unverified.
