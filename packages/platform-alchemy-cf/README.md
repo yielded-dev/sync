@@ -18,27 +18,21 @@ export class CounterObject extends Cloudflare.DurableObject<CounterObject>()(
 ) {}
 ```
 
-`make` supplies Alchemy's construction Effect and per-instance runtime Effect to
-the native constructor. Infrastructure dependencies resolve in the outer Effect;
-SQLite initialization happens in the runtime Effect. Supply application service
-dependencies around the construction Effect. Use `Server.provide` for service
-Layers acquired within each source operation. The runtime scope owns `RpcServer`
-and the Cloudflare socket bridge. Initialization or alarm failures propagate as
-defects at Alchemy's native boundary, which has no typed error channel for those hooks.
+`make` supplies the construction and runtime Effects to Alchemy's native
+constructor. Provide infrastructure dependencies around the construction Effect;
+use `Server.provide` for services acquired within each source operation.
+Initialization and alarm failures surface as defects because those native hooks
+have no typed error channel.
 
-Construct the Worker with Alchemy's own API. After routing and authentication,
-call `AlchemyCf.prepareRequest` with `{ request, address, identity }` and pass the
-returned native Effect HTTP request to the typed Alchemy stub's `fetch` method.
-Request preparation validates the identity and overwrites internal session/address headers. WebSocket
-upgrade responses retain their native socket. Only authenticated routes should
-expose the Durable Object binding.
+Construct the Worker with Alchemy's API. After routing and authentication, call
+`AlchemyCf.prepareRequest` with `{ request, address, identity }`, then pass the
+returned Effect HTTP request to the selected stub's `fetch`. The identity contains
+`actorId`, a Schema JSON `principal`, and `expiresAtMillis`. Request preparation
+replaces internal identity headers; only authenticated routes should expose the
+object binding.
 
-The [runnable Alchemy counter](../../examples/alchemy-cloudflare/README.md) reuses
-the effect-cf example's domain contract and server. The frameworks share the same
-[protocol and SQLite format](../platform-cloudflare/README.md), including receipts,
-authenticated socket attachments, cursor replay after activation loss, and leased
-outbox delivery. Effect RPC owns the wire protocol and stream acknowledgements.
-Sync owns its object's alarm; other alarm jobs need explicit application scheduling.
-A framework change alone
-does not transfer a Cloudflare namespace: preserve object identity or use the
-framework's native migration facilities.
+See the [runnable Alchemy counter](../../examples/alchemy-cloudflare/README.md)
+and shared [Cloudflare storage and protocol](../platform-cloudflare/README.md).
+Sync owns the object's alarm; other alarm jobs need an application scheduler.
+Preserve object identity when changing frameworks, or explicitly migrate the
+Cloudflare namespace to retain its durable data.

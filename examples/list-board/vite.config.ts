@@ -16,6 +16,8 @@ export default defineConfig(({ mode }) => ({
   server: { host: "127.0.0.1" },
   test: {
     cache: false,
+    // workerd cannot read Vitest's module cache on the host filesystem.
+    fsModuleCache: false,
     silent: "passed-only",
   },
   run: {

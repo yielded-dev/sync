@@ -19,6 +19,7 @@
       {
         "name": "@effect/language-service",
         "allowedUnstableApis": [
+          "@effect/atom-react",
           "@effect/sql-sqlite-do",
           "effect/http",
           "effect/reactivity",

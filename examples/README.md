@@ -1,19 +1,15 @@
 # Examples
 
-Runnable library consumers belong in this workspace directory. They must depend on
-public `@yielded/sync` entry points and selected adapters.
+Runnable consumers using public Sync entry points. Run commands from the
+repository root after `vp install` and `vp run build`.
 
-- [Contracts](contracts/README.md): shared codecs and external type proofs.
-- [Cloudflare](cloudflare/README.md): runnable counter authority and label plugin,
-  native RPC, SQLite receipts/outbox, and hibernating subscriptions.
-- [List and board](list-board/README.md): independent two-client consumer with typed
-  actions, optimistic reducers, presence, and browser persistence assembly.
+| Example                                         | Purpose                                             | Run                                                   |
+| ----------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------- |
+| [Contracts](contracts/README.md)                | Shared schemas, composition, and typed RPC          | `vp run @yielded/example-contracts#start`             |
+| [effect-cf counter](cloudflare/README.md)       | Counter and label plugin in a SQLite Durable Object | `vp run sync-cloudflare-example#dev`                  |
+| [Alchemy counter](alchemy-cloudflare/README.md) | The same domain with native Alchemy hosting         | `vp run sync-alchemy-cloudflare-example#dev`          |
+| [React board](list-board/README.md)             | Optimistic UI, Atom, presence, and IndexedDB        | `vp run sync-list-board-example#dev`                  |
+| [Expo persistence](persistence-expo/README.md)  | Native SQLite and process-restart probe             | `vp run @yielded/sync-example-persistence-expo#start` |
 
-- [Expo persistence](persistence-expo/README.md): native SQLite transaction and
-  process-restart recovery probe.
-
-The list and board consumer exercises convergence, rejection rollback, lost-response
-retry, and reconnect against a SQLite Worker. The adapter suites and native probe
-exercise browser reload and mobile restart storage boundaries. The
-[slide-deck pilot](../docs/slide-deck-pilot.md) maps the public API to the product
-source before broad adoption.
+Demo authentication must be replaced before deployment. The server examples use
+local development services; see each README for setup and constraints.

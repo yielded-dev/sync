@@ -19,6 +19,8 @@ export default defineConfig({
   },
   test: {
     cache: false,
+    // workerd cannot read Vitest's module cache on the host filesystem.
+    fsModuleCache: false,
     silent: "passed-only",
   },
 });

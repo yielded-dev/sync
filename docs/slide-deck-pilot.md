@@ -1,51 +1,45 @@
-# Slide-deck consumer pilot
+# Integrating a slide editor
 
-The slide-deck application owns slide schemas, editing rules, authorization,
-catalog records, projection destinations, and UI. A pilot should use the public
-sync entry points without moving those product decisions into the library.
-The [list and board consumer](../examples/list-board/README.md) provides a small
-runnable example of the transport and runtime assembly.
+A slide editor owns its slide schemas, editing rules, authorization, catalog,
+projection destinations, and UI. Use Sync's public entry points for coordination
+without moving those application decisions into the library. The
+[React board](../examples/list-board/README.md) provides runnable session and
+transport setup.
 
-Start in the product's `packages/slide-deck-source`: `SlideDeckRealtime.ts` owns
-the state, event, and command schemas; `slides/SlideReducer.ts` owns event
-application; `server/SlidesCapability.ts` owns validation and bootstrap;
-`client/definition.ts` owns optimistic behavior. Keep the current one-to-100
-slide bound, deterministic slide IDs, exact reorder validation, and shell
-identity checks when adapting those files.
+| Application concern                 | Sync integration                                                       |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| Slide state and events              | `Source.make` with the application's schemas                           |
+| Add, edit, remove, reorder, replace | Typed `Action.make` registrations and domain rejections                |
+| Validation and authoritative edits  | `Server.make` handlers committing state and events together            |
+| Event application and optimism      | Pure `Client.definition` reducers                                      |
+| Web and mobile sessions             | `Client.make`, `SourceAtom.make`, and the platform persistence adapter |
+| Authentication                      | Application provider at the Worker boundary                            |
+| Catalog and checkpoint projections  | Outbox obligations with idempotent destination delivery                |
 
-## Contract and runtime mapping
+## Bootstrap and existing data
 
-| Current responsibility                         | Pilot ownership                                                                                                                                 |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Slide state and events                         | Product `Source.make` contract using its existing `Slide` schema and schema version                                                             |
-| Add, edit title/body, remove, reorder, replace | Separate typed `Action.make` registrations with product rejection schemas; runtime owns command IDs, authority binding, and exact result lookup |
-| Validation and event application               | Product `Server.make` handlers and pure `Client.definition` reducers; actions commit state and events together                                  |
-| Web and mobile replica                         | One actor-scoped `Client.make` session, `SourceAtom.make` bindings, and the IndexedDB or Expo SQLite persistence adapter                        |
-| Session authorization                          | Product auth provider at the Cloudflare Worker boundary; root authorization also covers every registered capability                             |
-| Catalog, shell, checkpoint and projections     | Product database and delivery services; commit required outbox intent with the source mutation and deliver idempotently                         |
+Keep slide count limits, deterministic ids, reorder validation, and shell identity
+checks in the application. Initial slide and shell creation belong in one
+application-owned bootstrap workflow.
 
-The first pilot should use a disposable deck and namespace. Keep its initial
-slide and shell creation in one product-owned bootstrap workflow. The existing
-deck cannot be silently copied into a new Durable Object or local namespace:
-unresolved command identities and receipts need explicit reconciliation. Public
-`Server.make` initialization has no command payload, so the application must
-either supply a fully initialized deck through a service before opening the
-source or represent bootstrap as a typed action with an explicit empty state.
-The latter requires a distinct empty-state schema because today's `SlideDeckState`
-requires at least one slide. Choose that contract before switching a live deck.
+`Server.make` initialization receives no command payload. Supply an initialized
+deck through a service, or model bootstrap as a typed action with an explicit
+empty-state schema. Choose that contract before switching a live deck.
 
-The client can reuse the product's pure slide event reducer. Each action needs
-an optimistic reducer, including an identity reducer when an edit should wait
-for authority. Domain rejections remove the overlay; uncertain transport
-failures retain the original command. Web and mobile sessions close on identity
-change and reopen against the same actor journal. Presentation code reads Atom
-state and dispatches Effects; it owns no second command queue or socket cursor.
+Start with a disposable deck and namespace. Copying a deck into a new Durable
+Object or local namespace does not migrate its authority or retry evidence.
+Reconcile receipts, unresolved commands, and pending projections before switching.
 
-For the pilot, verify one new deck through public exports: two signed-in clients
-converge; a rejected edit rolls back; a response lost after commit returns its
-original result; a disconnected client catches up; and browser reload and native
-app restart retain unresolved evidence. Verify checkpoint or catalog projection
-delivery against the product destination with a stable idempotency key. The
-existing native iOS adapter proof covers unchanged SQLite operations; run the
-application's own restart check before replacing its source. Android execution
-still needs separate proof.
+## Editing and recovery
+
+Each action needs an optimistic reducer, including an identity reducer when the
+edit should wait for authority. Domain rejections remove optimism; uncertain
+transport outcomes retain the original command for exact retry. Web and mobile
+sessions close on identity change and reopen against the correct actor journal.
+
+Presentation code reads atoms and dispatches Effects. It needs no second command
+queue or socket cursor. Catalog and checkpoint destinations must deduplicate
+outbox delivery using the stable obligation id. Use the
+[native persistence probe](../examples/persistence-expo/README.md) when checking
+mobile restart recovery; application projection delivery requires its own
+integration check.

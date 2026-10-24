@@ -2,177 +2,140 @@
 title: Headless clients and Atom
 ---
 
-`Client.definition(contract, reducers)` supplies `applyEvent`, an `optimistic`
-reducer for every action, and matching `Client.plugin` registrations. Use an
-identity reducer when an action has no optimistic behavior. Registration is
-checked before resource acquisition. Root and plugin reducers receive only their
-own public snapshot slot. Optional `mergeSnapshot` enriches newer snapshots;
-`mergeHistory` enriches that slot without changing the cursor or settling commands.
+Create one client session per authenticated actor. It owns the source connections,
+optimistic state, and recovery; UI bindings read that same state.
 
-`Client.provide` and `providePlugin` attach scoped Layers. They retain unsatisfied
-Effect requirements, acquire plugins in declaration order, and finalize them in
-reverse order. UI, authentication, and projection destinations remain application
-concerns.
+## Open a source
+
+`Client.definition` supplies pure event and optimistic reducers for the shared
+contract. Every action needs an optimistic reducer; use an identity reducer when
+it should wait for authority. Register matching `Client.plugin` definitions for
+any plugins. Each reducer receives only its own snapshot slot.
+
+Using the `Counter` from [getting started](./guide/getting-started.md):
 
 ```ts
-const session =
-  yield *
-  Client.make(definition, {
-    persistence: { mode: "volatile" },
-  });
-const source = yield * session.open(contract.address("demo"));
-yield * source.ready;
-const result = yield * source.execute(contract.actions.set, { value: 7 });
+import { Client } from "@yielded/sync/client";
+import { Effect } from "effect";
+
+import { Counter } from "./counter";
+
+const definition = Client.definition(Counter, {
+  applyEvent: (_snapshot, event) => ({ value: event.value }),
+  optimistic: { set: (_snapshot, payload) => ({ value: payload.value }) },
+  plugins: [],
+});
+
+export const program = Effect.gen(function* () {
+  const session = yield* Client.make(definition, { persistence: { mode: "volatile" } });
+  const source = yield* session.open(Counter.address("demo"));
+  yield* source.ready;
+  return yield* source.execute(Counter.actions.set, { value: 7 });
+});
 ```
 
-Construction requires `Client.CurrentActor`, `Client.Transport`, and `Scope`.
-Persistent mode additionally requires `ReplicaPersistence`. Opening requires
-`Scope`. Keep the session scope alive for
-the authenticated actor. Close it before constructing a different actor's session.
-Effect scopes own actor, source, and lease lifetimes. Each open holds a source lease;
-concurrent opens share a coordinator until the
-last lease closes. Closed leases cannot dispatch, restore state, or publish messages.
-Closing one lease cancels its in-flight operations while other leases keep the source
-connected. Journal transactions already admitted finish atomically for that coordinator;
-their command identities remain available for recovery.
-`source.read` and `source.changes` expose the public replica, including the optimistic
-value, authoritative position, provisional cache value, pending phases, failures,
-connection state, and the last operational error.
+Provide `Client.CurrentActor`, `Client.Transport`, and a `Scope` around the whole
+workflow. `CurrentActor` contains `{ actorId }`; it selects local ownership and
+does not authenticate the user. Close the old session before opening one for a
+different actor. Do not return a live client from an already-completed scope.
 
-## Ordering and recovery
+Each `open` holds a scoped lease. Concurrent leases share one coordinator; closing
+the last disconnects it. Closing a lease cancels its in-flight operations while
+retaining admitted commands for recovery. `source.read` and `source.changes`
+expose the optimistic value, authoritative position, provisional cache, pending
+commands, failures, and connection state.
 
-The client checks JSON through the contract's Schema codecs. It applies contiguous
-events exactly once, validates a whole batch before committing any part, and
-recovers after a gap or queue overflow. Ordinary snapshots cannot rewind live
-state or replace a different authority. An explicit `Reset`, or snapshot recovery
-for an advertised `ResyncRequired` generation, can install a replacement authority.
-Late cache loads remain provisional and cannot overwrite live state.
+## Retry and recovery
 
-`hydrate` accepts a versioned snapshot using the same monotonic rules.
-`mergeObservation` and `applyHistory` never advance the cursor or confirm commands.
-`messages`, `publishMessage`, and `publishPluginMessage` are ephemeral and do not
-enter the journal or advance a durable position. Slow view and message observers
-use bounded, sliding buffers; view updates can coalesce. Durable transport frames
-instead trigger disconnection and recovery if their buffer overflows.
+`execute` captures the payload and journals the command before sending it. A
+declared rejection removes its optimistic overlay and appears in `failures`;
+`dismissFailure(id)` hides that terminal failure.
 
-Commands capture their Schema-encoded payload before transport I/O. The source's
-command gate serializes submissions and result lookups, including concurrent
-retries. A declared rejection removes its overlay and appears in `failures`.
-`dismissFailure(id)` only hides that terminal failure.
+When an admitted outcome is unknown, `ClientError` retains its `commandId`.
+Call `retry(id)` to look up the result and, when safe, resend the original command.
+It accepts no replacement payload and never allocates a new identity. Because an
+id may belong to any action, retry returns the union of action result/error types;
+`execute` retains the selected action's exact types.
 
-An operational `ClientError` retains `commandId` when an admitted outcome is
-unknown. `retry(id)` first asks for the exact result. An unknown lookup can resend
-the original envelope only within its known authority; expired results,
-confirmed commands without a result, and ambiguous unbound commands remain
-unresolved. It never allocates a replacement identity. A bare id may belong to any
-source action, so retry exposes the union of their result and rejection types;
-`execute` retains the chosen action's exact types.
+An event can confirm the edit before its return value arrives. The overlay then
+clears, but `ConfirmedAwaitingResult` stays pending until the result is known.
+Expired results and ambiguous commands remain unresolved. An authority change
+marks old work `AuthorityChanged`; the application must reconcile it before
+reissuing edits.
 
-An event confirms only the authenticated `(actorId, commandId)` pair. Confirmation
-removes the overlay while retaining `ConfirmedAwaitingResult` journal evidence.
-A success received before its events retains its overlay until a correlated event
-arrives or the authoritative cursor covers the accepted position. On authority replacement, unresolved old
-commands remain visible as `AuthorityChanged` and require application reconciliation.
+The client applies ordered events and recovers after gaps or buffer overflow.
+Cached snapshots remain provisional and cannot overwrite live state. `hydrate`
+obeys the same ordering rules; `mergeObservation` and `applyHistory` do not advance
+the cursor or confirm commands. Ephemeral `messages`, `publishMessage`, and
+`publishPluginMessage` never enter the durable journal. Slow observers may receive
+coalesced view updates or miss ephemeral messages.
 
-Defaults bound the runtime to 32 retained sources, 100 pending commands per source,
-256 buffered frames, and eight consecutive connection attempts. Reconnection uses
-250 ms exponential backoff capped at 30 seconds. Operations time out after ten
-seconds. Independent 30-second snapshot probes detect missed durable progress;
-automatic result reconciliation has a per-command attempt bound. Applications can
-configure `limits` and `retry`; `recover` explicitly restarts a parked source and
-its recovery budget. Applying a valid durable subscription frame resets the reconnect
-budget and backoff; snapshot probes and ephemeral messages do not. Authentication
-failures park instead of reconnecting forever.
-Inactive sources without unresolved work may be evicted to admit a new source.
+Configure bounds through `Client.make` options:
 
-## Transport and persistence
+| Option                                  | Default                                                        |
+| --------------------------------------- | -------------------------------------------------------------- |
+| `limits.maxSources`                     | 32 retained sources                                            |
+| `limits.maxPendingPerSource`            | 100 commands                                                   |
+| `limits.frameBuffer`                    | 256 frames                                                     |
+| `limits.operationTimeout`               | 10 seconds                                                     |
+| `limits.heartbeatInterval`              | 30 seconds between snapshot probes                             |
+| `retry.maxAttempts`                     | 8 consecutive connection attempts; also bounds result recovery |
+| `retry.initialDelay` / `retry.maxDelay` | 250 ms exponential backoff, capped at 30 seconds               |
 
-`Client.Transport` is the service for the portable JSON transport port. Its snapshot, execute,
-result and publish operations return typed Effects; subscription returns a Stream.
-Transport implementations must include bootstrap/replay in subscription and scope
-their resources to stream consumption. The subscription supplies initial authority;
-snapshot requests serve recovery and periodic probes. Custom transport Layers
-capture their implementation services during construction, so port methods have
-no remaining Effect requirements. Use `Layer.effect(Client.Transport, makeTransport)`
-to expose those construction requirements. The client performs its own Schema
-decoding and address checks.
+When supplying `limits` or `retry`, include its required fields. Authentication
+failures or exhausted connection attempts park the source. `recover` restarts it
+and resets result-recovery attempts. Sources with unresolved work are retained
+when inactive.
 
-`Client.layerRpcTransport(contract)` provides this service through native Effect
-RPC and requires `RpcClient.Protocol`. `Client.rpcTransport(contract)` remains
-available for scoped acquisition or transport decoration. The application supplies its socket
-protocol, JSON serialization, route, and credentials. Build those Layers in the
-session scope, or provide them around the whole session lifetime. A protocol bound
-to one route serves that route's source address; applications hosting several
-addresses can implement a routing transport. Core imports no browser, Node, Expo,
-or Cloudflare implementation.
+## Transport
 
-`Client.CurrentActor` carries `{ actorId }`, selected by the application's session
-and provided once to its client, transport, and persistence Layers. It has no
-default and does not authenticate the actor. Constructors capture that identity;
-later operations use the captured owner even when called from another context.
-Changing actors closes the old session scope before building a new one.
+`Client.layerRpcTransport(contract)` provides `Client.Transport` and requires
+`RpcClient.Protocol`. Supply the socket protocol, JSON RPC serialization, route,
+and credentials in the session's Layers. `Client.rpcTransport` supports scoped
+acquisition when you need to decorate the transport. A protocol bound to one route
+serves that source address; multi-address applications need a routing transport.
 
-Persistence must be explicit: `{ mode: "volatile" }` or
-`{ mode: "persistent" }`. Failure never changes that selection. Persistent mode
-reads `ReplicaPersistence` from context; volatile mode does not require it.
-`ReplicaPersistence` is the actor-scoped service; its handle captures a generation
-and exposes a disposable snapshot cache, transactional intent journal,
-`purgeSource`, and `wipe`. Journal admission commits before transport. Storage or
-capacity failure refuses new work, and unresolved evidence is never evicted.
+Custom transports provide typed Effects for snapshot, execute, result, and publish,
+and a scoped Stream for subscription. Subscription must include bootstrap/replay.
+Capture transport dependencies when constructing its Layer so operations have no
+remaining service requirements. Core imports no platform transport implementation.
 
-Journal rows retain an address, reserved command id, and Schema-encoded `Intent`
-format 1. That record contains the immutable command, local order, authority
-binding, confirmation position, and any known outcome. Unrecognized formats,
-source versions, codecs or inconsistent evidence are quarantined and continue
-reserving their identity and capacity. Cache corruption discards only the cache.
-Snapshot saves coalesce for 100 ms; `session.flush` reports save failure explicitly.
-The journal's first write never depends on a background save or unload callback.
+## Persistence
 
-`memory().open` supplies bounded process-local storage and requires `CurrentActor`.
-Reuse a memory factory to retain records across scopes. `ReplicaPersistence.layerMemory()`
-is a convenience Layer. A wipe invalidates old handles; reopen the factory to
-capture the new generation. The memory adapter is not restart durability.
+Choose `{ mode: "volatile" }` or `{ mode: "persistent" }` explicitly. Persistent
+mode requires `ReplicaPersistence`; failures never silently switch to volatile
+mode. Provide the actor once around the client, transport, and persistence Layers.
 
-`IndexedDb.open({ namespace })` and `ExpoSqlite.open({ namespace })` acquire durable
-storage in an Effect scope and require `Client.CurrentActor`. Their `layer(options)`
-constructors provide `ReplicaPersistence` with the same identity requirement.
-The client rejects a handle captured for a different actor. Durable handles add bounded oldest-write-first
-`snapshotCache.scan(limit)` metadata. Configure `maxJournalRows`, `maxSnapshots`
-and `maxBytes` explicitly when the defaults do not fit the application.
+Use [IndexedDB](https://github.com/yielded-dev/sync/blob/main/packages/local-indexeddb/README.md)
+in browsers or [Expo SQLite](https://github.com/yielded-dev/sync/blob/main/packages/local-expo/README.md)
+on native Expo. `ReplicaPersistence.layerMemory()` provides process-local storage
+when restart recovery is unnecessary. Reuse a `memory()` factory to retain its
+records across scopes.
 
-Adapters use separate cache/journal databases and atomic generation/revision checks.
-A concurrent journal commit returns `Conflict` without replaying the callback.
-Journal formats fail closed and retain evidence. Each actor has one bounded,
-generation-tagged cache record; cache format 2 resets known format-1 cache data
-without touching the journal. Malformed cache records can be replaced.
-Applications own background lifecycle hooks and can await `session.flush`;
-they need no unload write for initial journal admission. Session disposal retains
-journal evidence, and logout deletion remains an explicit application policy.
+Snapshot caches are disposable. Journals retain exact unresolved commands; storage
+or capacity failure refuses new work instead of evicting them. Unsupported journal
+entries remain quarantined and reserve their identities and capacity. `retry`
+returns `Quarantined` for these entries; keep them for explicit recovery.
 
-See the [IndexedDB](https://github.com/yielded-dev/sync/blob/main/packages/local-indexeddb/README.md) and
-[Expo SQLite](https://github.com/yielded-dev/sync/blob/main/packages/local-expo/README.md)
-adapter guides for physical names,
-format versions, reset scope and platform proof. There is no automatic migration
-from application-owned databases or namespaces. The portable `Persistence` helper
-is available for adapter authors implementing atomic string-record stores; custom
-consumers may continue implementing the smaller `PersistenceHandle` directly.
+Snapshot saves coalesce. Await `session.flush` when the application backgrounds to
+report pending save failures. Initial journal admission is already durable and
+does not depend on an unload callback. Session disposal retains stored data.
+`purgeSource` and `wipe` delete data only when explicitly requested; a wipe
+invalidates old handles, so reopen afterward. Reconcile unresolved work before
+wiping data or changing namespaces.
 
 ## Atom bindings
 
-`SourceAtom.make(session)` creates stable address-keyed bindings over this runtime.
-`replica(address)` acquires a lease and returns an `AsyncResult` replica atom.
-`passiveReplica(address)` returns an `AsyncResult` without acquiring a lease;
-`status(address)` is also passive. Registries observe the same replica even when
-several registries hold leases. Registry unmount/disposal releases its leases.
+`SourceAtom.make(session)` binds UI state to the same headless client:
 
-`execute`, `retry`, and `recover` return Effects over the same client. They acquire
-a temporary lease for the operation and wait for authority. React only reads atoms
-and dispatches these Effects through the application's runtime; it owns no socket,
-retry loop, cursor or second replica store.
+| Binding                       | Behavior                                                             |
+| ----------------------------- | -------------------------------------------------------------------- |
+| `replica(address)`            | Acquires a source lease and exposes an `AsyncResult` replica         |
+| `passiveReplica(address)`     | Reads an `AsyncResult` without connecting                            |
+| `status(address)`             | Reads connection status without connecting                           |
+| `execute`, `retry`, `recover` | Return Effects that acquire a temporary lease and wait for authority |
 
-The [React board example](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
-connects these bindings to `@effect/atom-react`. One `RegistryProvider` owns an
-`Atom.runtime` session with native Effect RPC and IndexedDB persistence. Components
-read the replica with `useAtomValue` and dispatch `runtime.fn` workflows for cards,
-board titles, exact retries, and reconnection. Its ephemeral presence stream shares
-the same headless client and stays outside the durable replica.
+Registry disposal releases its leases. React reads atoms and dispatches Effects
+through the application's runtime; it needs no second replica store or retry loop.
+The [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
+shows `RegistryProvider`, an actor-scoped `Atom.runtime`, IndexedDB, and presence.

@@ -27,17 +27,13 @@ identity. Only authenticated routes should expose the Durable Object binding.
 `EffectCf.errorResponse` maps a `ProtocolError` to its HTTP response.
 
 Source and delivery requirements remain visible in `sync.layer`. Supply instance
-services with native Layer composition. For services acquired and released within
-each source operation, use `Server.provide(CounterServer, ServicesLive)` before
-`EffectCf.make`. Sync's Layer owns the instance's SQLite port, source gate, and
-`RpcServer`; effect-cf's native `DurableObjectRpcWebSocket` owns the socket transport.
-Long-lived subscriptions use the instance scope and recover through cursor replay
-when an activation is lost. The source's outbox uses the object's alarm;
-compose other alarm jobs through an explicit application scheduler.
+services through Layer composition. Use `Server.provide(CounterServer, ServicesLive)`
+before `EffectCf.make` for services acquired and released within each source
+operation. Subscriptions reconnect and replay after an activation is lost.
+Sync owns the object's alarm; other alarm jobs need an application scheduler.
 
-See the [runnable counter](../../examples/cloudflare/README.md) and
-[list and board consumer](../../examples/list-board/README.md). Both frameworks
-share the [Cloudflare storage and protocol](../platform-cloudflare/README.md).
-When replacing the old `Cloudflare.durableObject` / `Cloudflare.worker` assembly,
-preserve class names, named-object keys, and storage namespaces to retain authority,
+See the [runnable counter](../../examples/cloudflare/README.md),
+[React board](../../examples/list-board/README.md), and shared
+[Cloudflare storage and protocol](../platform-cloudflare/README.md). Keep class
+names, named-object keys, and storage namespaces stable to retain authority,
 receipts, and pending outbox records.
