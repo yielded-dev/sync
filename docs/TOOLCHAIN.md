@@ -1,205 +1,129 @@
 # Repository toolchain
 
-This repository follows Effect Agent's Bun workspace and Vite+ conventions.
-The root `package.json` catalog is the source of truth for exact shared versions.
+Vite+ is the command authority; Bun is the package manager and script runtime.
+The root [package.json](../package.json) pins tools, supported Node.js versions,
+and shared dependencies. Use `catalog:` for shared versions and `workspace:*`
+for internal packages. Commit `bun.lock`; CI installs it frozen.
 
-| Tool                     | Version              |
-| ------------------------ | -------------------- |
-| Bun                      | `1.4.2`              |
-| Vite+                    | `1.4.0`              |
-| TypeScript               | `7.0.2`              |
-| Effect TypeScript-Go     | `0.48.1`             |
-| effect-cf                | `0.53.0`             |
-| Alchemy                  | `2.0.0-beta.80`      |
-| Cloudflare Vitest plugin | `1.4.0`              |
-| Cloudflare Workers types | `5.20260926.1`       |
-| Wrangler                 | `4.133.0`            |
-| Expo / Expo SQLite       | `57.0.24` / `57.0.3` |
-| React / React Native     | `19.2.3` / `0.86.3`  |
-| Playwright               | `1.58.2`             |
+## Setup and commands
 
-Exact Effect-family versions belong in the root catalog. Upgrade the family
-together and verify compatibility with Vite+'s bundled Vitest runner. Alchemy and
-effect-cf use Effect's stable module paths directly, without dependency patches or
-Effect overrides. Library Effect peers also use the catalog so published packages
-require the verified release.
+Install Vite+, then run from the repository root:
 
-Workspace manifests inherit shared versions through `catalog:` and refer to core
-through `workspace:*`. `bunfig.toml` disables implicit workspace linking. Commit
-`bun.lock`; CI uses a frozen install.
+```sh
+vp install
+vp -C packages/local-indexeddb exec playwright install chromium
+vp run ready
+```
 
-## Compiler, linting, and formatting
+Installation patches TypeScript with the pinned Effect TypeScript-Go compiler
+and installs Vite+ Git hooks. A fresh compiler install needs network access.
+After an install that skipped lifecycle scripts, run `vp run patch:tsgo`.
+Use `vp env doctor` for toolchain problems and `vp help` for command options.
 
-`tsconfig.base.json` defines strict, platform-neutral TypeScript options and Effect
-diagnostics. The IndexedDB adapter adds browser libraries locally. Root tooling has
-Node types; core has no ambient Node or DOM types.
+| Command                                   | Purpose                                              |
+| ----------------------------------------- | ---------------------------------------------------- |
+| `vp fmt` / `vp fmt --check`               | Format / check formatting                            |
+| `vp lint`                                 | Type-aware linting                                   |
+| `vp run typecheck`                        | Root and workspace TypeScript/Effect diagnostics     |
+| `vp run check`                            | Formatting, linting, and typechecks                  |
+| `vp run test`                             | Workspace tests                                      |
+| `vp run build`                            | Packages, examples, and public docs                  |
+| `vp run release:check`                    | Pack packages and verify a clean consumer            |
+| `vp run ready`                            | Build, check, test, and packed-consumer verification |
+| `vp run docs:dev` / `vp run docs:preview` | Serve source / built documentation                   |
+| `vp run docs:build`                       | Build the documentation site                         |
 
-`prepare` invokes the upstream `effect-tsgo patch --typescript` command, which
-installs the matching native compiler, then configures Vite+ hooks. The explicit
-`patch:tsgo` task supports installs that suppress lifecycle scripts. This needs
-network access to the upstream compiler release on a fresh machine.
+Builds precede typechecks because workspace imports resolve built ESM and
+declarations. Use `vp run --no-cache <task>` to investigate stale task results.
+The configuration lives in [vite.config.ts](../vite.config.ts) and
+[tsconfig.base.json](../tsconfig.base.json); required Effect diagnostic settings
+are documented in [AGENTS.md](../AGENTS.md#compiler-diagnostics).
 
-`vp run typecheck` checks root tooling and every workspace with the patched compiler.
-Effect diagnostic warnings are configured in the shared compiler plugin, including
-`preferTypedSchemaDecoder` and the recommended simplification rules.
-`unsafeEffectTypeAssertion` is a warning; `schemaSync` stays off.
+## Verification boundaries
 
-Unknown diagnostic names fail compilation. The shared plugin also checks tag-specific
-error handling and ignored `flatMap` inputs. Stability diagnostics stay enabled;
-`allowedUnstableApis` records the Effect modules this repository intentionally uses.
-Review new unstable or experimental dependencies before extending those allowances.
+Use the [testing skill](../.agents/skills/testing/SKILL.md) to select sufficient
+proof. Existing checks cover different environments:
 
-`vite.config.ts` owns Oxfmt and Oxlint configuration. It enables type-aware linting,
-typechecking, import checks, exhaustive switches, test hygiene, and Effect Agent's
-statement-spacing rules. The local `oxlint/plugin-style.js` exposes the one required
-Stylistic rule. Core imports cannot cross into platform adapters or host packages.
-Copied skills and generated hook internals have explicit tool ignores.
+| Boundary                       | Existing check                                                |
+| ------------------------------ | ------------------------------------------------------------- |
+| Portable client                | Core suite with Effect's test clock                           |
+| Cloudflare storage and RPC     | effect-cf and board suites in workerd with SQLite             |
+| Browser persistence            | IndexedDB suite in Chromium                                   |
+| SQLite storage                 | Expo adapter suite using file-backed Node SQLite              |
+| Native Expo bridge and restart | [Manual native probe](../examples/persistence-expo/README.md) |
+| Public package exports         | Contracts example and clean packed-consumer check             |
 
-## Builds and tests
+Desktop SQLite does not establish native bridge or device restart behavior.
+Follow the native probe when that boundary changes. See the
+[examples index](../examples/README.md) for development commands.
 
-Every library package has its own `vite.config.ts`, pure `typecheck` task, and
-`vp pack` build. Existing suites remain at their meaningful runtime boundaries. Builds produce ESM, declarations, and source maps in ignored `dist/`
-directories. Core's root entry point contains the shared contracts; runtime and
-adapter entry points implement authoritative execution through `./server` and
-the shared Cloudflare runtime and its framework adapters. Client and Atom entry points implement scoped replicas,
-transport/recovery, persistence ports, and view bindings. Local persistence adapter
-entry points provide scoped IndexedDB and Expo SQLite handles. The external contracts example participates in
-workspace typechecking and has a separate `start` task that displays a codec round trip.
+## Hooks and CI
 
-`vp run ready` builds packages first so workspace imports resolve their published
-ESM/declaration exports, then runs static checks, workspace tests, and a clean
-packed-consumer install, typecheck, and build. The build task also generates the
-Starlight documentation site from the `docs/` workspace.
-Tests use Vite+'s bundled Vitest 5.0.5 runner and Cloudflare Vitest plugin 1.4.0.
-Core uses Effect's `TestClock.layer()` with that runner and retains focused client
-admission, recovery and lifecycle races.
-The effect-cf adapter uses the released Worker pool in its Vite
-configuration and runs tests against the public Cloudflare example. Workerd and
-SQLite provide storage, interruption, eviction, hibernation, and native RPC proof.
-The example's build is a Wrangler dry run and participates in `ready`. Its `types`
-task generates binding declarations; pinned Workers types supply the runtime
-declarations. Generated bindings are excluded from formatting and linting.
-The list and board example serves a React and Effect Atom frontend and its local
-Worker together with `vp run sync-list-board-example#dev`. Its Vite configuration
-uses the React and Cloudflare plugins for development and builds, and the Worker
-pool for tests. The build produces the frontend assets and Worker before a Wrangler
-dry run using the generated configuration. The existing public-consumer test
-includes two-client recovery after Durable Object eviction and a forced
-subscription disconnect. The root `vite` override keeps plugins and Vitest on
-the catalog's Vite+ core alias.
-The Alchemy counter in `examples/alchemy-cloudflare` reuses the same public source
-and runs with `vp run sync-alchemy-cloudflare-example#dev`. Its native Alchemy stack
-uses local state and participates in workspace typechecking; the development
-command builds and runs the Worker locally.
-The IndexedDB suite runs Chromium with Playwright through Vite+; install Chromium
-with `vp -C packages/local-indexeddb exec playwright install chromium`. CI installs
-the browser and its system dependencies explicitly. The Expo adapter suite uses
-real file-backed Node SQLite through the Expo API subset. The Expo Go probe in
-`examples/persistence-expo` is a separate native bridge/restart check and participates
-in workspace typechecking.
+`vp install` configures the ignored dispatcher in `.vite-hooks/_`.
+The committed pre-commit hook runs `vp staged`; inspect it with `vp hooks status`.
 
-Use the [testing skill](../.agents/skills/testing/SKILL.md) to choose proof for a
-change. These existing entrypoints do not require new tests or a scenario matrix.
+Pull requests require `ready` and `Effect Agent review`. CI selects formatting,
+workflow, and docs checks for limited documentation changes; source, dependency,
+release, unknown, or incomplete diffs use the full gate. Pushes to `main` run the
+full gate. Title and description edits do not rerun CI. After retargeting a PR,
+close and reopen it to validate the new base.
 
-Vite Task caches successful script results. Vitest's mutable result cache is
-disabled to avoid invalidating task inputs. The workerd suites also disable
-Vitest's filesystem module cache because the Worker runtime cannot read the host
-cache. Use `vp run --no-cache <task>` when investigating a cache concern.
+CI installs dependencies without lifecycle scripts, patches the compiler
+explicitly, and caches successful Vite Task results. Timeout retries and fresh
+processes for stateful test retries are configured in
+[ci.yml](../.github/workflows/ci.yml) and the [run-ci action](../.github/actions/run-ci/action.yml).
+CI does not deploy or publish packages.
 
-## Git hooks and CI
-
-`vp install` recreates the ignored dispatcher in `.vite-hooks/_` and sets the
-clone's hook path. The committed `.vite-hooks/pre-commit` runs `vp staged`.
-Inspect the installation with `vp hooks status`.
-
-Every pull request reports the required `ready` check. Contributor docs, changesets,
-and auxiliary workflows need formatting and workflow validation; published docs
-also get a docs check/build. Source, dependencies, CI setup, unknown paths, release
-PRs, and pushes to `main` run the full gate. Renames and incomplete diffs select
-the full gate conservatively. Package README removals or renames retain the
-packed-consumer check.
-
-Opening, reopening, updating, or marking a PR ready runs CI. Title and description
-edits do not start a run. After retargeting a PR, close and reopen it to validate
-the new base before merging.
-
-GitHub Actions uses Vite+ for installation and commands, suppresses install scripts,
-and patches the compiler explicitly. Package downloads and successful Vite Task
-results are cached, including work completed before a later failure. Vite validates
-task inputs before reuse; Astro's cached outputs include generated types. Full CI
-keeps `ready`'s order: build, static checks, tests, and a fresh packed-consumer check.
-Timed-out commands restart once. Isolated tests retry only timeout errors, up to
-twice; browser, SQLite, and Durable Object suites restart once in a fresh process
-on failure so retries do not inherit failed-case state. Setup downloads also get
-one retry. A second command failure still fails `ready`.
-
-`ci.yml` does not deploy or publish packages. The manually dispatched
-`publish-beta.yml` runs the same `ready` gate and publishes its validated tarballs
-through npm trusted publishing. It verifies the registry install and records the
-source revision and workflow evidence in a GitHub prerelease. A successful beta
-publication triggers `deploy-docs.yml` for that same revision. See the
-[release guide](src/content/docs/RELEASE.md) for host support and credential setup.
-
-`pr-review.yml` uses the published Effect Agent review action and the repository's
-`OPENAI_API_KEY` secret. It reviews non-draft PRs, including forks, on opening,
-reopening, readiness, and new commits, alongside CI. Fork CI may still require
-GitHub workflow approval independently of review. An owner, member, or collaborator
-can request a full retry with `@effect-agent review full`; `@effect-agent review`
-requests an incremental pass. A manual workflow dispatch accepts a PR number and
-starts a full review.
-
-The privileged review job uses a pinned Action, checks out only default-branch
-guidance, and never runs PR code or dependency installation. It uses `GITHUB_TOKEN`
-to publish feedback and the `Effect Agent review` check, with `AGENTS.md` as
-repository guidance. No GitHub
-App secrets are required. Reviews use `gpt-6.1-sol` with high reasoning and
-Fast mode, at most five automatic attempts per PR, a $20 base allowance,
-and a $25 ceiling per attempt. Manual attempts have the same spending ceiling.
-Require both `ready` and `Effect Agent review` from GitHub Actions in the main branch
-ruleset. The review check reports progress on the inspected PR commit and passes only
-after complete review without unresolved blockers. Missing, failed, incomplete, or
-paused reviews block merging; use a full retry after the automatic allowance is spent.
-Stale event heads are skipped; a newer commit needs its own review.
+The review workflow requires `OPENAI_API_KEY`. It uses default-branch guidance
+and does not execute PR code. An owner, member, or collaborator can request
+`@effect-agent review` for an incremental pass or `@effect-agent review full`
+for a full retry. Manual dispatch also accepts a PR number. Missing, incomplete,
+or blocked reviews prevent merging; a new commit requires its own review.
+Review budgets and model settings live in [pr-review.yml](../.github/workflows/pr-review.yml).
 
 ## Documentation site
 
-The `docs/` workspace is an Astro Starlight site; public pages live in
-`docs/src/content/docs/` and the sidebar in `docs/astro.config.ts`. Contributor notes
-such as this file stay at the top of `docs/` and are not published. `vp run docs:dev`,
-`vp run docs:build`, and `vp run docs:preview` operate the site with a `/sync/` base
-path. Link pages with relative Markdown paths such as `../client.md`; the build
-rewrites them and fails on broken links or anchors. The shared yielded.dev look,
-library switcher, and Markdown helpers come from `@yielded/starlight-theme`
-(`yielded-dev/site`). The build fills `{{SYNC_VERSION}}` from the core package
-manifest, so installation guidance follows Changesets version bumps.
-`site/wrangler.jsonc` deploys a separate static asset Worker
-on the `yielded.dev/sync*` route; its handler removes that path prefix before
-reading assets and restores it on asset redirects. Requests for the 404 document
-are returned with status 404. The existing `/auth` route is owned separately.
+The Astro Starlight workspace publishes `docs/src/content/docs/` under `/sync/`.
+Top-level files in `docs/` are contributor guidance and are not published.
+[astro.config.ts](astro.config.ts) owns the sidebar; `@yielded/starlight-theme`
+owns rendering, colors, and the library switcher.
 
-`deploy-docs.yml` runs after a successful `Publish beta` workflow and checks out
-the validated release revision. It skips deployment if `main` has advanced, so
-an older run cannot replace newer docs. A manual workflow dispatch from current
-`main` can publish docs between package releases or retry a skipped run. The
-workflow needs the repository secret `CLOUDFLARE_API_TOKEN` with permission to
-deploy the docs Worker and manage its `yielded.dev` route.
+Use relative Markdown links between public pages. The build rewrites them and
+checks links and anchors. `{{SYNC_VERSION}}` reads the core package version from
+its manifest for installation examples. Follow the
+[documentation guidance](../AGENTS.md#documentation) when editing pages.
 
-`vp run docs:deploy` also builds and deploys the site locally. It requires
-Cloudflare access to the Yielded domain's account and Worker routes. With the
-local Wrangler OAuth session, unset any unrelated `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID` values before running it. Check the deployed home page,
-a guide page, and an asset URL after publication.
+## Releases and docs deployment
 
-## Changesets
+Use `vp run changeset` for consumer-visible release notes,
+`vp run changeset status` to inspect pending releases, and
+`vp run changeset:version` to advance the fixed beta group. Commit generated
+manifests, changelogs, and the lockfile. Retain consumed notes in `.changeset/pre/`
+for the stable release.
 
-Use `vp run changeset` to add release notes, `vp run changeset status` to inspect
-pending releases, and `vp run changeset:version` to advance the fixed beta group.
-Consumed beta notes live in `.changeset/pre/`; `pre.json` keeps only the
-prerelease mode and tag. Retain those notes for the eventual stable release.
-Changesets uses the repository's Oxfmt formatter for generated metadata.
+Configure `publish-beta.yml` as each package's npm trusted publisher. Dispatch
+[Publish beta](../.github/workflows/publish-beta.yml) from `main` after the local
+`vp run ready` gate. It validates and publishes the same tarballs with npm OIDC
+and provenance, verifies a registry consumer, and records evidence in a GitHub
+prerelease. An existing registry version is accepted only if its integrity matches.
+
+Successful publication triggers [Deploy docs](../.github/workflows/deploy-docs.yml)
+for the validated revision. It skips an older revision if `main` has advanced.
+Manual dispatch from current `main` publishes docs between releases or retries a
+skipped deployment. The workflow needs `CLOUDFLARE_API_TOKEN` with access to the
+site Worker and its `yielded.dev` route.
+
+`vp run docs:deploy` builds and deploys locally using [site/wrangler.jsonc](../site/wrangler.jsonc).
+When using Wrangler OAuth, unset unrelated `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` values. Check the deployed home page, a guide, and an asset.
+The Worker strips `/sync/` for asset lookup, restores it on redirects, and serves
+missing pages with HTTP 404.
 
 ## Contributor skills
 
-Shared contributor skills are authored in [danieljvdm/skills](https://github.com/danieljvdm/skills) and distributed by Dev Kit into `.agents/skills`. They are normal tracked files with individual origin receipts; `.claude/skills` links to the same content. `AGENTS.md` owns repository commands, gates, and constraints. Keep shared copies identical to their pinned source and upstream reusable improvements before refreshing local edits. Load exact repository paths rather than assuming precedence over a user skill with the same name.
-
-Dev Kit is a transient distribution tool. There is no Dev Kit dependency, runtime import, managed project manifest, reconciliation step, or lifecycle command.
+Shared skills are authored in [danieljvdm/skills](https://github.com/danieljvdm/skills)
+and distributed by Dev Kit into `.agents/skills`. Keep copies identical to their
+pinned source and retain their origin receipts. Put repository policy in
+`AGENTS.md`; upstream reusable improvements before refreshing local edits.
+Load exact repository skill paths. Dev Kit is not required to install, check,
+build, or run this library.

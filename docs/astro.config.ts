@@ -35,7 +35,7 @@ export default defineConfig({
         },
         {
           label: "Reference",
-          items: [{ label: "Beta release", slug: "release" }],
+          items: [{ label: "Releases and upgrades", slug: "release" }],
         },
       ],
     }),
