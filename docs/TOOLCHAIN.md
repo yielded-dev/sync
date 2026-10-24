@@ -42,7 +42,7 @@ for declaration builds; `@effect/tsgo` supplies the shared configuration schema 
 remains available for editor language-service features.
 
 `vp run typecheck` checks root tooling, all six libraries, and all five examples
-with `effect-tsrs diagnostics --project tsconfig.json --strict`. That command checks both
+with `effect-tsrs diagnostics --project tsconfig.json --type-check --strict`. That command checks both
 TypeScript types and Effect diagnostics. The packed-consumer check uses
 `tsrs --noEmit`; the docs workspace retains its Astro build.
 Effect diagnostic warnings are configured in the shared compiler plugin, including

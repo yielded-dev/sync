@@ -12,7 +12,7 @@
     "prepare": "vp config --no-agent --hooks-dir .vite-hooks",
     "fmt": "vp fmt",
     "lint": "vp lint",
-    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --strict && vp run -r typecheck",
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict && vp run -r typecheck",
     "check": "vp check && vp run typecheck",
     "test": "vp run -r --concurrency-limit 4 test",
     "build": "vp run -r build",
@@ -79,7 +79,7 @@
     "@effect/platform-node": "4.0.0",
     "@effect/platform-bun": "4.0.0",
     "vitest": "5.0.3",
-    "@yielded/effect-tsrs": "0.2.1",
+    "@yielded/effect-tsrs": "0.2.2",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929"
   },
   "trustedDependencies": [
