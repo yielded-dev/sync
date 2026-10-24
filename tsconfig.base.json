@@ -2,9 +2,7 @@
   "$schema": "./node_modules/@effect/tsgo/schema.json",
   "compilerOptions": {
     "target": "es2023",
-    "lib": [
-      "ES2023"
-    ],
+    "lib": ["ES2023"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -110,9 +108,7 @@
         },
         "overrides": [
           {
-            "include": [
-              "**/src/**/*.ts"
-            ],
+            "include": ["**/src/**/*.ts"],
             "options": {
               "diagnosticSeverity": {
                 "nodeBuiltinImport": "warning",
