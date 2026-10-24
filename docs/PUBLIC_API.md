@@ -108,15 +108,15 @@ Only completed delivery removes an obligation; failures retain evidence. Hosts
 arm durable wakeups before accepting retryable work. An alarm is a wakeup, not
 proof that the destination committed.
 
-Cloudflare hosts bind one source to each object. The shared runtime returns fetch
-and WebSocket lifecycle handlers plus a reusable outbox alarm Effect. Framework
-adapters expose native alarm callbacks by running that Effect.
+Cloudflare hosts bind one source to each object. See the
+[Cloudflare host API](../packages/platform-cloudflare/README.md) for shared
+handlers and framework integration.
 
 Applications authenticate callers, select typed stubs, and pass the request,
-address, and identity to `prepareRequest`.
-It replaces internal identity headers. Only authenticated boundaries may expose
-the binding. Check authorization for snapshots, subscriptions, actions, results,
-and messages, and revalidate bound identity and expiry after hibernation.
+address, and identity to `prepareRequest`. It replaces internal identity headers.
+Only authenticated boundaries may expose the binding. Check authorization for
+snapshots, subscriptions, actions, results, and messages, and revalidate bound
+identity and expiry after hibernation.
 
 The instance scope owns RPC and socket resources; `Server.provide` scopes services
 to source operations. Bootstrap, commits, and publication share a bounded source
