@@ -21,6 +21,8 @@
         "allowedUnstableApis": [
           "@effect/atom-react",
           "@effect/sql-sqlite-do",
+          "effect/Crypto#make",
+          "effect/PlatformError#systemError",
           "effect/http",
           "effect/reactivity",
           "effect/rpc",
