@@ -6,7 +6,7 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start --localhost --port 8097",
-    "typecheck": "effect-tsrs diagnostics --project tsconfig.json"
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --strict"
   },
   "dependencies": {
     "@yielded/sync": "workspace:*",

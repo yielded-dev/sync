@@ -12,7 +12,7 @@
     "prepare": "vp config --no-agent --hooks-dir .vite-hooks",
     "fmt": "vp fmt",
     "lint": "vp lint",
-    "typecheck": "effect-tsrs diagnostics --project tsconfig.json && vp run -r typecheck",
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --strict && vp run -r typecheck",
     "check": "vp check && vp run typecheck",
     "test": "vp run -r --concurrency-limit 4 test",
     "build": "vp run -r build",

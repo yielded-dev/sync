@@ -6,7 +6,7 @@
     "build": "vp build && vp run check:worker",
     "dev": "vp dev",
     "test": "vp test",
-    "typecheck": "effect-tsrs diagnostics --project tsconfig.json"
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --strict"
   },
   "dependencies": {
     "@effect/atom-react": "catalog:",

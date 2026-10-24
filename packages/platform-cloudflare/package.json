@@ -27,7 +27,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "typecheck": "effect-tsrs diagnostics --project tsconfig.json"
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --strict"
   },
   "dependencies": {
     "@effect/sql-sqlite-do": "catalog:",

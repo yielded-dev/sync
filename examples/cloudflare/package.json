@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "types": "wrangler types --include-runtime false",
-    "typecheck": "effect-tsrs diagnostics --project tsconfig.json"
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --strict"
   },
   "dependencies": {
     "@yielded/sync": "workspace:*",
