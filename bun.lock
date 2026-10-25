@@ -117,7 +117,7 @@
     },
     "packages/local-expo": {
       "name": "@yielded/sync-local-expo",
-      "version": "0.1.0-beta.1",
+      "version": "0.1.0-beta.2",
       "dependencies": {
         "@yielded/sync": "workspace:*",
       },
@@ -139,7 +139,7 @@
     },
     "packages/local-indexeddb": {
       "name": "@yielded/sync-local-indexeddb",
-      "version": "0.1.0-beta.1",
+      "version": "0.1.0-beta.2",
       "dependencies": {
         "@yielded/sync": "workspace:*",
       },
@@ -157,7 +157,7 @@
     },
     "packages/platform-alchemy-cf": {
       "name": "@yielded/sync-platform-alchemy-cf",
-      "version": "0.1.0-beta.1",
+      "version": "0.1.0-beta.2",
       "dependencies": {
         "@yielded/sync": "workspace:*",
         "@yielded/sync-platform-cloudflare": "workspace:*",
@@ -177,7 +177,7 @@
     },
     "packages/platform-cloudflare": {
       "name": "@yielded/sync-platform-cloudflare",
-      "version": "0.1.0-beta.1",
+      "version": "0.1.0-beta.2",
       "dependencies": {
         "@effect/sql-sqlite-do": "catalog:",
         "@yielded/sync": "workspace:*",
@@ -195,7 +195,7 @@
     },
     "packages/platform-effect-cf": {
       "name": "@yielded/sync-platform-effect-cf",
-      "version": "0.1.0-beta.1",
+      "version": "0.1.0-beta.2",
       "dependencies": {
         "@yielded/sync": "workspace:*",
         "@yielded/sync-platform-cloudflare": "workspace:*",
@@ -217,7 +217,7 @@
     },
     "packages/sync": {
       "name": "@yielded/sync",
-      "version": "0.1.0-beta.1",
+      "version": "0.1.0-beta.2",
       "devDependencies": {
         "effect": "catalog:",
         "typescript": "catalog:",

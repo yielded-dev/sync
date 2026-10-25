@@ -1,5 +1,13 @@
 # @yielded/sync-platform-effect-cf
 
+## 0.1.0-beta.2
+
+### Patch Changes
+
+- d0c336b: Support effect-cf 0.57 alongside 0.53.
+- @yielded/sync-platform-cloudflare@0.1.0-beta.2
+  - @yielded/sync@0.1.0-beta.2
+
 ## 0.1.0-beta.1
 
 ### Minor Changes

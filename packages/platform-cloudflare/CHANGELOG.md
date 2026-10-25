@@ -1,5 +1,11 @@
 # @yielded/sync-platform-cloudflare
 
+## 0.1.0-beta.2
+
+### Patch Changes
+
+- @yielded/sync@0.1.0-beta.2
+
 ## 0.1.0-beta.1
 
 ### Minor Changes
