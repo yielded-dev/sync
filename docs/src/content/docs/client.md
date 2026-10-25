@@ -47,7 +47,10 @@ commands, failures, and connection state.
 
 ## Retry and recovery
 
-`execute` captures the payload and journals the command before sending it. A
+`execute` captures the payload and journals the command before sending it.
+For local-first interactions, `enqueue` returns the command id after journal
+admission and delivers it in the background. Observe `pending`, `failures`, and
+`error` on the replica for delivery progress; a returned id is not server acceptance. A
 declared rejection removes its optimistic overlay and appears in `failures`;
 `dismissFailure(id)` hides that terminal failure.
 
@@ -64,8 +67,13 @@ marks old work `AuthorityChanged`; the application must reconcile it before
 reissuing edits.
 
 The client applies ordered events and recovers after gaps or buffer overflow.
-Cached snapshots remain provisional and cannot overwrite live state. `hydrate`
-obeys the same ordering rules; `mergeObservation` and `applyHistory` do not advance
+Cached snapshots remain provisional and cannot overwrite live state. A restored cache retains its authority identity
+for offline command admission without treating its contents as fresh. Connection
+retry exhaustion does not prevent these edits; authorization, storage, and
+protocol failures still refuse new work. Reconnect with `recover` to resume
+delivery. Commands remain bound to their original authority after recovery.
+
+`hydrate` obeys the same ordering rules; `mergeObservation` and `applyHistory` do not advance
 the cursor or confirm commands. Ephemeral `messages`, `publishMessage`, and
 `publishPluginMessage` never enter the durable journal. Slow observers may receive
 coalesced view updates or miss ephemeral messages.

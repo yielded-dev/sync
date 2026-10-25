@@ -12,6 +12,7 @@ export interface State {
     | { readonly position: SourcePosition; readonly snapshot: Snapshot }
     | undefined;
   readonly provisional: Snapshot | undefined;
+  readonly provisionalPosition: SourcePosition | undefined;
   readonly intents: ReadonlyMap<string, Intent>;
   readonly quarantined: ReadonlySet<string>;
   readonly failures: ReadonlyArray<{ readonly commandId: string; readonly error: unknown }>;
@@ -22,6 +23,7 @@ export interface State {
 export const empty = (): State => ({
   authoritative: undefined,
   provisional: undefined,
+  provisionalPosition: undefined,
   intents: new Map(),
   quarantined: new Set(),
   failures: [],

@@ -203,6 +203,60 @@ const stateWhere = (
   predicate: (state: Client.State<typeof Counter.spec>) => boolean,
 ) => lease.changes.pipe(Stream.filter(predicate), Stream.take(1), Stream.runCollect);
 
+// Regression in 40d7ebd: cache restore discarded the authority needed to admit
+// offline edits, and an exhausted connection retry budget refused new work.
+it("queues edits from a restored cache while parked and retries them against the same authority", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const remote = yield* server;
+      const storage = yield* memory().open;
+
+      yield* storage.snapshotCache.put(address, snapshot(0, 0));
+      let online = false;
+
+      const client = yield* Client.make(definition, {
+        persistence: { mode: "persistent" },
+        retry: { ...retry, maxAttempts: 1 },
+      }).pipe(
+        Effect.provideService(ReplicaPersistence, storage),
+        Effect.provideService(Client.Transport, {
+          ...remote.transport,
+          snapshot: (request) =>
+            online ? remote.transport.snapshot(request) : Effect.fail(unavailable()),
+          subscribe: (request) =>
+            online ? remote.transport.subscribe(request) : Stream.fail(unavailable()),
+          execute: (command) =>
+            online ? remote.transport.execute(command) : Effect.fail(unavailable()),
+        }),
+      );
+
+      const lease = yield* client.open(address);
+
+      yield* stateWhere(
+        lease,
+        (state) => state.provisional !== undefined && state.connection === "parked",
+      );
+      const commandId = yield* lease.enqueue(Counter.actions.add, { amount: 3 });
+
+      expect((yield* lease.read).pending[0]?.commandId).toBe(commandId);
+      expect((yield* lease.read).value?.source.value).toBe(3);
+      const [row] = yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10));
+
+      expect(row.value).toMatchObject({ command: { admittedGeneration: generation } });
+      online = true;
+      yield* lease.recover;
+      yield* lease.ready;
+      yield* stateWhere(lease, (state) => state.pending.length === 0);
+      expect((yield* lease.read).value?.source.value).toBe(3);
+      expect(remote.calls).toHaveLength(1);
+      expect(remote.calls[0].commandId).toBe(row.commandId);
+    }),
+  ).pipe(
+    Effect.provideService(Client.CurrentActor, { actorId: "alice" }),
+    Effect.provide(TestClock.layer()),
+    Effect.runPromise,
+  ));
+
 it("rejects a whole gapped batch before recovering authoritative state", () =>
   Effect.scoped(
     Effect.gen(function* () {
