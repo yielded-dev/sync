@@ -38,7 +38,6 @@ export const CounterServer = Server.make(Counter, {
         }),
       ),
   },
-  plugins: [],
 });
 ```
 
@@ -85,7 +84,9 @@ Create one session per authenticated actor with `Client.make`, then open
 `execute(Counter.actions.set, { value: 7 })`. See the [client guide](../client.md)
 for transport, persistence, and Atom setup.
 
-A reusable capability uses `Plugin.make` with matching `Server.plugin` and
-`Client.plugin` definitions. Each plugin owns its snapshot slot and actions;
-all share the source's authorization, ordered cursor, and lifetime. The runnable
-counter includes a label plugin, and the board uses one for its title.
+A reusable capability uses `Plugin.make`. Add it to the source's `plugins` list
+and provide matching `Server.plugin` and `Client.plugin` definitions. Omit
+`plugins` in all three constructors when the source has none. Each plugin owns
+its snapshot slot and actions; all share the source's authorization, ordered
+cursor, and lifetime. The runnable counter includes a label plugin, and the board
+uses one for its title.

@@ -255,24 +255,26 @@ export const make = <
     readonly authorize: (
       input: AuthorizationInput<P["Type"], State["Type"]>,
     ) => Effect.Effect<void, ProtocolError, R>;
-    readonly plugins: Plugins &
+    readonly plugins?: Plugins &
       Unique<Ids<Plugins>> &
       ([S["plugins"][number]["id"]] extends [Plugins[number]["id"]]
         ? [Plugins[number]["id"]] extends [S["plugins"][number]["id"]]
           ? unknown
           : never
         : never);
-  },
+  } & (S["plugins"] extends readonly [] ? unknown : { readonly plugins: Plugins }),
 ): Definition<S, R | HandlerRequirements<H[keyof H]> | PluginRequirements<Plugins>> => {
   checkHandlers(contract.spec, spec.actions);
+  const providedPlugins = spec.plugins ?? [];
+
   assertUnique(
     "server plugin",
-    spec.plugins.map((p) => p.id),
+    providedPlugins.map((p) => p.id),
   );
 
   if (
-    spec.plugins.length !== contract.spec.plugins.length ||
-    contract.spec.plugins.some((p) => !spec.plugins.some((server) => server.contract === p))
+    providedPlugins.length !== contract.spec.plugins.length ||
+    contract.spec.plugins.some((p) => !providedPlugins.some((server) => server.contract === p))
   ) {
     throw RegistrationError.make({
       message: "Server plugins must exactly match the source contract",
@@ -288,7 +290,7 @@ export const make = <
       const root = yield* acquireSlot("$source", contract.spec, slot);
       const slots = [root];
 
-      const plugins = spec.plugins as ReadonlyArray<
+      const plugins = providedPlugins as ReadonlyArray<
         PluginDefinition<string, PluginRequirements<Plugins>>
       >;
 

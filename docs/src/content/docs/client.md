@@ -10,7 +10,8 @@ optimistic state, and recovery; UI bindings read that same state.
 `Client.definition` supplies pure event and optimistic reducers for the shared
 contract. Every action needs an optimistic reducer; use an identity reducer when
 it should wait for authority. Register matching `Client.plugin` definitions for
-any plugins. Each reducer receives only its own snapshot slot.
+declared plugins, or omit `plugins` when there are none. Each reducer receives
+only its own snapshot slot.
 
 Using the `Counter` from [getting started](./guide/getting-started.md):
 
@@ -23,14 +24,16 @@ import { Counter } from "./counter";
 const definition = Client.definition(Counter, {
   applyEvent: (_snapshot, event) => ({ value: event.value }),
   optimistic: { set: (_snapshot, payload) => ({ value: payload.value }) },
-  plugins: [],
 });
 
 export const program = Effect.gen(function* () {
   const session = yield* Client.make(definition, { persistence: { mode: "volatile" } });
-  const source = yield* session.open(Counter.address("demo"));
-  yield* source.ready;
-  return yield* source.execute(Counter.actions.set, { value: 7 });
+  const lease = yield* session.open(Counter.address("demo"));
+  const counter = Client.view(lease);
+
+  yield* counter.ready;
+  yield* lease.execute(Counter.actions.set, { value: 7 });
+  return (yield* counter.read).value;
 });
 ```
 
@@ -41,9 +44,17 @@ different actor. Do not return a live client from an already-completed scope.
 
 Each `open` holds a scoped lease. Concurrent leases share one coordinator; closing
 the last disconnects it. Closing a lease cancels its in-flight operations while
-retaining admitted commands for recovery. `source.read` and `source.changes`
-expose the optimistic value, authoritative position, provisional cache, pending
-commands, failures, and connection state.
+retaining admitted commands for recovery.
+
+`Client.view(lease)` exposes root data through `read`, `changes`, and `ready`.
+Here, `counter.read` returns a replica whose `value` is `{ value: number }` or
+`undefined`. Its authoritative and provisional snapshots use the same shape,
+even when plugins are added. `Client.view(lease, id)` selects a declared plugin
+with its inferred snapshot type. All views share the lease's lifetime, connection
+state, pending commands, and failures. Commands still run through the lease.
+
+Use `lease.read`, `lease.changes`, and `lease.ready` when you need the complete
+`{ source, plugins }` snapshot. Views do not change wire or persisted data.
 
 ## Retry and recovery
 

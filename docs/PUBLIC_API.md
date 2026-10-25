@@ -38,6 +38,9 @@ result, rejection, and service types.
 messages, actions, and plugins. `address(id)` identifies one source authority.
 Application entity revisions are separate from source cursors.
 
+Omit `plugins` when a source has none. If the contract declares plugins,
+`Server.make` and `Client.definition` require matching implementations.
+
 `Action.make` correlates its payload, success, and declared rejection schemas.
 `Plugin.make` defines a reusable public capability; `Server.plugin` supplies its
 private implementation and `Client.plugin` its pure reducers. Composed snapshots
@@ -130,6 +133,12 @@ other alarm jobs require application scheduling.
 choice for its lifetime. Concurrent scoped opens share one coordinator per address.
 Closing a lease cancels its operations; closing the last releases the connection.
 Close the old session before changing actors. All resources and queues are bounded.
+
+`Client.view(lease)` exposes root snapshot data through `read`, `changes`, and
+`ready`; `Client.view(lease, id)` exposes a declared plugin's data. Views share the
+lease's lifetime and source-wide status, pending commands, and failures. The root
+view's shape is independent of plugin count; composite snapshots retain their
+`{ source, plugins }` shape.
 
 Reducers are pure. Apply complete valid event batches atomically, ignore duplicates,
 and recover on gaps or overflow. Cache restores remain provisional. History and

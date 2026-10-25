@@ -54,7 +54,6 @@ export const Counter = Source.make({
       error: Schema.Never,
     }),
   ],
-  plugins: [],
 });
 ```
 

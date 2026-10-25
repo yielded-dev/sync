@@ -107,14 +107,7 @@ type ActionRpcs<S extends Spec> =
   | BoundActions<S, "$source", S["actions"]>[number]["execute" | "result"]
   | PluginRpcs<S, S["plugins"]>;
 
-export const make = <const S extends Spec>(
-  input: S & {
-    readonly actions: S["actions"] & Unique<Names<S["actions"]>>;
-    readonly plugins: S["plugins"] & Unique<Ids<S["plugins"]>>;
-  },
-) => {
-  const spec: S = input;
-
+const define = <const S extends Spec>(spec: S) => {
   validate(Schema.NonEmptyString, spec.kind, "source kind");
   validate(SchemaVersion, spec.schemaVersion, "schema version");
   assertUnique(
@@ -278,4 +271,24 @@ export const make = <const S extends Spec>(
   });
 };
 
-export type Definition<S extends Spec = Spec> = ReturnType<typeof make<S>>;
+export type Definition<S extends Spec = Spec> = ReturnType<typeof define<S>>;
+
+export function make<const S extends Omit<Spec, "plugins">>(
+  input: S & {
+    readonly actions: S["actions"] & Unique<Names<S["actions"]>>;
+    readonly plugins?: never;
+  },
+): Definition<Omit<S, "plugins"> & { readonly plugins: readonly [] }>;
+
+export function make<const S extends Spec>(
+  input: S & {
+    readonly actions: S["actions"] & Unique<Names<S["actions"]>>;
+    readonly plugins: S["plugins"] & Unique<Ids<S["plugins"]>>;
+  },
+): Definition<S>;
+
+export function make(
+  input: Omit<Spec, "plugins"> & { readonly plugins?: ReadonlyArray<Plugin.Definition> },
+): unknown {
+  return define({ ...input, plugins: input.plugins ?? [] });
+}

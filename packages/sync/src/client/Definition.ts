@@ -92,31 +92,33 @@ type Requirements<Plugins extends ReadonlyArray<PluginDefinition<string, unknown
 export const definition = <
   S extends Source.Spec,
   O extends Optimistic<NoInfer<S>>,
-  const Plugins extends ReadonlyArray<PluginDefinition<string, unknown>>,
+  const Plugins extends ReadonlyArray<PluginDefinition<string, unknown>> = readonly [],
 >(
   contract: Source.Definition<S>,
   spec: Exact<NoInfer<S>, O> & {
     readonly allowUnboundCommands?: boolean;
-    readonly plugins: Plugins &
+    readonly plugins?: Plugins &
       Unique<Ids<Plugins>> &
       ([S["plugins"][number]["id"]] extends [Plugins[number]["id"]]
         ? [Plugins[number]["id"]] extends [S["plugins"][number]["id"]]
           ? unknown
           : never
         : never);
-  },
+  } & (S["plugins"] extends readonly [] ? unknown : { readonly plugins: Plugins }),
 ): Definition<S, Requirements<Plugins>> => {
   check(contract.spec, spec.optimistic);
+  const providedPlugins = spec.plugins ?? [];
+
   assertUnique(
     "client plugin",
-    spec.plugins.map((p) => p.id),
+    providedPlugins.map((p) => p.id),
   );
 
   const plugins = contract.spec.plugins.map((p) =>
-    spec.plugins.find((client) => client.contract === p),
+    providedPlugins.find((client) => client.contract === p),
   );
 
-  if (spec.plugins.length !== plugins.length || plugins.some((client) => client === undefined)) {
+  if (providedPlugins.length !== plugins.length || plugins.some((client) => client === undefined)) {
     throw RegistrationError.make({
       message: "Client plugins must exactly match the source contract",
     });
