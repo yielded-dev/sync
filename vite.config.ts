@@ -158,6 +158,10 @@ export default defineConfig({
         cache: false,
         command: "node scripts/release-check.mjs",
       },
+      "release:publish": {
+        cache: false,
+        command: "bun scripts/release-publish.ts",
+      },
     },
   },
 });

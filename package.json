@@ -24,10 +24,12 @@
     "changeset": "changeset",
     "changeset:pre": "changeset pre",
     "changeset:version": "changeset version",
-    "ci:version": "changeset version && vp install --ignore-scripts"
+    "ci:version": "changeset version && vp install --ignore-scripts",
+    "release:checked-publish": "vp run --no-cache release:publish --check-ready"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
+    "@effect/platform-node": "catalog:",
     "@effect/tsgo": "catalog:",
     "@stylistic/eslint-plugin": "5.10.0",
     "@types/node": "catalog:",
