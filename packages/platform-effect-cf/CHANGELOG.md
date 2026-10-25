@@ -1,0 +1,36 @@
+# @yielded/sync-platform-effect-cf
+
+## 0.1.0-beta.1
+
+### Minor Changes
+
+- 40d7ebd: Add native effect-cf and Alchemy v2 Cloudflare adapters over one shared SQLite and
+  RPC runtime. Applications construct their own Workers and Durable Objects and own
+  routing, authentication, typed bindings, and service composition. Replace
+  `Cloudflare.worker` and `Cloudflare.durableObject` with each framework's constructors
+  and the new adapter's `make` and `prepareRequest` operations. Applications call
+  their typed stubs directly with the prepared native request. Preserve object names,
+  storage namespaces, authority generations, receipts, and unresolved outbox records
+  when migrating. Update the Effect peer compatibility and consume current effect-cf and Alchemy releases.
+
+  Use Effect RpcServer for HTTP and WebSocket procedure dispatch, codecs, typed
+  responses, stream acknowledgements, and interruption. effect-cf supplies its native
+  DurableObjectRpcWebSocket transport; Alchemy uses a Cloudflare RpcServer.Protocol
+  bridge. Sync retains source ordering, bounded publication, durable retries, and
+  cursor recovery. Provide source-operation services with Server.provide; instance
+  Layers own the long-lived RPC server.
+
+### Patch Changes
+
+- 3100667: Require the stable Effect release and use its stable module paths. Update the native
+  Cloudflare adapters to Alchemy 2.0.0-beta.80 and effect-cf 0.53.0.
+- 4e088f2: Update the required Effect release and align its runtime companion packages with
+  the root catalog.
+- Updated dependencies [40d7ebd]
+- Updated dependencies [3100667]
+- Updated dependencies [40d7ebd]
+- Updated dependencies [fdf06c3]
+- Updated dependencies [4e088f2]
+- Updated dependencies [b551c7c]
+  - @yielded/sync@0.1.0-beta.1
+  - @yielded/sync-platform-cloudflare@0.1.0-beta.1

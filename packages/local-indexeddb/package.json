@@ -1,6 +1,6 @@
 {
   "name": "@yielded/sync-local-indexeddb",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "IndexedDB local persistence for Effect Sync clients.",
   "license": "MIT",
   "repository": {
