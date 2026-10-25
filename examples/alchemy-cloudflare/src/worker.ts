@@ -1,7 +1,7 @@
 import { ProtocolError } from "@yielded/sync";
 import { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";
 import * as Cloudflare from "alchemy/Cloudflare";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { authenticate } from "../../cloudflare/src/auth.ts";
@@ -11,16 +11,24 @@ import { CounterServer } from "../../cloudflare/src/server.ts";
 export class CounterObject extends Cloudflare.DurableObject<CounterObject>()(
   "CounterObject",
   AlchemyCf.make(CounterServer, {
-    storageNamespace: "counter-v1",
     replay: { maxEvents: 4, maxBatchBytes: 600_000 },
     sockets: { maxConnections: 32, bufferSize: 16 },
     outbox: {
-      maxPending: 100,
       batchSize: 10,
       retryMillis: 60_000,
       deliver: () => Effect.succeed({ _tag: "Delivered" as const }),
     },
-  }),
+  }).pipe(
+    Effect.map((runtime) =>
+      Effect.gen(function* () {
+        const storage = yield* Layer.build(
+          AlchemyCf.sqlite({ namespace: "counter-v1", replayWindow: 4, maxPendingOutbox: 100 }),
+        );
+
+        return yield* runtime.pipe(Effect.provideContext(storage));
+      }).pipe(Effect.orDie),
+    ),
+  ),
 ) {}
 
 export default class CounterWorker extends Cloudflare.Worker<CounterWorker>()(

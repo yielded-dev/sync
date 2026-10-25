@@ -74,6 +74,23 @@ export interface SourceTransaction {
   readonly commit: (plan: StorageCommit) => Effect.Effect<void, StorageError>;
 }
 
+/**
+ * Optional durable delivery. Commits retain obligations atomically and arm durable
+ * wakeups before accepting them. Claims and settlement fence attempts and schedule retries.
+ */
+export interface OutboxStorage {
+  readonly claim: (
+    nowMillis: number,
+    leaseMillis: number,
+    limit: number,
+  ) => Effect.Effect<ReadonlyArray<OutboxRecord>, StorageError>;
+  readonly settle: (
+    record: OutboxRecord,
+    disposition: DeliveryDisposition,
+  ) => Effect.Effect<void, StorageError>;
+  readonly nextTime: Effect.Effect<number | undefined, StorageError>;
+}
+
 /** One handle per authority; callbacks are never automatically re-executed. */
 export class SourceStorage extends Context.Service<
   SourceStorage,
@@ -81,16 +98,7 @@ export class SourceStorage extends Context.Service<
     readonly transaction: <A, E, R>(
       body: (tx: SourceTransaction) => Effect.Effect<A, E, R>,
     ) => Effect.Effect<A, E | StorageError, R>;
-    readonly claimOutbox: (
-      nowMillis: number,
-      leaseMillis: number,
-      limit: number,
-    ) => Effect.Effect<ReadonlyArray<OutboxRecord>, StorageError>;
-    readonly settleOutbox: (
-      record: OutboxRecord,
-      disposition: DeliveryDisposition,
-    ) => Effect.Effect<void, StorageError>;
-    readonly nextOutboxTime: Effect.Effect<number | undefined, StorageError>;
+    readonly outbox?: OutboxStorage;
   }
 >()("@yielded/sync/server/SourceStorage") {}
 

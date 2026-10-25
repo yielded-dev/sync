@@ -369,6 +369,8 @@ export const open = Effect.fn("Server.open")(function* <S extends Source.Spec, R
         } else {
           const plan = evaluated.plan;
 
+          if (plan.outbox.length > 0 && storage.outbox === undefined)
+            return yield* unavailable("Source storage does not support outbox delivery");
           if (plan.events.length > limits.maxEvents || plan.outbox.length > limits.maxOutbox)
             return yield* unavailable("Commit exceeds source limits");
           if (

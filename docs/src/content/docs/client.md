@@ -7,9 +7,9 @@ optimistic state, and recovery; UI bindings read that same state.
 
 ## Open a source
 
-`Client.definition` supplies pure event and optimistic reducers for the shared
-contract. Every action needs an optimistic reducer; use an identity reducer when
-it should wait for authority. Register matching `Client.plugin` definitions for
+`Client.definition` supplies a pure event reducer for the shared contract.
+Add optimistic reducers only for actions that need immediate local feedback;
+other actions leave the view unchanged until authority arrives. Register matching `Client.plugin` definitions for
 declared plugins, or omit `plugins` when there are none. Each reducer receives
 only its own snapshot slot.
 
@@ -23,7 +23,6 @@ import { Counter } from "./counter";
 
 const definition = Client.definition(Counter, {
   applyEvent: (_snapshot, event) => ({ value: event.value }),
-  optimistic: { set: (_snapshot, payload) => ({ value: payload.value }) },
 });
 
 export const program = Effect.gen(function* () {
@@ -84,8 +83,8 @@ retry exhaustion does not prevent these edits; authorization, storage, and
 protocol failures still refuse new work. Reconnect with `recover` to resume
 delivery. Commands remain bound to their original authority after recovery.
 
-`hydrate` obeys the same ordering rules; `mergeObservation` and `applyHistory` do not advance
-the cursor or confirm commands. Ephemeral `messages`, `publishMessage`, and
+`hydrate` accepts a snapshot frame under the same authority and ordering rules.
+Keep application history and other projections outside the replica. Ephemeral `messages`, `publishMessage`, and
 `publishPluginMessage` never enter the durable journal. Slow observers may receive
 coalesced view updates or miss ephemeral messages.
 
@@ -108,11 +107,14 @@ when inactive.
 
 ## Transport
 
-`Client.layerRpcTransport(contract)` provides `Client.Transport` and requires
-`RpcClient.Protocol`. Supply the socket protocol, JSON RPC serialization, route,
-and credentials in the session's Layers. `Client.rpcTransport` supports scoped
-acquisition when you need to decorate the transport. A protocol bound to one route
-serves that source address; multi-address applications need a routing transport.
+`Client.layerWebSocketTransport(contract, { url })` provides `Client.Transport`
+with JSON RPC. Supply `Socket.WebSocketConstructor`, such as
+`Socket.layerWebSocketConstructorGlobal` in a browser. The application owns the
+authenticated URL and session lifetime. A route serving one address needs one
+transport; multi-address applications need a routing transport.
+
+Use `Client.layerRpcTransport(contract)` with your own `RpcClient.Protocol` for
+other protocol composition, or scoped `Client.rpcTransport` to decorate it.
 
 Custom transports provide typed Effects for snapshot, execute, result, and publish,
 and a scoped Stream for subscription. Subscription must include bootstrap/replay.
@@ -124,22 +126,34 @@ remaining service requirements. Core imports no platform transport implementatio
 Choose `{ mode: "volatile" }` or `{ mode: "persistent" }` explicitly. Persistent
 mode requires `ReplicaPersistence`; failures never silently switch to volatile
 mode. Provide the actor once around the client, transport, and persistence Layers.
+Core requires only an actor-bound journal; a snapshot cache is optional.
+
+For your own persistence, provide a `ReplicaPersistence` service with `actorId`
+and `intentJournal`. Its `load(address, limit)` reads retained rows and
+`commit(address, { insert, replace, remove })` applies one atomic batch. Inserts
+must reserve unused identities; replacements require existing rows. Fence old
+handles after an actor switch or destructive reset, and fail without partial
+writes. Add `snapshotCache` with `get`, `put`, and `remove` only when needed.
+The [port types](https://github.com/yielded-dev/sync/blob/main/packages/sync/src/client/ReplicaPersistence.ts)
+define the full contract.
 
 Use [IndexedDB](https://github.com/yielded-dev/sync/blob/main/packages/local-indexeddb/README.md)
 in browsers or [Expo SQLite](https://github.com/yielded-dev/sync/blob/main/packages/local-expo/README.md)
-on native Expo. `ReplicaPersistence.layerMemory()` provides process-local storage
-when restart recovery is unnecessary. Reuse a `memory()` factory to retain its
-records across scopes.
+on native Expo. The optional `@yielded/sync-persistence` package exports
+`layerMemory()` for process-local storage and `Persistence.make` for shared
+durable-record policy. Reuse a `memory()` factory to retain its records across
+scopes. Core does not require these implementations or their storage formats.
 
 Snapshot caches are disposable. Journals retain exact unresolved commands; storage
 or capacity failure refuses new work instead of evicting them. Unsupported journal
 entries remain quarantined and reserve their identities and capacity. `retry`
 returns `Quarantined` for these entries; keep them for explicit recovery.
 
-Snapshot saves coalesce. Await `session.flush` when the application backgrounds to
-report pending save failures. Initial journal admission is already durable and
+Snapshot saves coalesce. Cache failures appear in `replica.cacheError` and do not
+park synchronization or prevent journal admission. Await `session.flush` when the
+application backgrounds to report pending save failures. Initial journal admission is already durable and
 does not depend on an unload callback. Session disposal retains stored data.
-`purgeSource` and `wipe` delete data only when explicitly requested; a wipe
+Concrete persistence handles expose `purgeSource` and `wipe` for explicit deletion; a wipe
 invalidates old handles, so reopen afterward. Reconcile unresolved work before
 wiping data or changing namespaces.
 

@@ -37,7 +37,11 @@ import {
   type Replica,
 } from "./Model.ts";
 import * as ReplicaState from "./replica.ts";
-import { ReplicaPersistence, type PersistenceError } from "./ReplicaPersistence.ts";
+import {
+  ReplicaPersistence,
+  type JournalRow,
+  type PersistenceError,
+} from "./ReplicaPersistence.ts";
 import { Transport, type Request } from "./Transport.ts";
 
 type SourceActions<S extends Source.Spec> =
@@ -112,13 +116,6 @@ export interface Lease<S extends Source.Spec> {
   >;
   readonly hydrate: (
     snapshot: Source.Definition<S>["envelope"]["snapshotFrame"]["Type"],
-  ) => Effect.Effect<void, ClientError>;
-  readonly mergeObservation: (
-    merge: (current: Snapshot<S> | undefined) => Snapshot<S>,
-  ) => Effect.Effect<void, ClientError>;
-  readonly applyHistory: (
-    generation: string,
-    snapshot: Snapshot<S>,
   ) => Effect.Effect<void, ClientError>;
   readonly dismissFailure: (commandId: string) => Effect.Effect<void, ClientError>;
 }
@@ -236,6 +233,7 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
   const remote = yield* Transport;
   const storage = options.persistence.mode === "persistent" ? yield* ReplicaPersistence : undefined;
+  const cache = storage?.snapshotCache;
 
   if (storage !== undefined && storage.actorId !== actorId)
     return yield* error("InvalidValue", "Persistence belongs to a different actor");
@@ -244,7 +242,11 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
   const entries = new Map<string, Entry<S>>();
   const leases = Semaphore.makeUnsafe(1);
   const changed = yield* PubSub.sliding<void>({ capacity: 1, replay: 1 });
-  const saves = yield* Queue.make<void>({ capacity: 1, strategy: "dropping" });
+
+  const saves =
+    cache === undefined
+      ? undefined
+      : yield* Queue.make<void>({ capacity: 1, strategy: "dropping" });
 
   yield* PubSub.publish(changed, undefined);
 
@@ -319,11 +321,17 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
       if (slot === undefined) throw error("InvalidValue", "Missing optimistic reducer");
 
-      return ReplicaState.replaceSlot(
-        snapshot,
-        slot.id,
-        slot.optimistic[command.action](ReplicaState.slotValue(snapshot, slot.id), command.payload),
-      );
+      const reduce = Object.hasOwn(slot.optimistic, command.action)
+        ? slot.optimistic[command.action]
+        : undefined;
+
+      return reduce === undefined
+        ? snapshot
+        : ReplicaState.replaceSlot(
+            snapshot,
+            slot.id,
+            reduce(ReplicaState.slotValue(snapshot, slot.id), command.payload),
+          );
     }) as State<S>;
 
   const commit = Effect.fn("Client.commit")(
@@ -354,30 +362,30 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
         const removals = Array.from(previous.intents.keys()).filter((id) => !next.intents.has(id));
 
-        if (updates.length > 0 || removals.length > 0)
-          yield* persistence(
-            storage.intentJournal.transaction((tx) =>
-              Effect.gen(function* () {
-                for (const [id, intent] of updates) {
-                  const row = {
-                    address: entry.address,
-                    commandId: id,
-                    value: yield* Schema.encodeEffect(Intent)(intent).pipe(Effect.orDie),
-                  };
+        if (updates.length > 0 || removals.length > 0) {
+          const insert: Array<JournalRow> = [];
+          const replace: Array<JournalRow> = [];
 
-                  yield* previous.intents.has(id) ? tx.replace(row) : tx.put(row);
-                }
-                for (const id of removals) yield* tx.remove(entry.address, id);
-              }),
-            ),
+          for (const [id, intent] of updates) {
+            const row = {
+              address: entry.address,
+              commandId: id,
+              value: yield* Schema.encodeEffect(Intent)(intent).pipe(Effect.orDie),
+            };
+
+            (previous.intents.has(id) ? replace : insert).push(row);
+          }
+          yield* persistence(
+            storage.intentJournal.commit(entry.address, { insert, replace, remove: removals }),
           );
+        }
       }
       // Finish installing an admitted transaction for the surviving coordinator,
       // even when its originating lease closes while storage is committing.
       yield* assertOpen(entry, sourceScope);
       entry.state = next;
       onCommit?.();
-      if (next.authoritative !== previous.authoritative) {
+      if (saves !== undefined && next.authoritative !== previous.authoritative) {
         entry.dirty = true;
         yield* Queue.offer(saves, undefined);
       }
@@ -418,16 +426,26 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
   const flushEntry = Effect.fn("Client.flushSource")(
     function* (entry: Entry<S>) {
-      if (!entry.dirty || storage === undefined || entry.state.authoritative === undefined) return;
+      if (!entry.dirty || cache === undefined || entry.state.authoritative === undefined) return;
       const authority = entry.state.authoritative;
 
-      const frame = yield* encode(wire.envelope.snapshotFrame, {
-        ...request(entry.address),
-        _tag: "Snapshot",
-        ...authority,
-      } as typeof wire.envelope.snapshotFrame.Type);
+      const saved = yield* Effect.result(
+        encode(wire.envelope.snapshotFrame, {
+          ...request(entry.address),
+          _tag: "Snapshot",
+          ...authority,
+        } as typeof wire.envelope.snapshotFrame.Type).pipe(
+          Effect.flatMap((frame) => persistence(cache.put(entry.address, frame))),
+        ),
+      );
 
-      yield* persistence(storage.snapshotCache.put(entry.address, frame));
+      const cacheError = saved._tag === "Failure" ? saved.failure : undefined;
+
+      if (entry.state.cacheError !== cacheError) {
+        entry.state = { ...entry.state, cacheError };
+        yield* signal;
+      }
+      if (saved._tag === "Failure") return yield* saved.failure;
       if (entry.state.authoritative === authority) entry.dirty = false;
     },
     (effect, entry) => effect.pipe(Semaphore.withPermit(entry.lock)),
@@ -445,9 +463,7 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     if (storage === undefined) return;
 
     const rows = yield* persistence(
-      storage.intentJournal.transaction((tx) =>
-        tx.scan(entry.address, limits.maxPendingPerSource + 1),
-      ),
+      storage.intentJournal.load(entry.address, limits.maxPendingPerSource + 1),
     );
 
     if (rows.length > limits.maxPendingPerSource)
@@ -522,14 +538,21 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     entry: Entry<S>,
     sourceScope: Scope.Closeable,
   ) {
-    if (storage === undefined) return;
-    const cached = yield* persistence(storage.snapshotCache.get(entry.address));
+    if (cache === undefined) return;
+    const cached = yield* persistence(cache.get(entry.address));
 
-    if (cached === undefined) return;
+    if (cached === undefined) {
+      if (entry.state.cacheError !== undefined)
+        yield* commit(entry, sourceScope, (state) => ({ ...state, cacheError: undefined }));
+
+      return;
+    }
     const result = yield* Effect.result(decode(wire.envelope.snapshotFrame, cached));
 
     if (result._tag === "Failure" || keyOf(result.success.address) !== keyOf(entry.address)) {
-      yield* persistence(storage.snapshotCache.remove(entry.address));
+      yield* persistence(cache.remove(entry.address));
+      if (entry.state.cacheError !== undefined)
+        yield* commit(entry, sourceScope, (state) => ({ ...state, cacheError: undefined }));
 
       return;
     }
@@ -539,8 +562,9 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             ...state,
             provisional: result.success.snapshot,
             provisionalPosition: result.success.position,
+            cacheError: undefined,
           }
-        : state,
+        : { ...state, cacheError: undefined },
     );
   });
 
@@ -952,7 +976,9 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
               yield* restore(active, sourceScope);
               yield* restoreCache(active, sourceScope).pipe(
                 Effect.catch((failure) =>
-                  recordFailure(active, sourceScope, failure).pipe(Effect.ignore),
+                  commit(active, sourceScope, (state) => ({ ...state, cacheError: failure })).pipe(
+                    Effect.ignore,
+                  ),
                 ),
                 Effect.forkIn(sourceScope),
               );
@@ -1170,39 +1196,6 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             Effect.asVoid,
           ),
         ),
-      mergeObservation: (merge) =>
-        owned(
-          commit(
-            entry,
-            sourceScope,
-            (state) => {
-              const value = merge(
-                (state.authoritative?.snapshot ?? state.provisional) as Snapshot<S> | undefined,
-              );
-
-              return state.authoritative === undefined
-                ? { ...state, provisional: value as ReplicaState.Snapshot }
-                : {
-                    ...state,
-                    authoritative: {
-                      ...state.authoritative,
-                      snapshot: value as ReplicaState.Snapshot,
-                    },
-                  };
-            },
-            leaseScope,
-          ),
-        ),
-      applyHistory: (generation, value) =>
-        owned(
-          commit(
-            entry,
-            sourceScope,
-            (state) =>
-              ReplicaState.history(state, entry.slots, generation, value as ReplicaState.Snapshot),
-            leaseScope,
-          ),
-        ),
       dismissFailure: (id) =>
         owned(
           commit(
@@ -1223,25 +1216,17 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       entries.clear();
       yield* signal;
       yield* PubSub.shutdown(changed);
-      yield* Queue.shutdown(saves);
+      if (saves !== undefined) yield* Queue.shutdown(saves);
     }),
   );
-  yield* Effect.gen(function* () {
-    while (true) {
-      yield* Queue.take(saves);
-      yield* Effect.sleep("100 millis");
-      yield* flush.pipe(
-        Effect.catch((failure) =>
-          Effect.gen(function* () {
-            for (const entry of entries.values()) {
-              if (entry.dirty) entry.state = { ...entry.state, error: failure };
-            }
-            yield* signal;
-          }),
-        ),
-      );
-    }
-  }).pipe(Effect.forkScoped);
+  if (saves !== undefined)
+    yield* Effect.gen(function* () {
+      while (true) {
+        yield* Queue.take(saves);
+        yield* Effect.sleep("100 millis");
+        yield* flush.pipe(Effect.ignore);
+      }
+    }).pipe(Effect.forkScoped);
 
   return { actorId, contract, open, read, changes, flush };
 });

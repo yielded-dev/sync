@@ -3,7 +3,7 @@ import {
   Server,
   type ServerCrypto,
   SourceStorage,
-  type StorageError,
+  StorageError,
   type DeliveryDisposition,
   type OutboxRecord,
 } from "@yielded/sync/server";
@@ -21,13 +21,11 @@ export const Attachment = Schema.Struct({ session: Server.Session, address: Sour
 export type Connection = typeof Attachment.Type & { readonly socket?: Socket };
 
 export interface Options<R = never> {
-  readonly storageNamespace: string;
   readonly replay: { readonly maxEvents: number; readonly maxBatchBytes: number };
   readonly sockets: { readonly maxConnections: number; readonly bufferSize: number };
   readonly maxQueuedTurns?: number;
   readonly turnTimeoutMillis?: number;
   readonly outbox?: {
-    readonly maxPending: number;
     readonly batchSize: number;
     readonly retryMillis: number;
     readonly deliver: (
@@ -74,9 +72,15 @@ export const make = Effect.fn("Cloudflare.SourceHub.make")(function* <
   state: ObjectState,
   options: Options<DeliveryR>,
   close: (socket: Socket, code: number, reason: string) => Effect.Effect<void>,
-): Effect.fn.Return<Hub, never, R | DeliveryR | SourceStorage | ServerCrypto> {
+): Effect.fn.Return<Hub, StorageError, R | DeliveryR | SourceStorage | ServerCrypto> {
   const services = yield* Effect.context<R | DeliveryR | SourceStorage | ServerCrypto>();
   const storage = yield* SourceStorage;
+  const outbox = storage.outbox;
+
+  if ((options.outbox === undefined) !== (outbox === undefined))
+    return yield* StorageError.make({
+      message: "Outbox delivery and storage capability must be configured together",
+    });
   // The host runs a dynamic source registry. Keep its actual schemas and application requirements.
   const source = definition as unknown as Server.Definition<Source.Spec, R>;
   const contract = source.contract;
@@ -262,14 +266,14 @@ export const make = Effect.fn("Cloudflare.SourceHub.make")(function* <
     Effect.gen(function* () {
       const delivery = options.outbox;
 
-      if (delivery === undefined) return;
+      if (delivery === undefined || outbox === undefined) return;
       const now = DateTime.toEpochMillis(yield* DateTime.now);
 
       yield* Effect.tryPromise({
         try: () => state.storage.setAlarm(now + delivery.retryMillis),
         catch: unavailable,
       });
-      const records = yield* storage.claimOutbox(now, delivery.retryMillis, delivery.batchSize);
+      const records = yield* outbox.claim(now, delivery.retryMillis, delivery.batchSize);
 
       const retry = (_tag: "Retry" | "Indeterminate") =>
         Effect.map(DateTime.now, (time) => ({
@@ -286,11 +290,11 @@ export const make = Effect.fn("Cloudflare.SourceHub.make")(function* <
           Effect.catch(() => retry("Retry")),
         );
 
-        yield* storage.settleOutbox(record, disposition);
+        yield* outbox.settle(record, disposition);
       }
       yield* locked(
         Effect.gen(function* () {
-          const next = yield* storage.nextOutboxTime;
+          const next = yield* outbox.nextTime;
           const finishedAt = DateTime.toEpochMillis(yield* DateTime.now);
 
           yield* Effect.tryPromise({

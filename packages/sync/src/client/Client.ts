@@ -10,5 +10,14 @@ export {
 export * from "./Runtime.ts";
 export { view, type View } from "./View.ts";
 export { CurrentActor } from "./CurrentActor.ts";
-export { rpcTransport, layerRpcTransport, Transport, type Request } from "./Transport.ts";
+
+export {
+  rpcTransport,
+  layerRpcTransport,
+  layerWebSocketTransport,
+  Transport,
+  type Request,
+  type WebSocketTransportOptions,
+} from "./Transport.ts";
+
 export { ClientError, EncodedCommand, Intent, type Replica, type Connection } from "./Model.ts";

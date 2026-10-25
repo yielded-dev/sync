@@ -31,7 +31,8 @@
     "test": "vp test"
   },
   "dependencies": {
-    "@yielded/sync": "workspace:*"
+    "@yielded/sync": "workspace:*",
+    "@yielded/sync-persistence": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -12,13 +12,14 @@ wire formats and implementation details.
 | ----------------------------------- | ---------------------------------------------------------------------------------- |
 | `@yielded/sync`                     | Shared sources, actions, plugins, identities, envelopes, and derived RPC contracts |
 | `@yielded/sync/server`              | Private state, authorization, execution, storage and outbox contracts              |
-| `@yielded/sync/client`              | Scoped replicas, transport, recovery, and client persistence                       |
+| `@yielded/sync/client`              | Scoped replicas, transport, recovery, and persistence ports                        |
 | `@yielded/sync/atom`                | Atom bindings over the headless client                                             |
 | `@yielded/sync-platform-cloudflare` | Shared Cloudflare protocol and SQLite storage                                      |
 | `@yielded/sync-platform-effect-cf`  | Native effect-cf integration                                                       |
 | `@yielded/sync-platform-alchemy-cf` | Native Alchemy integration                                                         |
 | `@yielded/sync-local-indexeddb`     | Browser client persistence                                                         |
 | `@yielded/sync-local-expo`          | Native Expo client persistence                                                     |
+| `@yielded/sync-persistence`         | Optional persistence implementations and shared durable-record policy              |
 
 Adapters depend inward on core. Root and client imports never expose server
 implementations or platform dependencies. The two Cloudflare framework adapters
@@ -38,6 +39,7 @@ result, rejection, and service types.
 messages, actions, and plugins. `address(id)` identifies one source authority.
 Application entity revisions are separate from source cursors.
 
+Omit `message` when there are no ephemeral messages; it defaults to `Schema.Never`.
 Omit `plugins` when a source has none. If the contract declares plugins,
 `Server.make` and `Client.definition` require matching implementations.
 
@@ -49,8 +51,8 @@ Cross-slot domain transactions belong in a source capability.
 
 Root operations use the `$source` namespace; plugin operations use the plugin id.
 All share the source's authorization, cursor, and lifetime. Reject reserved or
-duplicate registrations, duplicate catalog kinds, and missing or extra handlers
-and reducers before resource acquisition. Literal duplicates also fail typechecking.
+duplicate registrations, missing or extra handlers, and unknown optimistic reducers
+before resource acquisition. Literal duplicates also fail typechecking.
 Acquire plugins in declaration order and finalize them in reverse order.
 
 Contract schemas and RPC definitions live in [Source.ts](../packages/sync/src/Source.ts),
@@ -91,6 +93,9 @@ protection that prevents re-execution.
 `Server.make` supplies private state, initialization, snapshot projection,
 authorization, and handlers. Authorized viewers of a source receive the same
 public snapshot. Viewer-private projections need a separate authorization boundary.
+Hosts require an application-provided `SourceStorage`. SQLite is an explicit
+adapter choice. Durable outbox delivery is an optional storage capability;
+omitting it must reject any nonempty outbox commit before state is committed.
 
 `Server.commit` constructs a plan. The runtime validates it and atomically commits
 private state, contiguous events, the exact outcome, receipts, and outbox work
@@ -140,23 +145,30 @@ lease's lifetime and source-wide status, pending commands, and failures. The roo
 view's shape is independent of plugin count; composite snapshots retain their
 `{ source, plugins }` shape.
 
-Reducers are pure. Apply complete valid event batches atomically, ignore duplicates,
-and recover on gaps or overflow. Cache restores remain provisional. History and
-unversioned observations do not advance cursors or settle commands. A successful
+Reducers are pure; omitted optimistic reducers leave the snapshot unchanged.
+Apply complete valid event batches atomically, ignore duplicates, and recover on
+gaps or overflow. Cache restores remain provisional. A successful
 result keeps optimism until its events arrive or authority covers its position;
 a declared rejection removes it. Dismissing a failure never deletes unresolved work.
 
 Persistent mode requires `ReplicaPersistence` and never falls back to volatile
-mode. Handles capture actor and generation; mismatched actors are rejected.
+mode. Its required port is an actor-bound journal with `load` and atomic `commit`;
+the snapshot cache is optional. Handles fence operations against actor and generation
+changes; mismatched actors are rejected.
 Journal admission commits before transport. Capacity failure refuses new work
 instead of evicting unresolved evidence. Snapshot caches are separate and disposable.
 Unsupported intents remain quarantined, reserving their exact identities and capacity.
 
-Journal callbacks run once and commit with atomic revision/generation checks.
-Conflicts are explicit; callbacks are not replayed. Wipe rotates the generation
+Journal batches apply atomically with generation checks. Inserts reserve new
+identities and replacements require existing rows. Conflicts are explicit.
+Adapter-owned wipe rotates the generation
 with journal deletion, invalidating old handles. Delayed cache writes and cleanup
 cannot affect a newer generation. Unreadable journals and unknown physical formats
 remain intact for recovery. Cache recovery never resets journal data.
+
+Cache failures appear separately from synchronization/journal failures and cannot
+park an otherwise healthy replica. They remain observable through `cacheError`
+and explicit `flush` failures.
 
 The application owns namespaces, background hooks, and logout deletion. Disposal
 retains durable data; `flush` reports pending save failures. Changing namespace is
@@ -165,9 +177,9 @@ switching. Wire, source-schema, storage-format, authority, and local persistence
 generations remain distinct.
 
 [ReplicaPersistence.ts](../packages/sync/src/client/ReplicaPersistence.ts) defines
-the port; [Persistence.ts](../packages/sync/src/client/Persistence.ts) defines
-shared durable-record policy. Memory persistence is process-local. Durable adapters
-implement the same ownership and recovery contract using their native stores.
+the ports. Physical formats, memory storage, cache bounds, and destructive management
+belong to `@yielded/sync-persistence` and platform adapters. Applications may
+implement the ports directly with their own persistence strategy.
 
 `SourceAtom.make` uses the same runtime. Active atoms hold leases; passive reads
 never connect. Registry disposal releases leases. UI code owns no second command

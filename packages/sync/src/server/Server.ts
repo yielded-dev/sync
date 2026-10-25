@@ -18,12 +18,12 @@ export interface Commit<State, Event, Result> {
   readonly state: State;
   readonly events: ReadonlyArray<Event>;
   readonly result: Result;
-  readonly outbox: ReadonlyArray<Schema.Json>;
+  readonly outbox?: ReadonlyArray<Schema.Json>;
 }
 
 export const commit = <State, Event, Result>(
   plan: Commit<State, Event, Result>,
-): Commit<State, Event, Result> => plan;
+): Required<Commit<State, Event, Result>> => ({ ...plan, outbox: plan.outbox ?? [] });
 
 export type AuthorizationOperation =
   | { readonly _tag: "snapshot" | "subscribe" | "message" }
@@ -171,7 +171,7 @@ const acquireSlot = <S extends Plugin.Spec, State extends WireSchema, P extends 
               state: yield* encode(spec.state, plan.state),
               events: yield* Effect.forEach(plan.events, (event) => encode(contract.event, event)),
               result: yield* encode(action.success, plan.result),
-              outbox: yield* decode(Schema.Array(Schema.Json), plan.outbox),
+              outbox: yield* decode(Schema.Array(Schema.Json), plan.outbox ?? []),
             },
           };
         }),

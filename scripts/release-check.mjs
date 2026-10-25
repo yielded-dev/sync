@@ -12,6 +12,7 @@ const fromRegistry = process.argv.includes("--registry");
 
 const packages = [
   ["sync", "@yielded/sync"],
+  ["persistence", "@yielded/sync-persistence"],
   ["platform-cloudflare", "@yielded/sync-platform-cloudflare"],
   ["platform-effect-cf", "@yielded/sync-platform-effect-cf"],
   ["platform-alchemy-cf", "@yielded/sync-platform-alchemy-cf"],
@@ -138,9 +139,10 @@ try {
   await writeFile(
     join(consumer, "src/index.ts"),
     [
-      'export { Action, Plugin, Source, SourceCatalog } from "@yielded/sync";',
+      'export { Action, Plugin, Source } from "@yielded/sync";',
       'export { Server, SourceStorage } from "@yielded/sync/server";',
       'export { Client, ReplicaPersistence } from "@yielded/sync/client";',
+      'export { Persistence, memory, layerMemory } from "@yielded/sync-persistence";',
       'export { SourceAtom } from "@yielded/sync/atom";',
       'export { Cloudflare, SqliteStorage } from "@yielded/sync-platform-cloudflare";',
       'export { EffectCf } from "@yielded/sync-platform-effect-cf";',

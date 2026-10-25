@@ -18,6 +18,7 @@ export interface State {
   readonly failures: ReadonlyArray<{ readonly commandId: string; readonly error: unknown }>;
   readonly connection: Connection;
   readonly error: ClientError | undefined;
+  readonly cacheError: ClientError | undefined;
 }
 
 export const empty = (): State => ({
@@ -29,6 +30,7 @@ export const empty = (): State => ({
   failures: [],
   connection: "idle",
   error: undefined,
+  cacheError: undefined,
 });
 
 export const replaceSlot = (snapshot: Snapshot, id: string, value: unknown): Snapshot =>
@@ -81,47 +83,6 @@ export const reflected = (state: State): State => {
   return { ...state, intents };
 };
 
-const merge = (
-  slots: ReadonlyArray<Slot>,
-  current: Snapshot,
-  incoming: Snapshot,
-  operation: "mergeSnapshot" | "mergeHistory",
-): Snapshot => {
-  let value = incoming;
-
-  for (const slot of slots) {
-    const reducer = slot[operation];
-
-    value = replaceSlot(
-      value,
-      slot.id,
-      reducer === undefined
-        ? operation === "mergeHistory"
-          ? slotValue(current, slot.id)
-          : slotValue(incoming, slot.id)
-        : reducer(slotValue(current, slot.id), slotValue(incoming, slot.id)),
-    );
-  }
-
-  return value;
-};
-
-export const history = (
-  state: State,
-  slots: ReadonlyArray<Slot>,
-  generation: string,
-  incoming: Snapshot,
-): State =>
-  state.authoritative?.position.sourceAuthorityGeneration !== generation
-    ? state
-    : {
-        ...state,
-        authoritative: {
-          ...state.authoritative,
-          snapshot: merge(slots, state.authoritative.snapshot, incoming, "mergeHistory"),
-        },
-      };
-
 /** Entire batches are checked before any event or confirmation is committed. */
 export const frame = (
   state: State,
@@ -143,14 +104,9 @@ export const frame = (
       return { ...state, connection: "live", error: undefined };
     if (previous !== undefined && order === undefined && input._tag !== "Reset") return state;
 
-    const snapshot =
-      previous !== undefined && order !== undefined
-        ? merge(slots, previous.snapshot, input.snapshot, "mergeSnapshot")
-        : input.snapshot;
-
     return reflected({
       ...state,
-      authoritative: { position: input.position, snapshot },
+      authoritative: { position: input.position, snapshot: input.snapshot },
       provisional: undefined,
       connection: "live",
       error: undefined,
@@ -241,5 +197,6 @@ export const view = (
     failures: state.failures,
     connection: state.connection,
     error: state.error,
+    cacheError: state.cacheError,
   };
 };

@@ -3,21 +3,23 @@ title: Packages and hosts
 ---
 
 Core contracts are portable. Choose a server host and, when clients need restart
-recovery, a local persistence adapter.
+recovery, a local persistence adapter or your own journal implementation.
 
-| Package                             | Public API                                       | Use it for                                              |
-| ----------------------------------- | ------------------------------------------------ | ------------------------------------------------------- |
-| `@yielded/sync`                     | Root contracts, `./server`, `./client`, `./atom` | Shared definitions, execution, clients, and UI bindings |
-| `@yielded/sync-platform-cloudflare` | `Cloudflare`, `SqliteStorage`                    | Shared Cloudflare runtime and custom hosts              |
-| `@yielded/sync-platform-effect-cf`  | `EffectCf`                                       | Native effect-cf Workers and Durable Objects            |
-| `@yielded/sync-platform-alchemy-cf` | `AlchemyCf`                                      | Native Alchemy Workers and Durable Objects              |
-| `@yielded/sync-local-indexeddb`     | `IndexedDb`                                      | Browser client persistence                              |
-| `@yielded/sync-local-expo`          | `ExpoSqlite`                                     | Native Expo SQLite persistence                          |
+| Package                             | Public API                                       | Use it for                                                     |
+| ----------------------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
+| `@yielded/sync`                     | Root contracts, `./server`, `./client`, `./atom` | Shared definitions, execution, clients, and UI bindings        |
+| `@yielded/sync-persistence`         | `Persistence`, `memory`, `layerMemory`           | Optional client persistence implementations and durable policy |
+| `@yielded/sync-platform-cloudflare` | `Cloudflare`, `SqliteStorage`                    | Shared Cloudflare runtime and custom hosts                     |
+| `@yielded/sync-platform-effect-cf`  | `EffectCf`                                       | Native effect-cf Workers and Durable Objects                   |
+| `@yielded/sync-platform-alchemy-cf` | `AlchemyCf`                                      | Native Alchemy Workers and Durable Objects                     |
+| `@yielded/sync-local-indexeddb`     | `IndexedDb`                                      | Browser client persistence                                     |
+| `@yielded/sync-local-expo`          | `ExpoSqlite`                                     | Native Expo SQLite persistence                                 |
 
 The two framework adapters use the shared Cloudflare runtime. Pick the one that
 matches your application; neither requires the other framework. Applications own
 Worker routes, typed object bindings, authentication, authorization, and projection
-destinations. Server implementations are not exported from root or client entry
+destinations. Hosts require caller-provided `SourceStorage`; the framework
+adapters offer `sqlite(options)` Layers for native SQLite. Server implementations are not exported from root or client entry
 points.
 
 IndexedDB storage remains subject to browser quota and eviction. Expo persistence

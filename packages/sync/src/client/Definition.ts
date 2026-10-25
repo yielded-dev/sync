@@ -12,7 +12,7 @@ import type * as Source from "../Source.ts";
 import type { ClientError } from "./Model.ts";
 
 type Optimistic<S extends Plugin.Spec> = {
-  readonly [Name in S["actions"][number]["name"]]: (
+  readonly [Name in S["actions"][number]["name"]]?: (
     snapshot: S["snapshot"]["Type"],
     payload: Action.Payload<Extract<S["actions"][number], { readonly name: Name }>>,
   ) => S["snapshot"]["Type"];
@@ -23,24 +23,16 @@ interface Reducers<S extends Plugin.Spec> {
     snapshot: S["snapshot"]["Type"],
     event: S["event"]["Type"],
   ) => S["snapshot"]["Type"];
-  readonly optimistic: Optimistic<S>;
-  readonly mergeSnapshot?: (
-    current: S["snapshot"]["Type"],
-    incoming: S["snapshot"]["Type"],
-  ) => S["snapshot"]["Type"];
-  readonly mergeHistory?: (
-    current: S["snapshot"]["Type"],
-    history: S["snapshot"]["Type"],
-  ) => S["snapshot"]["Type"];
+  readonly optimistic?: Optimistic<S>;
 }
 
 /** @internal The registration boundary retains the schema for every erased slot. */
 export interface Slot {
   readonly id: string;
   readonly applyEvent: (snapshot: unknown, event: unknown) => unknown;
-  readonly optimistic: Readonly<Record<string, (snapshot: unknown, payload: unknown) => unknown>>;
-  readonly mergeSnapshot?: (current: unknown, incoming: unknown) => unknown;
-  readonly mergeHistory?: (current: unknown, history: unknown) => unknown;
+  readonly optimistic: Readonly<
+    Partial<Record<string, (snapshot: unknown, payload: unknown) => unknown>>
+  >;
 }
 
 export interface PluginDefinition<Id extends string = string, R = never> {
@@ -58,28 +50,27 @@ export interface Definition<S extends Source.Spec, R = never> {
 const check = (contract: Plugin.Spec, reducers: object) => {
   const expected = new Set(contract.actions.map((action) => action.name));
 
-  if (
-    Object.keys(reducers).length !== expected.size ||
-    Object.keys(reducers).some((key) => !expected.has(key))
-  ) {
+  if (Object.keys(reducers).some((key) => !expected.has(key))) {
     throw RegistrationError.make({
-      message: "Client optimistic reducers must exactly match the contract's actions",
+      message: "Client optimistic reducers must name declared actions",
     });
   }
 };
 
 type Exact<S extends Plugin.Spec, O> = Reducers<S> & {
-  readonly optimistic: O & Record<Exclude<keyof O, S["actions"][number]["name"]>, never>;
+  readonly optimistic?: O & Record<Exclude<keyof O, S["actions"][number]["name"]>, never>;
 };
 
 export const plugin = <Id extends string, S extends Plugin.Spec, O extends Optimistic<NoInfer<S>>>(
   contract: Plugin.Definition<Id, S>,
   reducers: Exact<NoInfer<S>, O>,
 ): PluginDefinition<Id> => {
-  check(contract.spec, reducers.optimistic);
+  const optimistic = reducers.optimistic ?? {};
+
+  check(contract.spec, optimistic);
 
   // Only the owning slot's schema-decoded values reach these functions.
-  const slot = { id: contract.id, ...reducers } as Slot;
+  const slot = { id: contract.id, ...reducers, optimistic } as Slot;
 
   return { id: contract.id, contract, acquire: Effect.succeed(slot) };
 };
@@ -106,7 +97,9 @@ export const definition = <
         : never);
   } & (S["plugins"] extends readonly [] ? unknown : { readonly plugins: Plugins }),
 ): Definition<S, Requirements<Plugins>> => {
-  check(contract.spec, spec.optimistic);
+  const optimistic = spec.optimistic ?? {};
+
+  check(contract.spec, optimistic);
   const providedPlugins = spec.plugins ?? [];
 
   assertUnique(
@@ -131,7 +124,7 @@ export const definition = <
     contract,
     allowUnboundCommands: spec.allowUnboundCommands ?? false,
     acquire: Effect.gen(function* () {
-      const slots: Array<Slot> = [{ id: "$source", ...spec } as Slot];
+      const slots: Array<Slot> = [{ id: "$source", ...spec, optimistic } as Slot];
 
       for (const client of implementations) {
         slots.push(yield* client.acquire);

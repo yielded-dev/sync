@@ -5,23 +5,33 @@ Use [effect-cf](../platform-effect-cf/README.md) or
 [Alchemy](../platform-alchemy-cf/README.md) for framework integration.
 
 For custom hosts, `Cloudflare.make(server, state, options)` acquires one source
-per object and returns fetch and WebSocket lifecycle handlers plus an `alarm`
-Effect. Run the same Effect for each alarm notification; framework adapters supply
-the native callback.
-`Cloudflare.prepareRequest` attaches the authenticated source address and identity
-to a native request. `SqliteStorage.layer(nativeStorage, options)` exposes the
-storage port separately.
+per object from an application-provided `SourceStorage`. It returns fetch and
+WebSocket lifecycle handlers plus an `alarm` Effect. Acquire the storage layer and
+handlers in the native object's scope. Run the same alarm Effect for each native
+notification; framework adapters supply the callback.
+
+`SqliteStorage.layer(nativeStorage, { namespace, replayWindow })` explicitly
+selects SQLite. Custom stores need only implement the
+[transaction contract](../sync/src/server/SourceStorage.ts); durable delivery adds
+the optional `outbox` capability.
 
 ## Authentication and transport
 
 Authenticate every route before preparing and forwarding its request. Request
-preparation replaces internal identity headers. The object binding is a trusted
-capability; additional routes and service bindings need equivalent authentication.
+preparation with `Cloudflare.prepareRequest` replaces internal identity headers.
+The object binding is a trusted capability; additional routes and service bindings
+need equivalent authentication.
 Use `Server.provide` for services acquired and released within each source operation.
 
-Clients use the source's Effect RPC group with `RpcSerialization.layerJson`.
-HTTP serves snapshot, execute, and result lookup. WebSockets also support
-subscription and connection-scoped messages, with one subscription per socket.
+For authenticated server-side calls,
+`Cloudflare.client(contract, { address, identity, fetch })` creates a scoped HTTP
+client with `snapshot`, `execute`, and `result`. Supply an effectful `fetch` that
+forwards to the selected native stub. Retain the exact command id, admitted
+generation, and payload for retries and result lookup.
+
+The transport uses the source's Effect RPC group with `RpcSerialization.layerJson`.
+WebSockets support subscriptions and optional connection-scoped messages, with
+one subscription per socket. Presence messages do not advance durable cursors.
 
 | Socket close                                   | Client action                                 |
 | ---------------------------------------------- | --------------------------------------------- |
@@ -34,18 +44,25 @@ and retry after recovery.
 
 ## Durable data
 
-Each object owns one source address and storage namespace. Namespace, schema, or
-format mismatches refuse access without resetting data. Preserve object identity
-and reconcile state, receipts, and pending delivery before changing storage.
-Event retention removes replay rows only; receipts are retained for exact retry.
+Each object owns one source address. The SQLite layer also owns its storage
+namespace and replay retention. Namespace, schema, or format mismatches refuse
+access without resetting data. Preserve object identity and reconcile state,
+receipts, and pending delivery before changing storage. Event retention removes
+replay rows only; receipts are retained for exact retry.
 `allowUnboundCommands` defaults to false. Enabling it reserves those command
 identities across authority generations.
 
-Outbox delivery is at least once. Destinations must deduplicate by the stable
-obligation id. Only `Delivered` removes an obligation; permanent, retryable, and
-indeterminate failures retain evidence. Plans containing outbox work require a
-delivery configuration. Sync owns the object's alarm, so unrelated alarm jobs
-need an application scheduler.
+Outbox delivery is optional. For SQLite, set `maxPendingOutbox` to a positive
+capacity on the storage layer and supply the host's `outbox` options:
+`batchSize`, `retryMillis`, and `deliver`. Without a storage outbox capability,
+nonempty outbox plans fail before commit. Host acquisition requires delivery
+configuration and the storage capability to be enabled together.
+
+Delivery is at least once. Destinations must deduplicate by the stable obligation
+id. Only `Delivered` removes an obligation; permanent, retryable, and indeterminate
+failures retain evidence. Drain pending delivery before disabling it. Disabling
+SQLite outbox support retains its records. Sync owns the object's alarm when
+delivery is enabled, so unrelated alarm jobs need an application scheduler.
 
 Storage schemas and transaction details live in
 [SqliteStorage.ts](src/SqliteStorage.ts); host options live in

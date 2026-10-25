@@ -1,5 +1,10 @@
 import { SqliteStorage } from "@yielded/sync-platform-cloudflare";
-import { SourceStorage, type OutboxRecord, type StoredHead } from "@yielded/sync/server";
+import {
+  SourceStorage,
+  type OutboxRecord,
+  type OutboxStorage,
+  type StoredHead,
+} from "@yielded/sync/server";
 import { env, reset, runInDurableObject, evictDurableObject } from "cloudflare:test";
 import { Deferred, Effect, Fiber } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
@@ -16,10 +21,16 @@ const initial: StoredHead = {
   state: { value: 0 },
 };
 
-const usingStorage = <A, E>(body: (storage: SourceStorage["Service"]) => Effect.Effect<A, E>) =>
+const usingStorage = <A, E>(
+  body: (storage: SourceStorage["Service"], outbox: OutboxStorage) => Effect.Effect<A, E>,
+) =>
   runInDurableObject(stub(), (_instance, state) =>
     Effect.runPromise(
-      Effect.flatMap(SourceStorage, body).pipe(
+      Effect.flatMap(SourceStorage, (storage) =>
+        storage.outbox === undefined
+          ? Effect.die("Configured SQLite outbox is unavailable")
+          : body(storage, storage.outbox),
+      ).pipe(
         Effect.provide(
           SqliteStorage.layer(state.storage, {
             namespace: "counter-v1",
@@ -57,7 +68,7 @@ afterEach(() => reset());
 
 it("rolls back a transaction interrupted after all four writes", async () => {
   await usingStorage(
-    Effect.fn(function* (storage) {
+    Effect.fn(function* (storage, outbox) {
       yield* storage.transaction((tx) => tx.initialize(initial));
       const written = yield* Deferred.make<void>();
 
@@ -85,7 +96,7 @@ it("rolls back a transaction interrupted after all four writes", async () => {
       yield* Deferred.await(written);
       yield* Fiber.interrupt(fiber);
       expect(yield* storage.transaction((tx) => tx.readHead)).toEqual(initial);
-      expect(yield* storage.nextOutboxTime).toBeUndefined();
+      expect(yield* outbox.nextTime).toBeUndefined();
       expect(yield* storage.transaction((tx) => tx.readEvents(initial.position, 4))).toEqual([]);
       expect(
         yield* storage.transaction((tx) =>
@@ -100,7 +111,7 @@ it("recovers leased outbox evidence after eviction and rejects a stale acknowled
   const due = 4_000_000_000_000;
 
   const original = await usingStorage(
-    Effect.fn(function* (storage) {
+    Effect.fn(function* (storage, outbox) {
       yield* storage.transaction((tx) => tx.initialize(initial));
       yield* storage.transaction((tx) =>
         tx.commit(
@@ -115,9 +126,9 @@ it("recovers leased outbox evidence after eviction and rejects a stale acknowled
           ]),
         ),
       );
-      const claimed = yield* storage.claimOutbox(due, 100, 1);
+      const claimed = yield* outbox.claim(due, 100, 1);
 
-      expect(yield* storage.claimOutbox(due + 1, 100, 1)).toEqual([]);
+      expect(yield* outbox.claim(due + 1, 100, 1)).toEqual([]);
 
       return claimed[0];
     }),
@@ -125,14 +136,14 @@ it("recovers leased outbox evidence after eviction and rejects a stale acknowled
 
   await evictDurableObject(stub());
   await usingStorage(
-    Effect.fn(function* (storage) {
-      const [recovered] = yield* storage.claimOutbox(due + 101, 100, 1);
+    Effect.fn(function* (_storage, outbox) {
+      const [recovered] = yield* outbox.claim(due + 101, 100, 1);
 
       expect(recovered).toEqual({ ...original, attempts: 2, availableAtMillis: due + 201 });
-      yield* storage.settleOutbox(original, { _tag: "Delivered" });
-      expect(yield* storage.nextOutboxTime).toBe(due + 201);
-      yield* storage.settleOutbox(recovered, { _tag: "Delivered" });
-      expect(yield* storage.nextOutboxTime).toBeUndefined();
+      yield* outbox.settle(original, { _tag: "Delivered" });
+      expect(yield* outbox.nextTime).toBe(due + 201);
+      yield* outbox.settle(recovered, { _tag: "Delivered" });
+      expect(yield* outbox.nextTime).toBeUndefined();
     }),
   );
 });

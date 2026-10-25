@@ -1,15 +1,15 @@
 import { type ProtocolError, SourceAddress, type Source } from "@yielded/sync";
-import { Server, ServerCrypto, StorageError } from "@yielded/sync/server";
+import { Server, ServerCrypto, StorageError, type SourceStorage } from "@yielded/sync/server";
 import { Crypto, DateTime, Effect, Layer, PlatformError, Schema, type Scope } from "effect";
 import { Hex } from "effect/encoding";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { RpcSerialization, RpcServer } from "effect/rpc";
 
+import { makeClient, type ClientConstructor } from "./RemoteClient.ts";
 import * as RpcHost from "./RpcHost.ts";
 import * as SocketTransport from "./SocketTransport.ts";
 import * as SourceHub from "./SourceHub.ts";
 import { Attachment, invalid, unavailable } from "./SourceHub.ts";
-import * as SqliteStorage from "./SqliteStorage.ts";
 
 export type {
   ObjectState,
@@ -19,6 +19,7 @@ export type {
 } from "./SocketTransport.ts";
 
 export type { Options } from "./SourceHub.ts";
+export type { ClientOptions, Command, RemoteClient } from "./RemoteClient.ts";
 
 const webCrypto = Crypto.make({
   randomBytes: (size) => crypto.getRandomValues(new Uint8Array(size)),
@@ -71,7 +72,7 @@ export const make = Effect.fn("Cloudflare.make")(function* <
   state: SocketTransport.ObjectState,
   options: SourceHub.Options<DeliveryR>,
   transportFactory?: SocketTransport.Factory,
-): Effect.fn.Return<Handlers, StorageError, Scope.Scope | R | DeliveryR> {
+): Effect.fn.Return<Handlers, StorageError, Scope.Scope | SourceStorage | R | DeliveryR> {
   for (const limit of [
     options.replay.maxEvents,
     options.replay.maxBatchBytes,
@@ -79,24 +80,13 @@ export const make = Effect.fn("Cloudflare.make")(function* <
     options.sockets.bufferSize,
     options.maxQueuedTurns ?? 128,
     options.turnTimeoutMillis ?? 5_000,
-    ...(options.outbox === undefined
-      ? []
-      : [options.outbox.maxPending, options.outbox.batchSize, options.outbox.retryMillis]),
+    ...(options.outbox === undefined ? [] : [options.outbox.batchSize, options.outbox.retryMillis]),
   ]) {
     if (!Number.isSafeInteger(limit) || limit <= 0)
       throw new RangeError("Cloudflare source limits must be positive safe integers");
   }
 
-  const context = yield* Layer.build(
-    Layer.mergeAll(
-      CryptoLive,
-      SqliteStorage.layer(state.storage, {
-        namespace: options.storageNamespace,
-        replayWindow: options.replay.maxEvents,
-        maxPendingOutbox: options.outbox?.maxPending ?? 0,
-      }),
-    ),
-  );
+  const context = yield* Layer.build(CryptoLive);
 
   const closeNative = (socket: SocketTransport.Socket, code: number, reason: string) =>
     Effect.try({ try: () => socket.close(code, reason), catch: unavailable }).pipe(Effect.ignore);
@@ -327,6 +317,9 @@ export const prepareRequest: <S extends Source.Spec>(
 
   return request;
 });
+
+/** A scoped, request-only client. The application retains exact command identities. */
+export const client: ClientConstructor = makeClient(prepareRequest);
 
 /** Protocol failure response for hosts that expose Sync directly over HTTP. */
 export const errorResponse = (error: ProtocolError): Response =>

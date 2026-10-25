@@ -1,4 +1,4 @@
-import { Action, Plugin, Source, SourceCatalog } from "@yielded/sync";
+import { Action, Plugin, Source } from "@yielded/sync";
 import { Schema } from "effect";
 
 export class InvalidValue extends Schema.TaggedError<InvalidValue>()("InvalidValue", {
@@ -33,5 +33,3 @@ export const Counter = Source.make({
   ],
   plugins: [Label],
 });
-
-export const Catalog = SourceCatalog.make([Counter]);

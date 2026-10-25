@@ -1,9 +1,5 @@
-import {
-  Client,
-  type ClientError,
-  type Persistence,
-  type PersistenceError,
-} from "@yielded/sync/client";
+import type { Persistence } from "@yielded/sync-persistence";
+import { Client, type ClientError, type PersistenceError } from "@yielded/sync/client";
 import { Effect, Exit, Scope } from "effect";
 
 import * as scenarios from "../../sync/test/persistence-scenarios.ts";
@@ -39,7 +35,7 @@ export const wipe = () => Effect.runPromise(held.wipe);
 export const writeHeld = () =>
   Effect.runPromise(
     held.intentJournal
-      .transaction((tx) => tx.put(scenarios.evidence))
+      .commit(scenarios.evidence.address, { insert: [scenarios.evidence], replace: [], remove: [] })
       .pipe(Effect.match({ onFailure: (error) => error.reason, onSuccess: () => "Success" })),
   );
 

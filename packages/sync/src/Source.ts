@@ -27,6 +27,24 @@ export interface Spec extends Plugin.Spec {
   readonly plugins: ReadonlyArray<Plugin.Definition>;
 }
 
+interface Input extends Omit<Spec, "message" | "plugins"> {
+  readonly message?: Spec["message"];
+  readonly plugins?: Spec["plugins"];
+}
+
+type Normalized<S extends Input> = S extends Spec
+  ? S
+  : Omit<S, "message" | "plugins"> & {
+      readonly message: "message" extends keyof S
+        ?
+            | Exclude<S["message"], undefined>
+            | (undefined extends S["message"] ? typeof Schema.Never : never)
+        : typeof Schema.Never;
+      readonly plugins: "plugins" extends keyof S
+        ? Exclude<S["plugins"], undefined> | (undefined extends S["plugins"] ? readonly [] : never)
+        : readonly [];
+    };
+
 type BoundActions<
   S extends Spec,
   Namespace extends string,
@@ -273,12 +291,12 @@ const define = <const S extends Spec>(spec: S) => {
 
 export type Definition<S extends Spec = Spec> = ReturnType<typeof define<S>>;
 
-export function make<const S extends Omit<Spec, "plugins">>(
+export function make<const S extends Input>(
   input: S & {
     readonly actions: S["actions"] & Unique<Names<S["actions"]>>;
-    readonly plugins?: never;
-  },
-): Definition<Omit<S, "plugins"> & { readonly plugins: readonly [] }>;
+    readonly plugins?: S["plugins"] & Unique<Ids<NonNullable<S["plugins"]>>>;
+  } & ([S] extends [Spec] ? never : unknown),
+): Definition<Normalized<S>>;
 
 export function make<const S extends Spec>(
   input: S & {
@@ -287,8 +305,6 @@ export function make<const S extends Spec>(
   },
 ): Definition<S>;
 
-export function make(
-  input: Omit<Spec, "plugins"> & { readonly plugins?: ReadonlyArray<Plugin.Definition> },
-): unknown {
-  return define({ ...input, plugins: input.plugins ?? [] });
+export function make(input: Input): unknown {
+  return define({ ...input, message: input.message ?? Schema.Never, plugins: input.plugins ?? [] });
 }

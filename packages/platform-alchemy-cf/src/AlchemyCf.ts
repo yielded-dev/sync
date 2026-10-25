@@ -1,12 +1,30 @@
-import type { ProtocolError, Source } from "@yielded/sync";
-import { Cloudflare } from "@yielded/sync-platform-cloudflare";
-import type { Server } from "@yielded/sync/server";
+import type { Action, ProtocolError, Source } from "@yielded/sync";
+import { Cloudflare, SqliteStorage } from "@yielded/sync-platform-cloudflare";
+import type { Server, SourceStorage, StorageError } from "@yielded/sync/server";
 import { DurableObjectState, type WebSocket } from "alchemy/Cloudflare/Workers";
-import { Context, Effect, Scope } from "effect";
+import { Context, Effect, Layer, Scope } from "effect";
 import { type HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 export type Options<R = never> = Cloudflare.Options<R>;
 export type Identity = Cloudflare.Identity;
+
+export type ClientOptions<Kind extends string, E = never, R = never> = Cloudflare.ClientOptions<
+  Kind,
+  E,
+  R
+>;
+
+export type Command<A extends Action.Definition> = Cloudflare.Command<A>;
+export type RemoteClient<S extends Source.Spec> = Cloudflare.RemoteClient<S>;
+export const client: typeof Cloudflare.client = Cloudflare.client;
+
+/** Build in the returned runtime Effect, after Alchemy has supplied native storage. */
+export const sqlite = (
+  options: SqliteStorage.Options,
+): Layer.Layer<SourceStorage, StorageError, DurableObjectState> =>
+  Layer.unwrap(
+    Effect.map(DurableObjectState, (state) => SqliteStorage.layer(state.raw.storage, options)),
+  );
 
 export type Handlers = {
   readonly fetch: Effect.Effect<
@@ -31,7 +49,7 @@ export const make: <S extends Source.Spec, R, DeliveryR = never>(
   definition: Server.Definition<S, R>,
   options: Options<DeliveryR>,
 ) => Effect.Effect<
-  Effect.Effect<Handlers, never, Scope.Scope>,
+  Effect.Effect<Handlers, never, Scope.Scope | SourceStorage>,
   never,
   DurableObjectState | R | DeliveryR
 > = Effect.fn("AlchemyCf.make")(

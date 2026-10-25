@@ -1,6 +1,6 @@
 import { ProtocolError } from "@yielded/sync";
 import { EffectCf } from "@yielded/sync-platform-effect-cf";
-import { Context, Effect } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { DurableObject, DurableObjectNamespace, Worker } from "effect-cf";
 
 import { authenticate } from "./auth.ts";
@@ -8,18 +8,24 @@ import { Counter } from "./contract.ts";
 import { CounterServer } from "./server.ts";
 
 const sync = EffectCf.make(CounterServer, {
-  storageNamespace: "counter-v1",
   replay: { maxEvents: 4, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 32, bufferSize: 16 },
   outbox: {
-    maxPending: 100,
     batchSize: 10,
     retryMillis: 60_000,
     deliver: () => Effect.succeed({ _tag: "Delivered" as const }),
   },
 });
 
-export const CounterObject = DurableObject.make(sync.layer, sync.handlers);
+export const CounterObject = DurableObject.make(
+  sync.layer.pipe(
+    Layer.provide(
+      EffectCf.sqlite({ namespace: "counter-v1", replayWindow: 4, maxPendingOutbox: 100 }),
+    ),
+  ),
+  sync.handlers,
+);
+
 export type CounterObject = InstanceType<typeof CounterObject>;
 
 class Counters extends Context.Service<

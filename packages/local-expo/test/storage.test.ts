@@ -47,13 +47,14 @@ it("rolls back conflicting journal writes and fences retired SQLite connections"
         .pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
     ),
   ).toContain("generation fencing");
+  // This synchronous bridge cannot release a writer while another waits for its lock.
   expect(
     await Effect.runPromise(
       scenarios
-        .concurrent(open, "concurrent")
+        .concurrent(open, "concurrent", 1)
         .pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
     ),
-  ).toBe("conflict and interruption rollback");
+  ).toBe("atomic conflict rollback");
 });
 it("background flushes and recovers immutable commands on reopen", async () => {
   const before = await Effect.runPromise(

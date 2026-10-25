@@ -32,7 +32,7 @@ const run = (scenario: Parameters<typeof window.persistence.run>[0], namespace: 
 
 it("rolls back conflicting journal writes and fences retired IndexedDB connections", async () => {
   expect(await run("exercise", "operations")).toContain("generation fencing");
-  expect(await run("concurrent", "concurrent")).toBe("conflict and interruption rollback");
+  expect(await run("concurrent", "concurrent")).toBe("atomic conflict rollback");
 });
 
 it("background flushes and retries the exact command after reload", async () => {

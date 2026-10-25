@@ -31,8 +31,8 @@ constraints. Expo web uses IndexedDB.
 
 ## Define a shared contract
 
-`Source.make` defines a public snapshot, durable event, ephemeral message, and
-registered actions. Effect Schema owns values that cross the wire or are persisted.
+`Source.make` defines a public snapshot, durable event, and registered actions.
+Messages and plugins are optional. Effect Schema owns values that cross the wire or are persisted.
 
 ```ts
 import { Action, Source } from "@yielded/sync";
@@ -43,7 +43,6 @@ export const Counter = Source.make({
   schemaVersion: 1,
   snapshot: Schema.Struct({ value: Schema.Number }),
   event: Schema.Struct({ value: Schema.Number }),
-  message: Schema.Never,
   actions: [
     Action.make("set", {
       payload: Schema.Struct({ value: Schema.Number }),
@@ -65,11 +64,12 @@ matching server definition and links to runnable applications.
 ## Connect server and client
 
 Use `Server.make` to supply private state, action handlers, authorization, and
-initialization. An accepted action commits state, events, its exact outcome, and
-outbox obligations atomically. The [counter example](../api/consumer.md) explains
+initialization. Provide the host's `SourceStorage`, using a SQLite Layer or your
+own implementation. An accepted action commits state, events, its exact outcome,
+and any outbox obligations atomically. The [counter example](../api/consumer.md) explains
 the server and host boundaries.
 
-On the client, `Client.definition` supplies pure event and optimistic reducers.
+On the client, `Client.definition` supplies a pure event reducer and optional optimistic reducers.
 `Client.make` opens a session for one authenticated actor, with an application
 transport and explicit persistence. Open a source address, wait for `ready`, then
 execute a registered action. `SourceAtom.make` adds UI bindings over that session.

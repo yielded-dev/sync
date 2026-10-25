@@ -1,7 +1,7 @@
 import { ProtocolError } from "@yielded/sync";
 import { EffectCf } from "@yielded/sync-platform-effect-cf";
 import { Server } from "@yielded/sync/server";
-import { Context, Effect, Option, Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import { DurableObject, DurableObjectNamespace, Worker } from "effect-cf";
 
 import { Board, CardRejected, Cards } from "./contract.ts";
@@ -21,7 +21,6 @@ const board = Server.plugin(Board, {
           state: { ...state, title: payload },
           events: [{ title: payload }],
           result: payload,
-          outbox: [],
         }),
       ),
   },
@@ -44,7 +43,6 @@ const server = Server.make(Cards, {
           state: { cards: [...state.cards, card] },
           events: [{ _tag: "Added" as const, card }],
           result: { id: card.id, count: state.cards.length + 1 },
-          outbox: [],
         }),
       );
     },
@@ -61,7 +59,6 @@ const server = Server.make(Cards, {
           },
           events: [{ _tag: "Moved" as const, ...payload }],
           result: payload,
-          outbox: [],
         }),
       );
     },
@@ -70,12 +67,15 @@ const server = Server.make(Cards, {
 });
 
 const sync = EffectCf.make(server, {
-  storageNamespace: "list-board-v1",
   replay: { maxEvents: 16, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 32, bufferSize: 32 },
 });
 
-export const BoardObject = DurableObject.make(sync.layer, sync.handlers);
+export const BoardObject = DurableObject.make(
+  sync.layer.pipe(Layer.provide(EffectCf.sqlite({ namespace: "list-board-v1", replayWindow: 16 }))),
+  sync.handlers,
+);
+
 export type BoardObject = InstanceType<typeof BoardObject>;
 
 class Boards extends Context.Service<

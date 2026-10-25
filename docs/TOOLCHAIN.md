@@ -35,7 +35,7 @@ and `vp help` for command options.
 | `vp run docs:dev` / `vp run docs:preview` | Serve source / built documentation                   |
 | `vp run docs:build`                       | Build the documentation site                         |
 
-`vp run typecheck` checks root tooling, all six libraries, and all five examples
+`vp run typecheck` checks root tooling, all libraries, and all examples
 with `effect-tsrs diagnostics --project tsconfig.json --type-check --strict`. It
 checks TypeScript types and Effect diagnostics; configured errors and warnings
 fail the check. The packed-consumer check uses `tsrs --noEmit`; the docs workspace

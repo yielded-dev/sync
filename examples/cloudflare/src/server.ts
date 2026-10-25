@@ -18,7 +18,6 @@ const LabelServer = Server.plugin(Label, {
           state: { ...state, text: payload, changedBy: principal.actorId },
           events: [{ text: payload }],
           result: payload,
-          outbox: [],
         }),
       ),
   },

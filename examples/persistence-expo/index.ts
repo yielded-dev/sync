@@ -14,8 +14,8 @@ const probe = Effect.gen(function* () {
     Effect.gen(function* () {
       const storage = yield* ExpoSqlite.open({ namespace });
 
-      return yield* storage.intentJournal.transaction((tx) =>
-        tx.get(scenarios.evidence.address, scenarios.evidence.commandId),
+      return (yield* storage.intentJournal.load(scenarios.evidence.address, 10)).find(
+        (row) => row.commandId === scenarios.evidence.commandId,
       );
     }),
   );

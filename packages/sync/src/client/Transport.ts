@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, Schema, Stream, type Scope } from "effect";
-import { RpcClient } from "effect/rpc";
+import { RpcClient, RpcSerialization } from "effect/rpc";
+import { Socket } from "effect/socket";
 
 import { ProtocolError, type SourceAddress, type SourcePosition } from "../Model.ts";
 import type * as Source from "../Source.ts";
@@ -113,3 +114,18 @@ export const rpcTransport = <S extends Source.Spec>(
 /** Requires the application's scoped RPC protocol, route, and credentials. */
 export const layerRpcTransport = <S extends Source.Spec>(contract: Source.Definition<S>) =>
   Layer.effect(Transport, rpcTransport(contract));
+
+export interface WebSocketTransportOptions {
+  readonly url: string | Effect.Effect<string>;
+}
+
+/** The application supplies the socket constructor, credentials, and session lifetime. */
+export const layerWebSocketTransport = <S extends Source.Spec>(
+  contract: Source.Definition<S>,
+  options: WebSocketTransportOptions,
+): Layer.Layer<Transport, never, Socket.WebSocketConstructor> =>
+  layerRpcTransport(contract).pipe(
+    Layer.provide(RpcClient.layerProtocolSocket({ retryTransientErrors: false })),
+    Layer.provide(RpcSerialization.layerJson),
+    Layer.provide(Socket.layerWebSocket(options.url)),
+  );

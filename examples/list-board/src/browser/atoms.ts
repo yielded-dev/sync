@@ -14,7 +14,6 @@ import {
   Stream,
 } from "effect";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { RpcClient, RpcSerialization } from "effect/rpc";
 import { Socket } from "effect/socket";
 
 import { BoardClient } from "../client.ts";
@@ -62,7 +61,7 @@ export const actorHref = (actor: typeof DemoActor.Type) => {
 
 const address = Cards.address(boardId);
 
-const protocol = Layer.unwrap(
+const transport = Layer.unwrap(
   Effect.gen(function* () {
     const { actorId } = yield* Client.CurrentActor;
     const socketUrl = new URL(`/sync/boards/${encodeURIComponent(boardId)}`, page.origin);
@@ -70,9 +69,7 @@ const protocol = Layer.unwrap(
     socketUrl.protocol = page.protocol === "https:" ? "wss:" : "ws:";
     socketUrl.searchParams.set("actor", actorId);
 
-    return RpcClient.layerProtocolSocket({ retryTransientErrors: false }).pipe(
-      Layer.provide(RpcSerialization.layerJson),
-      Layer.provide(Socket.layerWebSocket(socketUrl.href)),
+    return Client.layerWebSocketTransport(Cards, { url: socketUrl.href }).pipe(
       Layer.provide(Socket.layerWebSocketConstructorGlobal),
     );
   }),
@@ -94,10 +91,7 @@ class BoardSession extends Context.Service<BoardSession, Effect.Success<typeof m
 // One registry owns the actor's socket, IndexedDB handle, and source leases.
 const runtime = Atom.runtime(
   BoardSession.layer.pipe(
-    Layer.provide([
-      IndexedDb.layer({ namespace: "list-board-demo-v1" }),
-      Client.layerRpcTransport(Cards).pipe(Layer.provide(protocol)),
-    ]),
+    Layer.provide([IndexedDb.layer({ namespace: "list-board-demo-v1" }), transport]),
     Layer.provide(Layer.succeed(Client.CurrentActor, { actorId })),
   ),
 );
