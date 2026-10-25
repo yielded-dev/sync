@@ -121,9 +121,10 @@ Configure `publish-beta.yml` as each package's npm trusted publisher.
 the exact current `main` revision. It publishes only when Changesets reports
 unpublished versions with no pending changesets. Manual dispatch from `main`
 can retry a release. The publisher runs `vp run ready`, publishes the validated
-tarballs with npm OIDC and provenance, verifies a registry consumer, and records
-evidence in a GitHub prerelease. An existing registry version is accepted only if
-its integrity matches.
+tarballs with npm OIDC and provenance, waits for registry availability, verifies a
+registry consumer, and records evidence in a GitHub prerelease. An existing
+registry version is accepted only if its integrity matches. Registry propagation
+has a ten-minute deadline; a timed-out publication can be retried from `main`.
 
 Successful publication triggers [Deploy docs](../.github/workflows/deploy-docs.yml)
 for the validated revision. A skipped publisher does not deploy docs, and an

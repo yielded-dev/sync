@@ -104,24 +104,61 @@ jobs:
             *) echo "Expected a beta version, found $version" >&2; exit 1 ;;
           esac
 
-          for package in sync platform-cloudflare platform-effect-cf platform-alchemy-cf local-indexeddb local-expo; do
+          packages=(sync platform-cloudflare platform-effect-cf platform-alchemy-cf local-indexeddb local-expo)
+
+          registry_matches() {
+            local name=$1 archive=$2 remote local_integrity remote_integrity
+            if ! remote=$(npm view "$name@$version" dist.integrity --json --prefer-online --fetch-retries=0 --fetch-timeout=10000 2>/dev/null); then
+              return 1
+            fi
+            local_integrity="sha512-$(openssl dgst -sha512 -binary "$archive" | openssl base64 -A)"
+            remote_integrity=$(node -p "JSON.parse(process.argv[1])" "$remote")
+            if [ "$local_integrity" != "$remote_integrity" ]; then
+              echo "$name@$version exists with different contents" >&2
+              exit 1
+            fi
+          }
+
+          for package in "${packages[@]}"; do
             if [ "$package" = sync ]; then
               name=@yielded/sync
             else
               name=@yielded/sync-$package
             fi
             archive=".release/$package.tgz"
-            if remote=$(npm view "$name@$version" dist.integrity --json 2>/dev/null); then
-              local_integrity="sha512-$(openssl dgst -sha512 -binary "$archive" | openssl base64 -A)"
-              remote_integrity=$(node -p "JSON.parse(process.argv[1])" "$remote")
-              if [ "$local_integrity" != "$remote_integrity" ]; then
-                echo "$name@$version exists with different contents" >&2
-                exit 1
-              fi
+            if registry_matches "$name" "$archive"; then
               echo "$name@$version already matches the validated tarball"
             else
-              npm publish "$archive" --access public --tag beta --provenance
+              publish_log=$(mktemp)
+              if ! npm publish "$archive" --access public --tag beta --provenance 2>&1 | tee "$publish_log"; then
+                # npm can accept a version before registry reads can see it.
+                # A retry must still verify its integrity once it becomes visible.
+                if ! grep -Fq "You cannot publish over the previously published versions: $version." "$publish_log"; then
+                  rm -f "$publish_log"
+                  exit 1
+                fi
+              fi
+              rm -f "$publish_log"
             fi
+          done
+
+          deadline=$((SECONDS + 600))
+          while true; do
+            pending=()
+            for package in "${packages[@]}"; do
+              name=@yielded/sync
+              if [ "$package" != sync ]; then name=@yielded/sync-$package; fi
+              if ! registry_matches "$name" ".release/$package.tgz"; then
+                pending+=("$name")
+              fi
+            done
+            if [ "${#pending[@]}" -eq 0 ]; then break; fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "Timed out waiting for npm registry publication: ${pending[*]}" >&2
+              exit 1
+            fi
+            echo "Waiting for npm registry publication: ${pending[*]}"
+            sleep 10
           done
 
       - name: Verify registry installation
