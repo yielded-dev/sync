@@ -29,7 +29,8 @@ to existing guidance; it does not justify appending another section.
 
 Use `bun add` for consumer package installation examples.
 Use small diagrams only when they clarify ownership or usage.
-Use fenced `mermaid` blocks for flow diagrams, with `accTitle` and `accDescr`.
+Use the rich MDX diagram components from `@yielded/starlight-theme/components`
+for flows, traces, and ownership comparisons. Keep their accessible labels and descriptions.
 The shared Starlight theme owns rendering and colors.
 
 Never hardcode Effect's current version in documentation, including READMEs,
