@@ -104,19 +104,30 @@ its manifest for installation examples. Follow the
 ## Releases and docs deployment
 
 Use `vp run changeset` for consumer-visible release notes,
-`vp run changeset status` to inspect pending releases, and
-`vp run changeset:version` to advance the fixed beta group. Commit generated
-manifests, changelogs, and the lockfile. Retain consumed notes in `.changeset/pre/`
-for the stable release.
+and `vp run changeset status` to inspect pending releases. Pushes to `main` run
+[Release](../.github/workflows/release.yml), which opens or updates
+`changeset-release/main`. Its `ci:version` command advances the fixed beta group
+and updates manifests, changelogs, and the lockfile. Consumed notes remain in
+`.changeset/pre/` for the stable release. The version PR requires the same checks
+and review as other pull requests.
 
-Configure `publish-beta.yml` as each package's npm trusted publisher. Dispatch
-[Publish beta](../.github/workflows/publish-beta.yml) from `main` after the local
-`vp run ready` gate. It validates and publishes the same tarballs with npm OIDC
-and provenance, verifies a registry consumer, and records evidence in a GitHub
-prerelease. An existing registry version is accepted only if its integrity matches.
+The release workflow needs `EFFECT_AGENT_APP_ID` and
+`EFFECT_AGENT_APP_PRIVATE_KEY`, with the App installed on this repository and
+granted Contents and Pull requests write access. App-authored version commits
+trigger PR CI and review.
+
+Configure `publish-beta.yml` as each package's npm trusted publisher.
+[Publish beta](../.github/workflows/publish-beta.yml) runs after CI succeeds for
+the exact current `main` revision. It publishes only when Changesets reports
+unpublished versions with no pending changesets. Manual dispatch from `main`
+can retry a release. The publisher runs `vp run ready`, publishes the validated
+tarballs with npm OIDC and provenance, verifies a registry consumer, and records
+evidence in a GitHub prerelease. An existing registry version is accepted only if
+its integrity matches.
 
 Successful publication triggers [Deploy docs](../.github/workflows/deploy-docs.yml)
-for the validated revision. It skips an older revision if `main` has advanced.
+for the validated revision. A skipped publisher does not deploy docs, and an
+older revision is skipped if `main` has advanced.
 Manual dispatch from current `main` publishes docs between releases or retries a
 skipped deployment. The workflow needs `CLOUDFLARE_API_TOKEN` with access to the
 site Worker and its `yielded.dev` route.
