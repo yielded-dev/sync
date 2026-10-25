@@ -28,12 +28,13 @@ jobs:
     permissions:
       contents: read
     outputs:
-      publish: ${{ steps.select-mode.outputs.mode == 'publish' || github.event_name == 'workflow_dispatch' && steps.select-mode.outputs.mode == 'none' }}
+      publish: ${{ steps.select-mode.outputs.mode == 'publish' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Node
@@ -61,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
       id-token: write
     steps:
       - name: Require main branch
@@ -71,14 +72,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Node.js and npm registry
+      - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version: 24
           package-manager-cache: false
-          registry-url: https://registry.npmjs.org
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -91,65 +92,19 @@ jobs:
       - name: Install Chromium for persistence tests
         run: ./node_modules/.bin/vp -C packages/local-indexeddb exec playwright install --with-deps chromium
 
-      - name: Check, test, build, and validate tarballs
-        run: ./node_modules/.bin/vp run ready
+      - name: Upgrade npm for trusted publishing
+        run: npm install --global npm@12.2.0
 
-      - name: Publish validated tarballs
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(node -p "require('./packages/sync/package.json').version")
-          case "$version" in
-            *-beta.*) ;;
-            *) echo "Expected a beta version, found $version" >&2; exit 1 ;;
-          esac
+      - name: Mint the release token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.EFFECT_AGENT_APP_ID }}
+          private-key: ${{ secrets.EFFECT_AGENT_APP_PRIVATE_KEY }}
+          permission-contents: write
 
-          for package in sync platform-cloudflare platform-effect-cf platform-alchemy-cf local-indexeddb local-expo; do
-            if [ "$package" = sync ]; then
-              name=@yielded/sync
-            else
-              name=@yielded/sync-$package
-            fi
-            archive=".release/$package.tgz"
-            if remote=$(npm view "$name@$version" dist.integrity --json 2>/dev/null); then
-              local_integrity="sha512-$(openssl dgst -sha512 -binary "$archive" | openssl base64 -A)"
-              remote_integrity=$(node -p "JSON.parse(process.argv[1])" "$remote")
-              if [ "$local_integrity" != "$remote_integrity" ]; then
-                echo "$name@$version exists with different contents" >&2
-                exit 1
-              fi
-              echo "$name@$version already matches the validated tarball"
-            else
-              npm publish "$archive" --access public --tag beta --provenance
-            fi
-          done
-
-      - name: Verify registry installation
-        run: ./node_modules/.bin/vp run release:check --registry
-
-      - name: Record source and validation evidence
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(node -p "require('./packages/sync/package.json').version")
-          tag="v$version"
-          cat > .release/notes.md <<EOF
-          Beta of the six @yielded/sync packages at $version.
-
-          Source revision: [$GITHUB_SHA](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)
-          Validation: [release workflow run](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) ran vp run ready and installed, typechecked, and built the published versions from npm.
-          Supported hosts, adapters, and compatibility policy: [release guide](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/src/content/docs/RELEASE.md).
-          EOF
-          if gh release view "$tag" >/dev/null 2>&1; then
-            target=$(gh release view "$tag" --json targetCommitish --jq .targetCommitish)
-            if [ "$target" != "$GITHUB_SHA" ]; then
-              echo "$tag already points to a different source revision" >&2
-              exit 1
-            fi
-            gh release upload "$tag" .release/*.tgz --clobber
-            gh release edit "$tag" --notes-file .release/notes.md
-          else
-            gh release create "$tag" .release/*.tgz --target "$GITHUB_SHA" --prerelease --title "Effect Sync $version" --notes-file .release/notes.md
-          fi
+      - name: Publish release
+        uses: changesets/action/publish@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: ./node_modules/.bin/vp run --no-cache release:checked-publish

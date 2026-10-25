@@ -120,10 +120,16 @@ Configure `publish-beta.yml` as each package's npm trusted publisher.
 [Publish beta](../.github/workflows/publish-beta.yml) runs after CI succeeds for
 the exact current `main` revision. It publishes only when Changesets reports
 unpublished versions with no pending changesets. Manual dispatch from `main`
-can retry a release. The publisher runs `vp run ready`, publishes the validated
-tarballs with npm OIDC and provenance, verifies a registry consumer, and records
-evidence in a GitHub prerelease. An existing registry version is accepted only if
-its integrity matches.
+can retry a release. The publisher uses the same Changesets publish action as
+Auth and Agent. Its `release:checked-publish` hook runs `vp run ready`, prepares
+npm-compatible manifests, and invokes `changeset publish --tag beta`. Changesets
+owns registry checks, package publication, Git tags, and GitHub releases. npm
+authenticates through OIDC; the GitHub App token authorizes tags and releases.
+
+Use `vp run release:publish --dry-run` to build and inspect publishable packages
+without publishing or tagging. Temporary manifest and prerelease-state changes
+are restored after the command. Once npm makes a release available,
+`vp run release:check --registry` verifies a clean registry consumer.
 
 Successful publication triggers [Deploy docs](../.github/workflows/deploy-docs.yml)
 for the validated revision. A skipped publisher does not deploy docs, and an

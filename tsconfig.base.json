@@ -118,6 +118,20 @@
                 "preferSchemaOverJson": "suggestion"
               }
             }
+          },
+          {
+            "include": ["**/scripts/release-publish.ts"],
+            "options": {
+              "allowedUnstableApis": [
+                "effect/cli",
+                "effect/http",
+                "effect/process",
+                "effect/FileSystem#FileSystem",
+                "effect/Path#Path",
+                "@effect/platform-node/NodeServices#layer",
+                "@effect/platform-node/NodeRuntime#runMain"
+              ]
+            }
           }
         ]
       }
