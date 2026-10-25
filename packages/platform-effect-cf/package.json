@@ -46,6 +46,6 @@
   },
   "peerDependencies": {
     "effect": "catalog:",
-    "effect-cf": "^0.53.0"
+    "effect-cf": "^0.53.0 || ^0.57.0"
   }
 }
