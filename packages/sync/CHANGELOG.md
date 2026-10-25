@@ -1,5 +1,9 @@
 # @yielded/sync
 
+## 0.1.0-beta.2
+
+No changes in this release.
+
 ## 0.1.0-beta.1
 
 ### Minor Changes

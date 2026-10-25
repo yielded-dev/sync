@@ -1,5 +1,12 @@
 # @yielded/sync-platform-alchemy-cf
 
+## 0.1.0-beta.2
+
+### Patch Changes
+
+- @yielded/sync-platform-cloudflare@0.1.0-beta.2
+  - @yielded/sync@0.1.0-beta.2
+
 ## 0.1.0-beta.1
 
 ### Minor Changes
