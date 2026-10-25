@@ -142,7 +142,7 @@ jobs:
             fi
           done
 
-          deadline=$((SECONDS + 600))
+          deadline=$((SECONDS + 1200))
           while true; do
             pending=()
             for package in "${packages[@]}"; do
