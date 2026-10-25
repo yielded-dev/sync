@@ -87,6 +87,11 @@ export interface Lease<S extends Source.Spec> {
   readonly read: Effect.Effect<State<S>, ClientError>;
   readonly changes: Stream.Stream<State<S>, ClientError>;
   readonly ready: Effect.Effect<Snapshot<S>, ClientError>;
+  /** Journal locally and start background delivery without waiting for the network. */
+  readonly enqueue: <A extends Actions<S>>(
+    action: A,
+    payload: Action.Payload<NoInfer<A>>,
+  ) => Effect.Effect<string, ClientError>;
   readonly execute: <A extends Actions<S>>(
     action: A,
     payload: Action.Payload<NoInfer<A>>,
@@ -530,7 +535,11 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     }
     yield* commit(entry, sourceScope, (state) =>
       state.authoritative === undefined
-        ? { ...state, provisional: result.success.snapshot }
+        ? {
+            ...state,
+            provisional: result.success.snapshot,
+            provisionalPosition: result.success.position,
+          }
         : state,
     );
   });
@@ -833,6 +842,16 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     function* (entry: Entry<S>, sourceScope: Scope.Closeable, leaseScope?: Scope.Scope) {
       yield* assertOpen(entry, sourceScope, leaseScope);
       if (entry.run !== undefined) yield* Fiber.interrupt(entry.run);
+      yield* commit(
+        entry,
+        sourceScope,
+        (state) => ({
+          ...state,
+          connection: state.authoritative === undefined ? "connecting" : "recovering",
+          error: undefined,
+        }),
+        leaseScope,
+      );
       entry.run = yield* run(entry, sourceScope).pipe(
         Effect.catch((failure) =>
           failure.reason === "Closed"
@@ -998,7 +1017,7 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         return yield* Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber)));
       });
 
-    const execute = (action: BoundAction<S>, payload: unknown) =>
+    const admit = (action: BoundAction<S>, payload: unknown) =>
       owned(
         Effect.gen(function* () {
           if (!actions.includes(action))
@@ -1012,16 +1031,24 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             entry,
             sourceScope,
             (state) => {
-              if (state.connection === "parked")
+              if (
+                state.connection === "parked" &&
+                state.error !== undefined &&
+                !["Disconnected", "Timeout", "OutcomeUnknown"].includes(state.error.reason)
+              )
                 throw (
                   state.error ??
                   error("Disconnected", "Recover the parked source before dispatching")
                 );
               if (state.intents.size + state.quarantined.size >= limits.maxPendingPerSource)
                 throw error("Capacity", "Pending command capacity exhausted");
-              if (state.authoritative === undefined && !definition.allowUnboundCommands)
+
+              const generation =
+                (state.authoritative?.position ?? state.provisionalPosition)
+                  ?.sourceAuthorityGeneration ?? null;
+
+              if (generation === null && !definition.allowUnboundCommands)
                 throw error("AuthorityUnknown", "Wait for authority before executing commands");
-              const generation = state.authoritative?.position.sourceAuthorityGeneration ?? null;
 
               const command: EncodedCommand = {
                 ...request(address),
@@ -1049,10 +1076,37 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             leaseScope,
           );
 
+          return id;
+        }),
+      );
+
+    const execute = (action: BoundAction<S>, payload: unknown) =>
+      owned(
+        Effect.gen(function* () {
+          const id = yield* admit(action, payload);
+
           return yield* send(entry, sourceScope, id, false, leaseScope).pipe(
             Effect.mapError((failure) => error(failure.reason, failure.message, id)),
             Effect.flatMap(unwrap),
           );
+        }),
+      );
+
+    const enqueue = (action: BoundAction<S>, payload: unknown) =>
+      owned(
+        Effect.gen(function* () {
+          const id = yield* admit(action, payload);
+
+          yield* send(entry, sourceScope, id, false).pipe(
+            Effect.catch((failure) =>
+              failure.reason === "Closed"
+                ? Effect.void
+                : recordFailure(entry, sourceScope, failure),
+            ),
+            Effect.forkIn(sourceScope),
+          );
+
+          return id;
         }),
       );
 
@@ -1088,6 +1142,7 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         ),
       ),
       execute: execute as Lease<S>["execute"],
+      enqueue: enqueue as Lease<S>["enqueue"],
       retry: (id) =>
         owned(
           send(entry, sourceScope, id, true, leaseScope).pipe(
