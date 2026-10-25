@@ -5,7 +5,9 @@ Use [effect-cf](../platform-effect-cf/README.md) or
 [Alchemy](../platform-alchemy-cf/README.md) for framework integration.
 
 For custom hosts, `Cloudflare.make(server, state, options)` acquires one source
-per object and returns fetch, WebSocket lifecycle, and alarm handlers.
+per object and returns fetch and WebSocket lifecycle handlers plus an `alarm`
+Effect. Run the same Effect for each alarm notification; framework adapters supply
+the native callback.
 `Cloudflare.prepareRequest` attaches the authenticated source address and identity
 to a native request. `SqliteStorage.layer(nativeStorage, options)` exposes the
 storage port separately.

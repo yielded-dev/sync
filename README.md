@@ -58,9 +58,10 @@ vp run ready
 ```
 
 The root manifest pins the package manager, dependencies, and supported Node.js
-versions. Installation sets up the Effect compiler and Git hooks. `vp run ready`
-builds packages and docs, checks formatting and types, runs tests, and verifies a
-clean consumer of the packed packages.
+versions. Installation configures Git hooks; typechecking uses the pinned
+Rust-based Effect compiler. `vp run ready` builds packages and docs, checks
+formatting and types, runs tests, and verifies a clean consumer of the packed
+packages.
 
 Use `vp run docs:dev` for the docs site or
 `vp run sync-list-board-example#dev` for the React board and its local Worker.

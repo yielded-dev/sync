@@ -1,6 +1,6 @@
 import { type ProtocolError, SourceAddress, type Source } from "@yielded/sync";
 import { Server, ServerCrypto, StorageError } from "@yielded/sync/server";
-import { DateTime, Effect, Layer, Schema, type Scope } from "effect";
+import { Crypto, DateTime, Effect, Layer, PlatformError, Schema, type Scope } from "effect";
 import { Hex } from "effect/encoding";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { RpcSerialization, RpcServer } from "effect/rpc";
@@ -20,8 +20,23 @@ export type {
 
 export type { Options } from "./SourceHub.ts";
 
+const webCrypto = Crypto.make({
+  randomBytes: (size) => crypto.getRandomValues(new Uint8Array(size)),
+  digest: (algorithm, data) =>
+    Effect.tryPromise({
+      try: async () => new Uint8Array(await crypto.subtle.digest(algorithm, new Uint8Array(data))),
+      catch: (cause) =>
+        PlatformError.systemError({
+          _tag: "Unknown",
+          module: "Crypto",
+          method: "digest",
+          cause,
+        }),
+    }),
+});
+
 const CryptoLive = Layer.succeed(ServerCrypto, {
-  generation: Effect.sync(() => crypto.randomUUID()),
+  generation: webCrypto.randomUUIDv4().pipe(Effect.orDie),
   sha256: (text) =>
     Effect.tryPromise({
       try: async () =>
@@ -43,7 +58,7 @@ export interface Handlers {
   ) => Effect.Effect<void>;
   readonly webSocketClose: (socket: SocketTransport.Socket) => Effect.Effect<void>;
   readonly webSocketError: (socket: SocketTransport.Socket) => Effect.Effect<void>;
-  readonly alarm: () => Effect.Effect<void, ProtocolError | StorageError>;
+  readonly alarm: Effect.Effect<void, ProtocolError | StorageError>;
 }
 
 /** Acquire once per native object. RPC fibers live in the instance scope; source operations are scoped separately. */
@@ -302,7 +317,7 @@ export const prepareRequest: <S extends Source.Spec>(
 
   const session = yield* decode(Server.Session, {
     ...input.identity,
-    connectionId: crypto.randomUUID(),
+    connectionId: yield* webCrypto.randomUUIDv4().pipe(Effect.orDie),
   });
 
   const request = new Request(input.request);

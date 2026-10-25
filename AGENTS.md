@@ -60,15 +60,15 @@ Use `vp env doctor` for toolchain troubleshooting.
 The root catalog owns exact shared dependency versions. Use `catalog:` for shared
 dependencies and `workspace:*` for internal packages. After dependency changes,
 run `vp install` and the relevant verification. Fix and release owning libraries;
-consume released runtime versions without dependency patches. The supported
-Effect TypeScript-Go compiler installation is toolchain setup.
+consume released runtime versions without dependency patches. The Rust compiler
+platform binaries are installed as optional dependencies.
 
 Before handoff, run `vp run ready`. CI runs the same command after a frozen install
-and explicit compiler setup.
+with optional platform binaries enabled.
 
 ## Compiler diagnostics
 
-Keep `preferTypedSchemaDecoder` and these simplification diagnostics at warning
+Keep `preferTypedSchemaDecoder` and these simplification diagnostics at error
 severity in the shared Effect language-service configuration:
 
 - `catchAllTagDispatchToCatchTag`
@@ -80,8 +80,8 @@ severity in the shared Effect language-service configuration:
 - `timeoutCatchTagToTimeoutOrElse`
 - `runOfExitToRunExit`
 
-Keep smaller simplification rules at their default suggestion severity,
-`schemaSync` off, and `unsafeEffectTypeAssertion` at warning severity. Apply
+Keep unconfigured simplification rules at their default severity,
+`schemaSync` off, and `unsafeEffectTypeAssertion` at error severity. Apply
 suggested rewrites only when they preserve failure, interruption, and resource
 behavior. The root catalog owns compiler versions.
 

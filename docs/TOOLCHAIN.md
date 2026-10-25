@@ -15,10 +15,12 @@ vp -C packages/local-indexeddb exec playwright install chromium
 vp run ready
 ```
 
-Installation patches TypeScript with the pinned Effect TypeScript-Go compiler
-and installs Vite+ Git hooks. A fresh compiler install needs network access.
-After an install that skipped lifecycle scripts, run `vp run patch:tsgo`.
-Use `vp env doctor` for toolchain problems and `vp help` for command options.
+Installation configures Vite+ Git hooks. Rust compiler binaries arrive through
+platform optional dependencies; keep those enabled during installation. No
+compiler patch or post-install download is required. TypeScript remains installed
+for declaration builds, and `@effect/tsgo` supplies the shared configuration schema
+and editor language-service features. Use `vp env doctor` for toolchain problems
+and `vp help` for command options.
 
 | Command                                   | Purpose                                              |
 | ----------------------------------------- | ---------------------------------------------------- |
@@ -32,6 +34,12 @@ Use `vp env doctor` for toolchain problems and `vp help` for command options.
 | `vp run ready`                            | Build, check, test, and packed-consumer verification |
 | `vp run docs:dev` / `vp run docs:preview` | Serve source / built documentation                   |
 | `vp run docs:build`                       | Build the documentation site                         |
+
+`vp run typecheck` checks root tooling, all six libraries, and all five examples
+with `effect-tsrs diagnostics --project tsconfig.json --type-check --strict`. It
+checks TypeScript types and Effect diagnostics; configured errors and warnings
+fail the check. The packed-consumer check uses `tsrs --noEmit`; the docs workspace
+retains its Astro build.
 
 Builds precede typechecks because workspace imports resolve built ESM and
 declarations. Use `vp run --no-cache <task>` to investigate stale task results.
@@ -68,9 +76,9 @@ release, unknown, or incomplete diffs use the full gate. Pushes to `main` run th
 full gate. Title and description edits do not rerun CI. After retargeting a PR,
 close and reopen it to validate the new base.
 
-CI installs dependencies without lifecycle scripts, patches the compiler
-explicitly, and caches successful Vite Task results. Timeout retries and fresh
-processes for stateful test retries are configured in
+CI installs dependencies without lifecycle scripts, keeps optional platform
+binaries enabled, and caches successful Vite Task results. Timeout retries and
+fresh processes for stateful test retries are configured in
 [ci.yml](../.github/workflows/ci.yml) and the [run-ci action](../.github/actions/run-ci/action.yml).
 CI does not deploy or publish packages.
 
