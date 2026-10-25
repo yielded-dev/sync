@@ -28,7 +28,7 @@ with idempotent destination delivery before adding a projection.
 
 Allocate a command id once and retain its payload for retry. A retried set returns
 its original previous/current values, even after later edits. The
-[client runtime](../../docs/src/content/docs/client.md) manages this automatically.
+[client runtime](../../docs/src/content/docs/client.mdx) manages this automatically.
 
 `vp run sync-cloudflare-example#build` is a deployment dry run.
 `vp run @yielded/sync-platform-effect-cf#test` runs the local workerd checks.

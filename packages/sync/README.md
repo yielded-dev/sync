@@ -19,9 +19,9 @@ rejections are durable outcomes; operational failures are not. Retrying an
 identical command returns its original result.
 
 Core owns persistence contracts; applications supply server storage and client
-journals. Optional implementations live in `@yielded/sync-persistence` and the
-platform adapters. Sources may omit messages and plugins; client definitions may
-omit optimistic reducers.
+journals. `@yielded/sync-persistence/indexeddb` provides browser storage and
+`@yielded/sync-persistence/expo` provides native Expo SQLite. Sources may omit
+messages and plugins; client definitions may omit optimistic reducers.
 
 Clients require an actor, transport, explicit persistence choice, and a live scope.
 Close the session before switching actors. Unknown outcomes retain their command
@@ -29,6 +29,6 @@ ids for `retry(id)`; never replace them with a new id to bypass recovery. Atom
 bindings share that session and release their leases on registry disposal.
 
 Start with [getting started](../../docs/src/content/docs/guide/getting-started.md),
-the [client guide](../../docs/src/content/docs/client.md), or the
+the [client guide](../../docs/src/content/docs/client.mdx), or the
 [runnable examples](../../examples/README.md). Contributor contracts are in
 [API boundaries](../../docs/PUBLIC_API.md).

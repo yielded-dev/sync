@@ -13,4 +13,4 @@ vp run @yielded/example-contracts#start
 
 `start` prints the encoded and decoded snapshot. The typecheck covers public action,
 service, client, and Atom types and runs as part of `vp run ready`. For runtime
-setup, see the [counter](../cloudflare/README.md) or [client guide](../../docs/src/content/docs/client.md).
+setup, see the [counter](../cloudflare/README.md) or [client guide](../../docs/src/content/docs/client.mdx).

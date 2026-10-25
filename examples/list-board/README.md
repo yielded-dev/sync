@@ -1,8 +1,8 @@
 # Shared board
 
 A React and Effect Atom frontend over Sync's public client. An effect-cf Worker
-stores cards and board titles in SQLite; the browser uses IndexedDB for snapshots
-and pending commands.
+stores cards and board titles in SQLite; the browser uses
+`@yielded/sync-persistence/indexeddb` for snapshots and pending commands.
 
 ## Run it
 
@@ -23,7 +23,7 @@ the frontend and Worker locally without a Cloudflare account.
 
 Use `/?board=another-board&actor=alice` for another board. Switching identity
 navigates to a new page, closes the old session, and opens the selected actor's
-persistence partition. It does not wipe pending commands.
+persistence partition. Pending commands stay with their original identity.
 
 While disconnected, cached content remains visible and editing waits for authority.
 An uncertain command can be retried using its saved id. The client reconnects and

@@ -30,8 +30,7 @@ const run = (scenario: Parameters<typeof window.persistence.run>[0], namespace: 
     namespace,
   });
 
-it("rolls back conflicting journal writes and fences retired IndexedDB connections", async () => {
-  expect(await run("exercise", "operations")).toContain("generation fencing");
+it("rolls back conflicting IndexedDB journal writes", async () => {
   expect(await run("concurrent", "concurrent")).toBe("atomic conflict rollback");
 });
 
@@ -45,14 +44,14 @@ it("background flushes and retries the exact command after reload", async () => 
   expect((after as { remaining: unknown }).remaining).toEqual([]);
 });
 
-it("fences a retired persistence handle in another browser tab", async () => {
+it("fences a legacy journal generation changed by another browser tab", async () => {
   const other = await page.context().newPage();
 
   try {
     await other.goto(server.resolvedUrls!.local[0]);
     await page.evaluate(() => window.persistence.hold("tabs"));
     await other.evaluate(() => window.persistence.hold("tabs"));
-    await other.evaluate(() => window.persistence.wipe());
+    await other.evaluate(() => window.persistence.retireLegacyGeneration("tabs"));
     expect(await page.evaluate(() => window.persistence.writeHeld())).toBe("StaleGeneration");
     await page.evaluate(() => window.persistence.closeHeld());
     await other.evaluate(() => window.persistence.closeHeld());

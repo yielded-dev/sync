@@ -1,8 +1,8 @@
 # Native persistence probe
 
-An Expo Go consumer for checking SQLite transactions and recovery after an app
-restart. It exercises exact retry evidence, rollback, connection conflicts,
-generation fencing, and background flushing through the native bridge.
+An Expo Go consumer of `@yielded/sync-persistence/expo` for checking SQLite
+transactions and recovery after an app restart. It exercises exact retry evidence,
+rollback, connection conflicts, and background flushing through the native bridge.
 
 ## Run and inspect
 

@@ -8,7 +8,7 @@ import { Effect } from "effect";
 import { afterAll, beforeAll, expect, it, vi } from "vite-plus/test";
 
 import * as scenarios from "../../sync/test/persistence-scenarios.ts";
-import { ExpoSqlite } from "../src/index.ts";
+import { ExpoSqlite } from "../src/expo.ts";
 
 vi.mock("expo-sqlite", () => ({
   openDatabaseAsync: async (name: string, _options: unknown, directory: string) => {
@@ -39,14 +39,7 @@ afterAll(async () => {
 
 const open: scenarios.Open = (options) => ExpoSqlite.open({ ...options, directory });
 
-it("rolls back conflicting journal writes and fences retired SQLite connections", async () => {
-  expect(
-    await Effect.runPromise(
-      scenarios
-        .exercise(open, "operations")
-        .pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
-    ),
-  ).toContain("generation fencing");
+it("rolls back conflicting SQLite journal writes", async () => {
   // This synchronous bridge cannot release a writer while another waits for its lock.
   expect(
     await Effect.runPromise(

@@ -2,6 +2,8 @@
 title: Headless clients and Atom
 ---
 
+import { Trace } from "@yielded/starlight-theme/components";
+
 Create one client session per authenticated actor. It owns the source connections,
 optimistic state, and recovery; UI bindings read that same state.
 
@@ -9,9 +11,9 @@ optimistic state, and recovery; UI bindings read that same state.
 
 `Client.definition` supplies a pure event reducer for the shared contract.
 Add optimistic reducers only for actions that need immediate local feedback;
-other actions leave the view unchanged until authority arrives. Register matching `Client.plugin` definitions for
-declared plugins, or omit `plugins` when there are none. Each reducer receives
-only its own snapshot slot.
+other actions leave the view unchanged until authority arrives. Register matching
+`Client.plugin` definitions for declared plugins, or omit `plugins` when there are
+none. Each reducer receives only its own snapshot slot.
 
 Using the `Counter` from [getting started](./guide/getting-started.md):
 
@@ -60,9 +62,52 @@ Use `lease.read`, `lease.changes`, and `lease.ready` when you need the complete
 `execute` captures the payload and journals the command before sending it.
 For local-first interactions, `enqueue` returns the command id after journal
 admission and delivers it in the background. Observe `pending`, `failures`, and
-`error` on the replica for delivery progress; a returned id is not server acceptance. A
-declared rejection removes its optimistic overlay and appears in `failures`;
+`error` on the replica for delivery progress; a returned id is not server
+acceptance. A declared rejection removes its optimistic overlay and appears in `failures`;
 `dismissFailure(id)` hides that terminal failure.
+
+An offline edit in persistent mode keeps one identity through delivery and recovery:
+
+<Trace
+  lanes={[
+    { id: "app", label: "Your app" },
+    { id: "library", label: "Sync client" },
+    { id: "server", label: "Sync server" },
+  ]}
+  steps={[
+    {
+      lane: "app",
+      title: "Queue an edit",
+      code: "lease.enqueue(action, payload)",
+      detail: "A known authority permits admission while disconnected.",
+    },
+    {
+      lane: "library",
+      title: "Retain the command",
+      detail:
+        "The original command id and encoded payload stay in your journal. A supplied optimistic reducer updates the view.",
+    },
+    {
+      lane: "library",
+      title: "Resume delivery",
+      code: "lease.recover",
+      detail:
+        "After a parked connection recovers, Sync looks up uncertain results before resending the same command.",
+    },
+    {
+      lane: "server",
+      title: "Return the authoritative outcome",
+      detail:
+        "A retained receipt returns its exact result. A safe resend without a receipt can execute the action.",
+    },
+    {
+      lane: "library",
+      title: "Reconcile the accepted edit",
+      detail:
+        "Ordered events replace optimism. The command stays pending until its result is known and authority covers its position.",
+    },
+  ]}
+/>
 
 When an admitted outcome is unknown, `ClientError` retains its `commandId`.
 Call `retry(id)` to look up the result and, when safe, resend the original command.
@@ -77,16 +122,17 @@ marks old work `AuthorityChanged`; the application must reconcile it before
 reissuing edits.
 
 The client applies ordered events and recovers after gaps or buffer overflow.
-Cached snapshots remain provisional and cannot overwrite live state. A restored cache retains its authority identity
-for offline command admission without treating its contents as fresh. Connection
+Cached snapshots remain provisional and cannot overwrite live state. A restored
+cache retains its authority identity for offline command admission without
+treating its contents as fresh. Connection
 retry exhaustion does not prevent these edits; authorization, storage, and
 protocol failures still refuse new work. Reconnect with `recover` to resume
 delivery. Commands remain bound to their original authority after recovery.
 
-`hydrate` accepts a snapshot frame under the same authority and ordering rules.
-Keep application history and other projections outside the replica. Ephemeral `messages`, `publishMessage`, and
-`publishPluginMessage` never enter the durable journal. Slow observers may receive
-coalesced view updates or miss ephemeral messages.
+Keep application history and other projections outside the replica. Ephemeral
+`messages`, `publishMessage`, and `publishPluginMessage` never enter the durable
+journal. Slow observers may receive coalesced view updates or miss ephemeral
+messages.
 
 Configure bounds through `Client.make` options:
 
@@ -128,21 +174,13 @@ mode requires `ReplicaPersistence`; failures never silently switch to volatile
 mode. Provide the actor once around the client, transport, and persistence Layers.
 Core requires only an actor-bound journal; a snapshot cache is optional.
 
-For your own persistence, provide a `ReplicaPersistence` service with `actorId`
-and `intentJournal`. Its `load(address, limit)` reads retained rows and
-`commit(address, { insert, replace, remove })` applies one atomic batch. Inserts
-must reserve unused identities; replacements require existing rows. Fence old
-handles after an actor switch or destructive reset, and fail without partial
-writes. Add `snapshotCache` with `get`, `put`, and `remove` only when needed.
-The [port types](https://github.com/yielded-dev/sync/blob/main/packages/sync/src/client/ReplicaPersistence.ts)
-define the full contract.
-
-Use [IndexedDB](https://github.com/yielded-dev/sync/blob/main/packages/local-indexeddb/README.md)
-in browsers or [Expo SQLite](https://github.com/yielded-dev/sync/blob/main/packages/local-expo/README.md)
-on native Expo. The optional `@yielded/sync-persistence` package exports
-`layerMemory()` for process-local storage and `Persistence.make` for shared
-durable-record policy. Reuse a `memory()` factory to retain its records across
-scopes. Core does not require these implementations or their storage formats.
+The optional [`@yielded/sync-persistence`](https://github.com/yielded-dev/sync/blob/main/packages/persistence/README.md)
+package provides `IndexedDb` from its `/indexeddb` entry point and `ExpoSqlite`
+from `/expo`. Keep the persistence Layer alive for the complete client session.
+For custom storage, implement the
+[`ReplicaPersistence` port](https://github.com/yielded-dev/sync/blob/main/packages/sync/src/client/ReplicaPersistence.ts)
+directly or use the package's `Persistence` driver policy. Core does not depend
+on these implementations or their storage formats.
 
 Snapshot caches are disposable. Journals retain exact unresolved commands; storage
 or capacity failure refuses new work instead of evicting them. Unsupported journal
@@ -151,11 +189,10 @@ returns `Quarantined` for these entries; keep them for explicit recovery.
 
 Snapshot saves coalesce. Cache failures appear in `replica.cacheError` and do not
 park synchronization or prevent journal admission. Await `session.flush` when the
-application backgrounds to report pending save failures. Initial journal admission is already durable and
-does not depend on an unload callback. Session disposal retains stored data.
-Concrete persistence handles expose `purgeSource` and `wipe` for explicit deletion; a wipe
-invalidates old handles, so reopen afterward. Reconcile unresolved work before
-wiping data or changing namespaces.
+application backgrounds to report pending save failures. Initial journal admission
+is already durable and does not depend on an unload callback. Session disposal
+retains stored data. Close sessions and reconcile unresolved commands before
+deleting local data or changing namespaces.
 
 ## Atom bindings
 

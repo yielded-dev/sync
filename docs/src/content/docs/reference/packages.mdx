@@ -1,0 +1,69 @@
+---
+title: Packages and hosts
+---
+
+import { OwnershipLadder } from "@yielded/starlight-theme/components";
+
+Core contracts are portable. Choose a server host and, when clients need restart
+recovery, a local persistence adapter or your own journal implementation.
+
+| Entry point                           | Use it for                                                        |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| `@yielded/sync`                       | Shared contracts; `./server`, `./client`, and `./atom` runtimes   |
+| `@yielded/sync-persistence`           | `Persistence`: shared record policy and custom drivers            |
+| `@yielded/sync-persistence/indexeddb` | `IndexedDb`: browser persistence, including Expo web              |
+| `@yielded/sync-persistence/expo`      | `ExpoSqlite`: native Expo SQLite persistence                      |
+| `@yielded/sync-platform-cloudflare`   | `Cloudflare` and `SqliteStorage`: shared runtime and custom hosts |
+| `@yielded/sync-platform-effect-cf`    | `EffectCf`: native effect-cf Workers and Durable Objects          |
+| `@yielded/sync-platform-alchemy-cf`   | `AlchemyCf`: native Alchemy Workers and Durable Objects           |
+
+The two framework adapters use the shared Cloudflare runtime. Pick the one that
+matches your application; neither requires the other framework. Applications own
+Worker routes, typed object bindings, authentication, authorization, and projection
+destinations. Hosts require caller-provided `SourceStorage`; the framework
+adapters offer `sqlite(options)` Layers for native SQLite. Server implementations
+are not exported from root or client entry points.
+
+For client persistence, choose how much implementation to supply:
+
+<OwnershipLadder
+  caption="Core defines the client persistence port; the optional package can supply record policy and platform storage."
+  levels={[
+    { name: "Core port", api: "ReplicaPersistence" },
+    { name: "Shared policy", api: "Persistence.make(…)" },
+    { name: "Platform adapter", api: "IndexedDb / ExpoSqlite" },
+  ]}
+  layers={[
+    {
+      name: "Storage access",
+      cells: [
+        { owner: "app", note: "Supply an actor-bound journal and optional cache." },
+        { owner: "app", note: "Supply two scoped AtomicStore drivers." },
+        { owner: "library", note: "Browser IndexedDB or native Expo SQLite." },
+      ],
+    },
+    {
+      name: "Record policy",
+      cells: [
+        { owner: "app", note: "Your formats and atomic commits." },
+        { owner: "library", note: "Journal formats, fencing, bounds, and cache policy." },
+        { owner: "library", note: "The same shared persistence policy." },
+      ],
+    },
+  ]}
+  shared={{
+    name: "Client runtime",
+    label: "Same core",
+    note: "The same `Client`, views, and retry protocol use `ReplicaPersistence` at every level.",
+  }}
+/>
+
+The persistence package's root and browser entry points do not load native Expo
+code. Install its optional `expo-sqlite` peer when using `/expo`. IndexedDB remains
+subject to browser quota and eviction. Both adapters retain unresolved command
+journals separately from disposable snapshot caches. See
+[client persistence](../client.mdx#persistence).
+
+Keep Sync packages on the same exact version. Package manifests declare supported
+Effect, framework, and Expo peer ranges; the repository catalog pins the development
+combination. Read the [upgrade guidance](../RELEASE.md) before changing versions.

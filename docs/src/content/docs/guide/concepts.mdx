@@ -2,21 +2,68 @@
 title: How Sync works
 ---
 
+import { FlowMap } from "@yielded/starlight-theme/components";
+
 A source is one ordered authority for a domain entity. The shared contract names
 its public snapshot, durable events, ephemeral messages, and typed actions. A
 plugin adds a reusable capability with its own snapshot and actions while sharing
 the source's cursor and lifecycle.
 
-```mermaid
-flowchart TB
-  accTitle: A source connects clients to an authoritative server
-  accDescr: A shared source contract defines both sides. Clients send actions and exact retries to the server, which stores state and receipts and sends snapshots and ordered events back to clients.
-  Contract[Shared source contract] --> Client[Scoped clients]
-  Contract --> Server[Authoritative server]
-  Client -->|Actions and exact retries| Server
-  Server -->|Snapshots and ordered events| Client
-  Server --> Storage[(State and receipts)]
-```
+<FlowMap
+  title="One contract, two separate storage boundaries"
+  description="Your shared source contract defines the client and server. The client sends commands and exact retries; the server returns snapshots and ordered events. You supply SourceStorage for the server and, for persistent clients, a separate ReplicaPersistence implementation."
+  columns={2}
+  nodes={[
+    {
+      id: "contract",
+      at: [1, 1],
+      owner: "app",
+      title: "Shared contract",
+      code: "Source.make(…)",
+      note: "Your schemas + actions",
+    },
+    {
+      id: "client",
+      at: [2, 1],
+      owner: "library",
+      title: "Scoped client",
+      code: "Client.make(…)",
+      note: "Actions + exact retries",
+    },
+    {
+      id: "server",
+      at: [2, 2],
+      owner: "library",
+      title: "Authoritative server",
+      code: "Server.make(…)",
+      note: "Snapshots + ordered events",
+    },
+    {
+      id: "client-storage",
+      at: [3, 1],
+      owner: "app",
+      title: "Client persistence",
+      code: "ReplicaPersistence",
+      note: "Journal; optional cache",
+    },
+    {
+      id: "server-storage",
+      at: [3, 2],
+      owner: "app",
+      title: "Server storage",
+      code: "SourceStorage",
+      note: "Atomic durable writes",
+    },
+  ]}
+  edges={[
+    { from: "contract", to: "client" },
+    { from: "contract", to: "server" },
+    { from: "client", to: "server" },
+    { from: "server", to: "client" },
+    { from: "client", to: "client-storage", label: "Optional" },
+    { from: "server", to: "server-storage", label: "Required" },
+  ]}
+/>
 
 ## Authority and receipts
 
@@ -57,4 +104,4 @@ Server storage and client persistence are separate contracts. Disposable
 snapshot caches never replace the pending-intent journal. Choose an explicit
 namespace and reconcile unresolved identities before resetting or migrating
 durable data. The [consumer example](../api/consumer.md) puts these pieces
-together; the [client guide](../client.md) describes the replica lifecycle.
+together; the [client guide](../client.mdx) describes the replica lifecycle.

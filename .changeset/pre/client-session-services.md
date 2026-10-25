@@ -1,7 +1,6 @@
 ---
 "@yielded/sync": minor
-"@yielded/sync-local-indexeddb": minor
-"@yielded/sync-local-expo": minor
+"@yielded/sync-persistence": minor
 ---
 
 Require `Client.CurrentActor` and `Client.Transport` services when constructing a

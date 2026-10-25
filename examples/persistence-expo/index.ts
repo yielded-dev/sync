@@ -1,4 +1,4 @@
-import { ExpoSqlite } from "@yielded/sync-local-expo";
+import { ExpoSqlite } from "@yielded/sync-persistence/expo";
 import { Client } from "@yielded/sync/client";
 import { Clock, Effect } from "effect";
 import { registerRootComponent } from "expo";
@@ -21,19 +21,18 @@ const probe = Effect.gen(function* () {
   );
 
   const run = String(yield* Clock.currentTimeMillis);
-  const transactions = yield* scenarios.exercise(ExpoSqlite.open, `native-operations-${run}`);
   const conflicts = yield* scenarios.concurrent(ExpoSqlite.open, `native-conflicts-${run}`);
 
   if (existing === undefined) {
     yield* scenarios.seed(ExpoSqlite.open, namespace);
     const client = yield* scenarios.runtimeSeed(ExpoSqlite.open, `${namespace}-client`);
 
-    return { phase: "seeded", transactions, conflicts, client };
+    return { phase: "seeded", conflicts, client };
   }
   yield* scenarios.restore(ExpoSqlite.open, namespace);
   const client = yield* scenarios.runtimeRestore(ExpoSqlite.open, `${namespace}-client`);
 
-  return { phase: "restored", transactions, conflicts, client };
+  return { phase: "restored", conflicts, client };
 }).pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" }));
 
 const App = () => {

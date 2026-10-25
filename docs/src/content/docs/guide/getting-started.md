@@ -17,22 +17,25 @@ bun add @yielded/sync-platform-effect-cf@{{SYNC_VERSION}} effect-cf
 bun add @yielded/sync-platform-alchemy-cf@{{SYNC_VERSION}} alchemy
 ```
 
-For durable client storage, choose the adapter for your platform:
+For durable client storage, install the optional persistence package:
 
 ```sh
-bun add @yielded/sync-local-indexeddb@{{SYNC_VERSION}}
-# Or, for native Expo:
-bun add @yielded/sync-local-expo@{{SYNC_VERSION}} expo-sqlite
+bun add @yielded/sync-persistence@{{SYNC_VERSION}}
+# Native Expo also requires:
+bun add expo-sqlite
 ```
 
 Keep Sync packages on the same exact version and satisfy the peer ranges in
-their manifests. See [packages and hosts](../reference/packages.md) for platform
-constraints. Expo web uses IndexedDB.
+their manifests. Import `IndexedDb` from `@yielded/sync-persistence/indexeddb`
+for browsers, including Expo web, or `ExpoSqlite` from
+`@yielded/sync-persistence/expo` for native Expo. See
+[packages and hosts](../reference/packages.mdx) for platform constraints.
 
 ## Define a shared contract
 
 `Source.make` defines a public snapshot, durable event, and registered actions.
-Messages and plugins are optional. Effect Schema owns values that cross the wire or are persisted.
+Messages and plugins are optional. Effect Schema owns values that cross the wire
+or are persisted.
 
 ```ts
 import { Action, Source } from "@yielded/sync";
@@ -66,15 +69,16 @@ matching server definition and links to runnable applications.
 Use `Server.make` to supply private state, action handlers, authorization, and
 initialization. Provide the host's `SourceStorage`, using a SQLite Layer or your
 own implementation. An accepted action commits state, events, its exact outcome,
-and any outbox obligations atomically. The [counter example](../api/consumer.md) explains
-the server and host boundaries.
+and any outbox obligations atomically. The [counter example](../api/consumer.md)
+explains the server and host boundaries.
 
-On the client, `Client.definition` supplies a pure event reducer and optional optimistic reducers.
-`Client.make` opens a session for one authenticated actor, with an application
-transport and explicit persistence. Open a source address, wait for `ready`, then
-execute a registered action. `SourceAtom.make` adds UI bindings over that session.
+On the client, `Client.definition` supplies a pure event reducer and optional
+optimistic reducers. `Client.make` opens a session for one authenticated actor,
+with an application transport and explicit persistence. Open a source address,
+wait for `ready`, then execute a registered action. `SourceAtom.make` adds UI
+bindings over that session.
 
 Use `{ mode: "volatile" }` for disposable client state or `{ mode: "persistent" }`
 with a `ReplicaPersistence` Layer. Persistent journals retain unresolved command
 identities across restarts; snapshot caches can be rebuilt. The
-[client guide](../client.md) covers session lifetime and safe retry.
+[client guide](../client.mdx) covers session lifetime and safe retry.

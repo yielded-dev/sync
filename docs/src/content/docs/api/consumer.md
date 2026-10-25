@@ -55,7 +55,7 @@ domain rejection; that rejection is also retained for exact retry.
 ## Host the source
 
 Choose `EffectCf.make` or `AlchemyCf.make` from the
-[framework adapters](../reference/packages.md) and supply a `SourceStorage` layer.
+[framework adapters](../reference/packages.mdx) and supply a `SourceStorage` layer.
 The native `sqlite` helper explicitly selects SQLite:
 
 ```ts
@@ -104,7 +104,7 @@ Actions without an optimistic reducer wait for the authoritative event.
 
 Create one session per authenticated actor with `Client.make`, then open
 `Counter.address("demo")`, await `ready`, and call
-`execute(Counter.actions.set, { value: 7 })`. See the [client guide](../client.md)
+`execute(Counter.actions.set, { value: 7 })`. See the [client guide](../client.mdx)
 for transport, persistence, and Atom setup.
 
 For server-side calls, `EffectCf.client` and `AlchemyCf.client` provide scoped

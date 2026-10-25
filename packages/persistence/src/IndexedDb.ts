@@ -1,6 +1,7 @@
-import { Persistence } from "@yielded/sync-persistence";
 import { ReplicaPersistence, type Client, type PersistenceError } from "@yielded/sync/client";
 import { Effect, Layer, Schema, type Scope } from "effect";
+
+import * as Persistence from "./Persistence.ts";
 
 export type Options = Persistence.Options;
 
@@ -46,17 +47,8 @@ const connect = (name: string, version: 1 | 2) =>
 
 const store = Effect.fn("IndexedDb.store")(function* (name: string, version: 1 | 2) {
   const db = yield* connect(name, version);
-  let closed = false;
 
-  db.onversionchange = () => {
-    closed = true;
-    db.close();
-  };
-  yield* Effect.addFinalizer(() =>
-    Effect.sync(() => {
-      closed = true;
-    }),
-  );
+  db.onversionchange = () => db.close();
 
   const operation = <A>(
     key: string,
@@ -64,11 +56,6 @@ const store = Effect.fn("IndexedDb.store")(function* (name: string, version: 1 |
     f: (value: string | undefined) => readonly [A, string | undefined],
   ) =>
     Effect.callback<A, PersistenceError>((resume) => {
-      if (closed) {
-        resume(Effect.fail(Persistence.failure("Unavailable", "IndexedDB handle is closed")));
-
-        return;
-      }
       let transaction: IDBTransaction;
 
       try {

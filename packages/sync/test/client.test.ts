@@ -15,7 +15,7 @@ import {
 import { TestClock } from "effect/testing";
 import { expect, it } from "vite-plus/test";
 
-import { memory } from "../../persistence/src/index.ts";
+import { memory } from "./persistence.ts";
 
 const Label = Plugin.make("label", {
   snapshot: Schema.Struct({ text: Schema.String }),
@@ -492,7 +492,7 @@ it("refuses journal failures before I/O and never silently falls back to volatil
   Effect.scoped(
     Effect.gen(function* () {
       const remote = yield* server;
-      const storage = yield* memory({ maxJournalRows: 0 }).open;
+      const storage = yield* memory({ maxBytes: 1 }).open;
 
       const client = yield* Client.make(definition, {
         persistence: { mode: "persistent" },
@@ -702,6 +702,7 @@ it("never rebinds an ambiguous unbound command to a newly observed authority", (
     Effect.gen(function* () {
       const remote = yield* server;
       let calls = 0;
+      const authority = yield* Deferred.make<void>();
 
       const client = yield* Client.make(
         Client.definition(Counter, {
@@ -715,7 +716,13 @@ it("never rebinds an ambiguous unbound command to a newly observed authority", (
         Effect.provideService(Client.Transport, {
           ...remote.transport,
           snapshot: () => Effect.never,
-          subscribe: () => Stream.never,
+          subscribe: () =>
+            Stream.concat(
+              Stream.fromEffect(
+                Deferred.await(authority).pipe(Effect.as(snapshot(0, 10, replacement))),
+              ),
+              Stream.never,
+            ),
           execute: () =>
             Effect.suspend(() => {
               calls += 1;
@@ -730,7 +737,11 @@ it("never rebinds an ambiguous unbound command to a newly observed authority", (
       yield* lease.execute(Counter.actions.add, { amount: 2 }).pipe(Effect.result);
       const id = (yield* lease.read).pending[0].commandId;
 
-      yield* lease.hydrate(snapshot(0, 10, replacement));
+      yield* Deferred.succeed(authority, undefined);
+      yield* stateWhere(
+        lease,
+        (state) => state.authoritative?.position.sourceAuthorityGeneration === replacement,
+      );
       expect(yield* Effect.result(lease.retry(id))).toMatchObject({
         _tag: "Failure",
         failure: { reason: "OutcomeUnknown", commandId: id },

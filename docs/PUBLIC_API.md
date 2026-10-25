@@ -3,23 +3,23 @@
 These boundaries apply to changes in the library and its adapters. For usage,
 start with [getting started](src/content/docs/guide/getting-started.md), the
 [counter example](src/content/docs/api/consumer.md), or the
-[client guide](src/content/docs/client.md). Schemas and source interfaces own
+[client guide](src/content/docs/client.mdx). Schemas and source interfaces own
 wire formats and implementation details.
 
 ## Package boundaries
 
-| Entry point                         | Responsibility                                                                     |
-| ----------------------------------- | ---------------------------------------------------------------------------------- |
-| `@yielded/sync`                     | Shared sources, actions, plugins, identities, envelopes, and derived RPC contracts |
-| `@yielded/sync/server`              | Private state, authorization, execution, storage and outbox contracts              |
-| `@yielded/sync/client`              | Scoped replicas, transport, recovery, and persistence ports                        |
-| `@yielded/sync/atom`                | Atom bindings over the headless client                                             |
-| `@yielded/sync-platform-cloudflare` | Shared Cloudflare protocol and SQLite storage                                      |
-| `@yielded/sync-platform-effect-cf`  | Native effect-cf integration                                                       |
-| `@yielded/sync-platform-alchemy-cf` | Native Alchemy integration                                                         |
-| `@yielded/sync-local-indexeddb`     | Browser client persistence                                                         |
-| `@yielded/sync-local-expo`          | Native Expo client persistence                                                     |
-| `@yielded/sync-persistence`         | Optional persistence implementations and shared durable-record policy              |
+| Entry point                           | Responsibility                                                                     |
+| ------------------------------------- | ---------------------------------------------------------------------------------- |
+| `@yielded/sync`                       | Shared sources, actions, plugins, identities, envelopes, and derived RPC contracts |
+| `@yielded/sync/server`                | Private state, authorization, execution, storage and outbox contracts              |
+| `@yielded/sync/client`                | Scoped replicas, transport, recovery, and persistence ports                        |
+| `@yielded/sync/atom`                  | Atom bindings over the headless client                                             |
+| `@yielded/sync-platform-cloudflare`   | Shared Cloudflare protocol and SQLite storage                                      |
+| `@yielded/sync-platform-effect-cf`    | Native effect-cf integration                                                       |
+| `@yielded/sync-platform-alchemy-cf`   | Native Alchemy integration                                                         |
+| `@yielded/sync-persistence`           | Optional durable client persistence policy and driver contracts                    |
+| `@yielded/sync-persistence/indexeddb` | Browser client persistence                                                         |
+| `@yielded/sync-persistence/expo`      | Native Expo client persistence                                                     |
 
 Adapters depend inward on core. Root and client imports never expose server
 implementations or platform dependencies. The two Cloudflare framework adapters
@@ -161,25 +161,25 @@ Unsupported intents remain quarantined, reserving their exact identities and cap
 
 Journal batches apply atomically with generation checks. Inserts reserve new
 identities and replacements require existing rows. Conflicts are explicit.
-Adapter-owned wipe rotates the generation
-with journal deletion, invalidating old handles. Delayed cache writes and cleanup
-cannot affect a newer generation. Unreadable journals and unknown physical formats
-remain intact for recovery. Cache recovery never resets journal data.
+Unreadable journals and unknown physical formats remain intact for recovery.
+Cache recovery never resets journal data or permits stale-generation writes.
 
 Cache failures appear separately from synchronization/journal failures and cannot
 park an otherwise healthy replica. They remain observable through `cacheError`
 and explicit `flush` failures.
 
-The application owns namespaces, background hooks, and logout deletion. Disposal
-retains durable data; `flush` reports pending save failures. Changing namespace is
+The application owns namespaces, background hooks, and destructive cleanup.
+Close all writers before deleting their storage. Disposal retains durable data;
+`flush` reports pending save failures. Changing namespace is
 not migration: reconcile old journals, receipts, and outbox evidence before
 switching. Wire, source-schema, storage-format, authority, and local persistence
 generations remain distinct.
 
 [ReplicaPersistence.ts](../packages/sync/src/client/ReplicaPersistence.ts) defines
-the ports. Physical formats, memory storage, cache bounds, and destructive management
-belong to `@yielded/sync-persistence` and platform adapters. Applications may
-implement the ports directly with their own persistence strategy.
+the ports. Physical formats and cache bounds belong to the optional
+`@yielded/sync-persistence` package; its browser and native entry points remain
+independent. Applications may implement the ports directly with their own
+persistence strategy.
 
 `SourceAtom.make` uses the same runtime. Active atoms hold leases; passive reads
 never connect. Registry disposal releases leases. UI code owns no second command

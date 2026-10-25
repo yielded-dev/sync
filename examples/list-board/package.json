@@ -11,7 +11,7 @@
   "dependencies": {
     "@effect/atom-react": "catalog:",
     "@yielded/sync": "workspace:*",
-    "@yielded/sync-local-indexeddb": "workspace:*",
+    "@yielded/sync-persistence": "workspace:*",
     "@yielded/sync-platform-effect-cf": "workspace:*",
     "effect": "catalog:",
     "effect-cf": "catalog:",

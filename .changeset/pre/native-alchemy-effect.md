@@ -3,8 +3,7 @@
 "@yielded/sync-platform-cloudflare": patch
 "@yielded/sync-platform-effect-cf": patch
 "@yielded/sync-platform-alchemy-cf": patch
-"@yielded/sync-local-indexeddb": patch
-"@yielded/sync-local-expo": patch
+"@yielded/sync-persistence": patch
 ---
 
 Require the stable Effect release and use its stable module paths. Update the native

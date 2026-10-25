@@ -73,42 +73,6 @@ export const restore = (open: Open, namespace: string) =>
     }),
   );
 
-export const exercise = (open: Open, namespace: string) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const config = options(namespace);
-      const first = yield* open(config);
-      const second = yield* open(config);
-
-      yield* first.intentJournal.commit(address, { insert: [evidence], replace: [], remove: [] });
-
-      const staleWrite = first.intentJournal.commit(address, {
-        insert: [],
-        replace: [{ ...evidence, value: "late" }],
-        remove: [],
-      });
-
-      yield* second.wipe;
-      const fresh = yield* open(config);
-
-      yield* fresh.intentJournal.commit(address, {
-        insert: [{ ...evidence, value: "new generation" }],
-        replace: [],
-        remove: [],
-      });
-      equal(yield* failureReason(staleWrite), "StaleGeneration", "delayed writer crossed a wipe");
-      equal(
-        (yield* fresh.intentJournal.load(address, 10)).find(
-          (row) => row.commandId === evidence.commandId,
-        ),
-        { ...evidence, value: "new generation" },
-        "late writer destroyed new evidence",
-      );
-
-      return "generation fencing";
-    }),
-  );
-
 export const concurrent = (open: Open, namespace: string, concurrency: 1 | 2 = 2) =>
   Effect.scoped(
     Effect.gen(function* () {

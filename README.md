@@ -32,21 +32,19 @@ Start with the [documentation](https://yielded.dev/sync/),
 | Package                             | Responsibility                                                                    |
 | ----------------------------------- | --------------------------------------------------------------------------------- |
 | `@yielded/sync`                     | Shared contracts, with separate `./server`, `./client`, and `./atom` entry points |
-| `@yielded/sync-persistence`         | Optional memory storage and shared durable client persistence policy              |
+| `@yielded/sync-persistence`         | Optional browser and native client persistence, with shared driver policy         |
 | `@yielded/sync-platform-cloudflare` | Shared Cloudflare protocol and SQLite storage                                     |
 | `@yielded/sync-platform-effect-cf`  | Native effect-cf Worker and Durable Object integration                            |
 | `@yielded/sync-platform-alchemy-cf` | Native Alchemy Worker and Durable Object integration                              |
-| `@yielded/sync-local-indexeddb`     | Browser persistence                                                               |
-| `@yielded/sync-local-expo`          | Expo SQLite persistence                                                           |
 
 Applications own domain models, authentication, authorization, projection
-destinations, and UI. Applications supply server storage and may implement client
-journals directly; core owns no persistence implementation. Sync coordinates atomic
-state/event/receipt commits, optional outbox obligations, ordered replay, and client recovery.
-Snapshot caches are disposable; unresolved command
-journals retain the identities needed for safe retry.
+destinations, and UI. They supply server storage and may implement client journals
+directly; core owns no persistence implementation. Sync coordinates atomic
+state/event/receipt commits, optional outbox obligations, ordered replay, and
+client recovery. Snapshot caches are disposable; unresolved command journals
+retain the identities needed for safe retry.
 
-See [packages and hosts](docs/src/content/docs/reference/packages.md) for adapter
+See [packages and hosts](docs/src/content/docs/reference/packages.mdx) for adapter
 choices and [GitHub releases](https://github.com/yielded-dev/sync/releases) for
 release notes.
 
@@ -56,7 +54,7 @@ Install [Vite+](https://viteplus.dev/guide/), then run:
 
 ```sh
 vp install
-vp -C packages/local-indexeddb exec playwright install chromium
+vp -C packages/persistence exec playwright install chromium
 vp run ready
 ```
 

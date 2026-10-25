@@ -114,9 +114,6 @@ export interface Lease<S extends Source.Spec> {
     Source.Definition<S>["envelope"]["messageFrame" | "leaveFrame"]["Type"],
     ClientError
   >;
-  readonly hydrate: (
-    snapshot: Source.Definition<S>["envelope"]["snapshotFrame"]["Type"],
-  ) => Effect.Effect<void, ClientError>;
   readonly dismissFailure: (commandId: string) => Effect.Effect<void, ClientError>;
 }
 
@@ -1186,16 +1183,6 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       messages: Stream.fromPubSub(messages).pipe(
         Stream.mapEffect((frame) => active.pipe(Effect.as(frame))),
       ) as Lease<S>["messages"],
-      hydrate: (frame) =>
-        owned(
-          encode(
-            wire.envelope.snapshotFrame,
-            frame as typeof wire.envelope.snapshotFrame.Type,
-          ).pipe(
-            Effect.flatMap((value) => acceptFrame(entry, sourceScope, value, leaseScope)),
-            Effect.asVoid,
-          ),
-        ),
       dismissFailure: (id) =>
         owned(
           commit(
