@@ -1,7 +1,9 @@
 # @yielded/sync-platform-alchemy-cf
 
-Sync handlers for Alchemy Cloudflare Workers and Durable Objects. The application
-supplies `SourceStorage`; this example selects SQLite.
+Optional Alchemy Cloudflare Worker and Durable Object integration around
+`Server.host`. Core owns synchronization; this adapter supplies native transport,
+lifecycle, and alarm handling. The application supplies `SourceStorage`; this
+example selects SQLite.
 
 ```ts
 import { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";

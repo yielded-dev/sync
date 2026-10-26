@@ -3,7 +3,7 @@ import { Client, type ClientError, type PersistenceError } from "@yielded/sync/c
 import { Effect, Exit, Schema, Scope } from "effect";
 
 import * as scenarios from "../../sync/test/persistence-scenarios.ts";
-import { IndexedDb } from "../src/browser.ts";
+import { IndexedDb } from "../src/index.ts";
 
 export const run = (
   scenario: "concurrent" | "runtimeSeed" | "runtimeRestore",

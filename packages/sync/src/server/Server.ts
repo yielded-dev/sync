@@ -13,6 +13,7 @@ import type * as Source from "../Source.ts";
 import { decode, encode } from "./codec.ts";
 
 export { open, type Runtime, type Limits, Session, canonicalJson } from "./Runtime.ts";
+export { host, type Host, type HostOptions, type Connection, type LiveConnection } from "./Host.ts";
 
 export interface Commit<State, Event, Result> {
   readonly state: State;

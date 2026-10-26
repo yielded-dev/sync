@@ -11,7 +11,7 @@ Install Vite+, then run from the repository root:
 
 ```sh
 vp install
-vp -C packages/persistence exec playwright install chromium
+vp -C packages/local-indexeddb exec playwright install chromium
 vp run ready
 ```
 

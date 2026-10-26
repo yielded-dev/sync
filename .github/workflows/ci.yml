@@ -168,7 +168,7 @@ jobs:
           # the retry then loses the still-held dpkg lock.
           timeout: 10m
           retry-errors: "true"
-          command: vp -C packages/persistence exec playwright install --with-deps chromium
+          command: vp -C packages/local-indexeddb exec playwright install --with-deps chromium
 
       - name: Run isolated test cases with timeout retries
         if: needs.changes.outputs.full == 'true'
@@ -178,7 +178,8 @@ jobs:
           command: >-
             vp run -v --concurrency-limit 2
             -F './packages/*' -F './examples/*'
-            -F '!@yielded/sync-persistence'
+            -F '!@yielded/sync-local-expo'
+            -F '!@yielded/sync-local-indexeddb'
             -F '!@yielded/sync-platform-effect-cf'
             -F '!sync-list-board-example' test
             --retry.count 2 --retry.delay 1000
@@ -194,7 +195,8 @@ jobs:
           retry-errors: "true"
           command: >-
             vp run -v --parallel --concurrency-limit 1 --fail-if-no-match
-            -F '@yielded/sync-persistence'
+            -F '@yielded/sync-local-expo'
+            -F '@yielded/sync-local-indexeddb'
             -F '@yielded/sync-platform-effect-cf'
             -F 'sync-list-board-example' test --retry.count 0
 

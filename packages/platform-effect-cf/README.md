@@ -1,7 +1,9 @@
 # @yielded/sync-platform-effect-cf
 
-Sync handlers for native effect-cf Workers and Durable Objects. The application
-supplies `SourceStorage`; this example selects SQLite.
+Optional native effect-cf Worker and Durable Object integration around
+`Server.host`. Core owns synchronization; this adapter supplies native transport,
+lifecycle, and alarm handling. The application supplies `SourceStorage`; this
+example selects SQLite.
 
 ```ts
 import { EffectCf } from "@yielded/sync-platform-effect-cf";

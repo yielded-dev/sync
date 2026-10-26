@@ -1,8 +1,9 @@
-import type { ProtocolError } from "@yielded/sync";
+import { ProtocolError } from "@yielded/sync";
 import { Effect, Queue, type Scope } from "effect";
 import { type RpcMessage, RpcSerialization, RpcServer } from "effect/rpc";
 
-import { invalid } from "./SourceHub.ts";
+const invalid = () =>
+  ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source request" });
 
 export type Socket = WebSocket;
 export type ObjectState = Pick<DurableObjectState, "storage" | "getWebSockets" | "acceptWebSocket">;

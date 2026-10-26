@@ -90,7 +90,7 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Install Chromium for persistence tests
-        run: ./node_modules/.bin/vp -C packages/persistence exec playwright install --with-deps chromium
+        run: ./node_modules/.bin/vp -C packages/local-indexeddb exec playwright install --with-deps chromium
 
       - name: Upgrade npm for trusted publishing
         run: npm install --global npm@12.2.0

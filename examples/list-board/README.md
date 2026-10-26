@@ -2,7 +2,7 @@
 
 A React and Effect Atom frontend over Sync's public client. An effect-cf Worker
 stores cards and board titles in SQLite; the browser uses
-`@yielded/sync-persistence/indexeddb` for snapshots and pending commands.
+`@yielded/sync-local-indexeddb` for snapshots and pending commands.
 
 ## Run it
 

@@ -8,7 +8,7 @@ import { Effect } from "effect";
 import { afterAll, beforeAll, expect, it, vi } from "vite-plus/test";
 
 import * as scenarios from "../../sync/test/persistence-scenarios.ts";
-import { ExpoSqlite } from "../src/expo.ts";
+import { ExpoSqlite } from "../src/index.ts";
 
 vi.mock("expo-sqlite", () => ({
   openDatabaseAsync: async (name: string, _options: unknown, directory: string) => {

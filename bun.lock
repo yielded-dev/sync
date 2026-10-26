@@ -77,7 +77,7 @@
       "dependencies": {
         "@effect/atom-react": "catalog:",
         "@yielded/sync": "workspace:*",
-        "@yielded/sync-persistence": "workspace:*",
+        "@yielded/sync-local-indexeddb": "workspace:*",
         "@yielded/sync-platform-effect-cf": "workspace:*",
         "effect": "catalog:",
         "effect-cf": "catalog:",
@@ -103,7 +103,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@yielded/sync": "workspace:*",
-        "@yielded/sync-persistence": "workspace:*",
+        "@yielded/sync-local-expo": "workspace:*",
         "effect": "catalog:",
         "expo": "catalog:",
         "expo-sqlite": "catalog:",
@@ -115,18 +115,18 @@
         "typescript": "catalog:",
       },
     },
-    "packages/persistence": {
-      "name": "@yielded/sync-persistence",
+    "packages/local-expo": {
+      "name": "@yielded/sync-local-expo",
       "version": "0.1.0-beta.2",
       "dependencies": {
         "@yielded/sync": "workspace:*",
+        "@yielded/sync-persistence": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "catalog:",
         "effect": "catalog:",
         "expo": "catalog:",
         "expo-sqlite": "catalog:",
-        "playwright": "catalog:",
         "react": "catalog:",
         "react-native": "catalog:",
         "typescript": "catalog:",
@@ -135,11 +135,43 @@
       },
       "peerDependencies": {
         "effect": "catalog:",
-        "expo-sqlite": "catalog:",
+        "expo-sqlite": "^57.0.3",
       },
-      "optionalPeers": [
-        "expo-sqlite",
-      ],
+    },
+    "packages/local-indexeddb": {
+      "name": "@yielded/sync-local-indexeddb",
+      "version": "0.1.0-beta.2",
+      "dependencies": {
+        "@yielded/sync": "workspace:*",
+        "@yielded/sync-persistence": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "effect": "catalog:",
+        "playwright": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:",
+        "vite-plus": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "catalog:",
+      },
+    },
+    "packages/persistence": {
+      "name": "@yielded/sync-persistence",
+      "version": "0.1.0-beta.2",
+      "dependencies": {
+        "@yielded/sync": "workspace:*",
+      },
+      "devDependencies": {
+        "effect": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:",
+        "vite-plus": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "catalog:",
+      },
     },
     "packages/platform-alchemy-cf": {
       "name": "@yielded/sync-platform-alchemy-cf",
@@ -1428,6 +1460,10 @@
     "@yielded/sync-docs": ["@yielded/sync-docs@workspace:docs"],
 
     "@yielded/sync-example-persistence-expo": ["@yielded/sync-example-persistence-expo@workspace:examples/persistence-expo"],
+
+    "@yielded/sync-local-expo": ["@yielded/sync-local-expo@workspace:packages/local-expo"],
+
+    "@yielded/sync-local-indexeddb": ["@yielded/sync-local-indexeddb@workspace:packages/local-indexeddb"],
 
     "@yielded/sync-persistence": ["@yielded/sync-persistence@workspace:packages/persistence"],
 

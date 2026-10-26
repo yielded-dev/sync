@@ -5,7 +5,7 @@ Effect-native realtime contracts, authoritative execution, and scoped clients.
 | Entry point            | Public API                                                               |
 | ---------------------- | ------------------------------------------------------------------------ |
 | `@yielded/sync`        | `Source`, `Action`, `Plugin`, Schema envelopes and derived RPC contracts |
-| `@yielded/sync/server` | `Server`, `SourceStorage`, `ServerCrypto`                                |
+| `@yielded/sync/server` | `Server`, `ServerRpc`, `SourceStorage`, `ServerCrypto`                   |
 | `@yielded/sync/client` | `Client`, `ReplicaPersistence` ports, typed operational errors           |
 | `@yielded/sync/atom`   | `SourceAtom` bindings over the headless client                           |
 
@@ -13,15 +13,22 @@ Root contracts are portable between server and client. Server implementations an
 platform adapters stay separate. Applications own domain schemas, authentication,
 authorization, projection destinations, and UI.
 
+`Server.host(definition)` coordinates one storage authority with ordered turns,
+subscriptions, publication, and optional outbox delivery. Provide `SourceStorage`,
+`ServerCrypto`, and the definition's services in its scope. `ServerRpc.handlers(host)`
+connects it to Effect RPC; platform transport and scheduling remain application
+choices. See the [core server example](../../examples/contracts/README.md).
+
 `Server.commit` builds a plan; the runtime atomically commits state, events, exact
 outcomes, and outbox obligations. Changed state must emit an event. Declared
 rejections are durable outcomes; operational failures are not. Retrying an
 identical command returns its original result.
 
 Core owns persistence contracts; applications supply server storage and client
-journals. `@yielded/sync-persistence/indexeddb` provides browser storage and
-`@yielded/sync-persistence/expo` provides native Expo SQLite. Sources may omit
-messages and plugins; client definitions may omit optimistic reducers.
+journals. `@yielded/sync-local-indexeddb` provides browser storage and
+`@yielded/sync-local-expo` provides native Expo SQLite; `@yielded/sync-persistence`
+supplies shared record policy for custom drivers. Sources may omit messages and
+plugins; client definitions may omit optimistic reducers.
 
 Clients require an actor, transport, explicit persistence choice, and a live scope.
 Close the session before switching actors. Unknown outcomes retain their command

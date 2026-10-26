@@ -1,14 +1,16 @@
 # @yielded/sync-platform-cloudflare
 
-Shared Cloudflare protocol and SQLite Durable Object storage for Sync.
+Cloudflare request, WebSocket, and alarm integration around Sync's portable
+`Server.host`, plus optional SQLite Durable Object storage.
 Use [effect-cf](../platform-effect-cf/README.md) or
 [Alchemy](../platform-alchemy-cf/README.md) for framework integration.
 
-For custom hosts, `Cloudflare.make(server, state, options)` acquires one source
-per object from an application-provided `SourceStorage`. It returns fetch and
-WebSocket lifecycle handlers plus an `alarm` Effect. Acquire the storage layer and
-handlers in the native object's scope. Run the same alarm Effect for each native
-notification; framework adapters supply the callback.
+`Cloudflare.make(server, state, options)` adapts one source per object from an
+application-provided `SourceStorage`. It returns fetch and WebSocket lifecycle
+handlers plus an `alarm` Effect. Acquire storage and handlers in the native
+object's scope. Run the same alarm Effect for each native notification; framework
+adapters supply the callback. For other environments, use `Server.host` and
+`ServerRpc` directly from `@yielded/sync/server`.
 
 `SqliteStorage.layer(nativeStorage, { namespace, replayWindow })` explicitly
 selects SQLite. Custom stores need only implement the
@@ -29,7 +31,9 @@ client with `snapshot`, `execute`, and `result`. Supply an effectful `fetch` tha
 forwards to the selected native stub. Retain the exact command id, admitted
 generation, and payload for retries and result lookup.
 
-The transport uses the source's Effect RPC group with `RpcSerialization.layerJson`.
+The adapter connects the source's Effect RPC group through `ServerRpc`. The core
+host owns ordering, authorization, publication, and connection limits; the
+adapter owns native request decoding, socket closure, and alarm scheduling.
 WebSockets support subscriptions and optional connection-scoped messages, with
 one subscription per socket. Presence messages do not advance durable cursors.
 
@@ -65,5 +69,6 @@ SQLite outbox support retains its records. Sync owns the object's alarm when
 delivery is enabled, so unrelated alarm jobs need an application scheduler.
 
 Storage schemas and transaction details live in
-[SqliteStorage.ts](src/SqliteStorage.ts); host options live in
-[SourceHub.ts](src/SourceHub.ts).
+[SqliteStorage.ts](src/SqliteStorage.ts). The [portable host](../sync/src/server/Host.ts)
+owns synchronization options; `Cloudflare.Options` maps `sockets` to its
+connection limits and supplies durable alarm scheduling for outbox delivery.

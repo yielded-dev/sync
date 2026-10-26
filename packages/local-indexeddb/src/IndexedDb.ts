@@ -1,7 +1,6 @@
+import { Persistence } from "@yielded/sync-persistence";
 import { ReplicaPersistence, type Client, type PersistenceError } from "@yielded/sync/client";
 import { Effect, Layer, Schema, type Scope } from "effect";
-
-import * as Persistence from "./Persistence.ts";
 
 export type Options = Persistence.Options;
 

@@ -8,22 +8,22 @@ wire formats and implementation details.
 
 ## Package boundaries
 
-| Entry point                           | Responsibility                                                                     |
-| ------------------------------------- | ---------------------------------------------------------------------------------- |
-| `@yielded/sync`                       | Shared sources, actions, plugins, identities, envelopes, and derived RPC contracts |
-| `@yielded/sync/server`                | Private state, authorization, execution, storage and outbox contracts              |
-| `@yielded/sync/client`                | Scoped replicas, transport, recovery, and persistence ports                        |
-| `@yielded/sync/atom`                  | Atom bindings over the headless client                                             |
-| `@yielded/sync-platform-cloudflare`   | Shared Cloudflare protocol and SQLite storage                                      |
-| `@yielded/sync-platform-effect-cf`    | Native effect-cf integration                                                       |
-| `@yielded/sync-platform-alchemy-cf`   | Native Alchemy integration                                                         |
-| `@yielded/sync-persistence`           | Optional durable client persistence policy and driver contracts                    |
-| `@yielded/sync-persistence/indexeddb` | Browser client persistence                                                         |
-| `@yielded/sync-persistence/expo`      | Native Expo client persistence                                                     |
+| Entry point                         | Responsibility                                                                     |
+| ----------------------------------- | ---------------------------------------------------------------------------------- |
+| `@yielded/sync`                     | Shared sources, actions, plugins, identities, envelopes, and derived RPC contracts |
+| `@yielded/sync/server`              | Private state, portable hosting, RPC handlers, storage and outbox contracts        |
+| `@yielded/sync/client`              | Scoped replicas, transport, recovery, and persistence ports                        |
+| `@yielded/sync/atom`                | Atom bindings over the headless client                                             |
+| `@yielded/sync-platform-cloudflare` | Native Cloudflare transport, lifecycle, scheduling, and SQLite storage             |
+| `@yielded/sync-platform-effect-cf`  | Native effect-cf integration                                                       |
+| `@yielded/sync-platform-alchemy-cf` | Native Alchemy integration                                                         |
+| `@yielded/sync-persistence`         | Optional durable client persistence policy and driver contracts                    |
+| `@yielded/sync-local-indexeddb`     | Browser client persistence                                                         |
+| `@yielded/sync-local-expo`          | Native Expo client persistence                                                     |
 
 Adapters depend inward on core. Root and client imports never expose server
-implementations or platform dependencies. The two Cloudflare framework adapters
-share the lower-level runtime and do not import each other's framework.
+implementations or platform dependencies. The Cloudflare adapters use the same
+core host and do not import each other's framework.
 Applications own domain models, authentication, authorization policy, routes,
 bindings, projection destinations, bootstrap workflows, and UI.
 
@@ -97,6 +97,21 @@ Hosts require an application-provided `SourceStorage`. SQLite is an explicit
 adapter choice. Durable outbox delivery is an optional storage capability;
 omitting it must reject any nonempty outbox commit before state is committed.
 
+`Server.host(definition, options)` supplies platform-independent ordering,
+subscriptions, publication, and optional outbox delivery. Use one host per
+storage authority. Its scope captures `SourceStorage`, `ServerCrypto`, and the
+definition's services; `Server.open` acquires operation resources for each turn.
+`connect({ address, session })` binds a trusted session to a scoped live connection.
+Its `closed` Effect requests transport closure on failure; ordinary connection
+scope disposal completes it successfully. Subscription scopes are independent
+of connection scopes.
+
+The host provides `snapshot`, `dispatch`, `lookup`, `subscribe`, `publishMessage`,
+and `checkConnection`. `ServerRpc.handlers(host)` returns the source's Effect RPC
+group and handler services. Applications supply `ServerRpc.CurrentConnection`
+from authenticated context and choose an Effect RPC transport. Native socket,
+request, and process APIs stay outside core.
+
 `Server.commit` constructs a plan. The runtime validates it and atomically commits
 private state, contiguous events, the exact outcome, receipts, and outbox work
 before publication or reply. Changed state must emit an event. Authorization,
@@ -112,11 +127,13 @@ rerun automatically after a conflict.
 
 Outbox delivery is at least once, with stable ids and durable claim fencing.
 Applications own destination idempotency and classification of delivery results.
-Only completed delivery removes an obligation; failures retain evidence. Hosts
-arm durable wakeups before accepting retryable work. An alarm is a wakeup, not
-proof that the destination committed.
+Only completed delivery removes an obligation; failures retain evidence. Outbox
+users supply `deliver` and a durable `schedule(atMillis | undefined)` callback,
+then run `host.drainOutbox` on wakeup. Hosts arm wakeups before accepting retryable
+work. A wakeup is not proof that the destination committed.
 
-Cloudflare hosts bind one source to each object. See the
+Cloudflare adapters bind one source to each object and adapt the core host's
+connection closure and wakeup requests to native sockets and alarms. See the
 [Cloudflare host API](../packages/platform-cloudflare/README.md) for shared
 handlers and framework integration.
 
@@ -127,10 +144,11 @@ snapshots, subscriptions, actions, results, and messages, and revalidate bound
 identity and expiry after hibernation.
 
 The instance scope owns RPC and socket resources; `Server.provide` scopes services
-to source operations. Bootstrap, commits, and publication share a bounded source
-gate; network delivery stays outside it and SQLite transactions. Lost activations
-reset streams so clients reconnect and replay. Sync owns the object's alarm;
-other alarm jobs require application scheduling.
+to source operations. Bootstrap, commits, and publication share the core host's
+bounded source gate; network delivery stays outside it and storage transactions.
+Lost activations reset streams so clients reconnect and replay. When outbox
+delivery is enabled, Sync uses the object's alarm; other jobs require application
+scheduling.
 
 ## Client and persistence
 
@@ -177,9 +195,9 @@ generations remain distinct.
 
 [ReplicaPersistence.ts](../packages/sync/src/client/ReplicaPersistence.ts) defines
 the ports. Physical formats and cache bounds belong to the optional
-`@yielded/sync-persistence` package; its browser and native entry points remain
-independent. Applications may implement the ports directly with their own
-persistence strategy.
+`@yielded/sync-persistence` package. Browser and native drivers live separately in
+`@yielded/sync-local-indexeddb` and `@yielded/sync-local-expo`. Applications may
+implement the ports directly with their own persistence strategy.
 
 `SourceAtom.make` uses the same runtime. Active atoms hold leases; passive reads
 never connect. Registry disposal releases leases. UI code owns no second command

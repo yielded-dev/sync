@@ -1,6 +1,12 @@
-import { type ProtocolError, SourceAddress, type Source } from "@yielded/sync";
-import { Server, ServerCrypto, StorageError, type SourceStorage } from "@yielded/sync/server";
-import { Crypto, DateTime, Effect, Layer, PlatformError, Schema, type Scope } from "effect";
+import { ProtocolError, SourceAddress, type Source } from "@yielded/sync";
+import {
+  Server,
+  ServerCrypto,
+  ServerRpc,
+  StorageError,
+  type SourceStorage,
+} from "@yielded/sync/server";
+import { Crypto, DateTime, Effect, Exit, Layer, PlatformError, Schema, Scope } from "effect";
 import { Hex } from "effect/encoding";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { RpcSerialization, RpcServer } from "effect/rpc";
@@ -8,8 +14,14 @@ import { RpcSerialization, RpcServer } from "effect/rpc";
 import { makeClient, type ClientConstructor } from "./RemoteClient.ts";
 import * as RpcHost from "./RpcHost.ts";
 import * as SocketTransport from "./SocketTransport.ts";
-import * as SourceHub from "./SourceHub.ts";
-import { Attachment, invalid, unavailable } from "./SourceHub.ts";
+
+const invalid = () =>
+  ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source request" });
+
+const unavailable = () =>
+  ProtocolError.make({ reason: "Unavailable", message: "Source temporarily unavailable" });
+
+const Attachment = Schema.Struct({ session: Server.Session, address: SourceAddress });
 
 export type {
   ObjectState,
@@ -18,7 +30,14 @@ export type {
   Factory as TransportFactory,
 } from "./SocketTransport.ts";
 
-export type { Options } from "./SourceHub.ts";
+export interface Options<R = never> {
+  readonly replay: NonNullable<Server.HostOptions["replay"]>;
+  readonly sockets: NonNullable<Server.HostOptions["connections"]>;
+  readonly maxQueuedTurns?: number;
+  readonly turnTimeoutMillis?: number;
+  readonly outbox?: Omit<NonNullable<Server.HostOptions<R>["outbox"]>, "schedule">;
+}
+
 export type { ClientOptions, Command, RemoteClient } from "./RemoteClient.ts";
 
 const webCrypto = Crypto.make({
@@ -70,23 +89,16 @@ export const make = Effect.fn("Cloudflare.make")(function* <
 >(
   definition: Server.Definition<S, R>,
   state: SocketTransport.ObjectState,
-  options: SourceHub.Options<DeliveryR>,
+  options: Options<DeliveryR>,
   transportFactory?: SocketTransport.Factory,
 ): Effect.fn.Return<Handlers, StorageError, Scope.Scope | SourceStorage | R | DeliveryR> {
-  for (const limit of [
-    options.replay.maxEvents,
-    options.replay.maxBatchBytes,
-    options.sockets.maxConnections,
-    options.sockets.bufferSize,
-    options.maxQueuedTurns ?? 128,
-    options.turnTimeoutMillis ?? 5_000,
-    ...(options.outbox === undefined ? [] : [options.outbox.batchSize, options.outbox.retryMillis]),
-  ]) {
-    if (!Number.isSafeInteger(limit) || limit <= 0)
-      throw new RangeError("Cloudflare source limits must be positive safe integers");
-  }
-
   const context = yield* Layer.build(CryptoLive);
+  const scope = yield* Scope.Scope;
+
+  const connections = new Map<
+    SocketTransport.Socket,
+    { connection: Server.LiveConnection; scope: Scope.Closeable }
+  >();
 
   const closeNative = (socket: SocketTransport.Socket, code: number, reason: string) =>
     Effect.try({ try: () => socket.close(code, reason), catch: unavailable }).pipe(Effect.ignore);
@@ -94,10 +106,9 @@ export const make = Effect.fn("Cloudflare.make")(function* <
   const readAttachment = (socket: SocketTransport.Socket) =>
     Effect.try({ try: () => socket.deserializeAttachment(), catch: invalid }).pipe(
       Effect.flatMap((value) => decode(Attachment, value)),
-      Effect.map((attachment): SourceHub.Connection => ({ ...attachment, socket })),
     );
 
-  // Fence expired identities before a native transport restores or resets its RPC sockets.
+  // Fence restored identities before a native transport resets its RPC sockets.
   const now = DateTime.toEpochMillis(yield* DateTime.now);
 
   for (const socket of state.getWebSockets()) {
@@ -111,7 +122,7 @@ export const make = Effect.fn("Cloudflare.make")(function* <
     );
   }
 
-  const serialization = RpcHost.serialization(options.replay.maxBatchBytes);
+  const serialization = ServerRpc.serialization(options.replay.maxBatchBytes);
 
   const transport = yield* (transportFactory ?? SocketTransport.make(state)).pipe(
     Effect.provideService(RpcSerialization.RpcSerialization, serialization),
@@ -120,11 +131,32 @@ export const make = Effect.fn("Cloudflare.make")(function* <
   const close = (socket: SocketTransport.Socket, code: number, reason: string) =>
     closeNative(socket, code, reason).pipe(Effect.andThen(transport.close(socket)));
 
-  const hub = yield* SourceHub.make(definition, state, options, close).pipe(
-    Effect.provideContext(context),
-  );
+  const { sockets, outbox, ...hostOptions } = options;
+  // Native handlers dispatch dynamically; the source's codecs retain their concrete schemas.
+  const source = definition as unknown as Server.Definition<Source.Spec, R>;
 
-  const rpc = RpcHost.handlers(hub);
+  const hub = yield* Server.host(source, {
+    ...hostOptions,
+    connections: sockets,
+    ...(outbox === undefined
+      ? {}
+      : {
+          outbox: {
+            ...outbox,
+            schedule: (atMillis: number | undefined) =>
+              Effect.tryPromise({
+                try: () =>
+                  atMillis === undefined
+                    ? state.storage.deleteAlarm()
+                    : state.storage.setAlarm(atMillis),
+                catch: (cause) =>
+                  StorageError.make({ message: "Could not schedule outbox delivery", cause }),
+              }),
+          },
+        }),
+  }).pipe(Effect.provideContext(context));
+
+  const rpc = ServerRpc.handlers(hub);
   const handlers = yield* rpc.services;
 
   yield* RpcServer.make(rpc.group).pipe(
@@ -154,34 +186,46 @@ export const make = Effect.fn("Cloudflare.make")(function* <
       request.headers.get("x-yielded-session"),
     );
 
-    const connection: SourceHub.Connection = { address, session };
+    const connection: Server.Connection = { address, session };
 
     if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
-      return yield* hub.run(connection, address, (runtime) =>
-        Effect.gen(function* () {
-          yield* runtime.checkSubscription(session);
-          if (
-            state.getWebSockets().filter((socket) => socket.readyState === WebSocket.OPEN).length >=
-            options.sockets.maxConnections
-          )
-            return new Response("Source connection capacity reached", { status: 503 });
+      const child = yield* Scope.fork(scope, "sequential");
 
-          const pair = yield* Effect.try({
-            try: () => {
-              const pair = new WebSocketPair();
+      return yield* Effect.gen(function* () {
+        const live = yield* hub.connect(connection).pipe(Effect.provideService(Scope.Scope, child));
 
-              pair[1].serializeAttachment({ session, address } satisfies typeof Attachment.Type);
+        const pair = yield* Effect.try({
+          try: () => {
+            const pair = new WebSocketPair();
 
-              return pair;
-            },
-            catch: unavailable,
-          });
+            pair[1].serializeAttachment(connection satisfies typeof Attachment.Type);
 
-          yield* transport.accept(pair[1]);
+            return pair;
+          },
+          catch: unavailable,
+        });
 
-          return new Response(null, { status: 101, webSocket: pair[0] });
-        }),
-      );
+        const socket = pair[1];
+
+        connections.set(socket, { connection: live, scope: child });
+        yield* Scope.addFinalizer(
+          child,
+          Effect.gen(function* () {
+            connections.delete(socket);
+            yield* close(socket, 1000, "Connection closed");
+          }),
+        );
+        yield* transport.accept(socket);
+        yield* live.closed.pipe(
+          Effect.catch((error) =>
+            close(socket, error.reason === "Unavailable" ? 1013 : 4403, error.message),
+          ),
+          Effect.andThen(Scope.close(child, Exit.void)),
+          Effect.forkIn(scope),
+        );
+
+        return new Response(null, { status: 101, webSocket: pair[0] });
+      }).pipe(Effect.onError(() => Scope.close(child, Exit.void)));
     }
     if (request.method !== "POST")
       return new Response("Expected POST or WebSocket", { status: 405 });
@@ -198,7 +242,7 @@ export const make = Effect.fn("Cloudflare.make")(function* <
         HttpServerRequest.HttpServerRequest,
         HttpServerRequest.fromWeb(boundedRequest),
       ),
-      Effect.provideService(RpcHost.CurrentConnection, connection),
+      Effect.provideService(ServerRpc.CurrentConnection, connection),
       Effect.scoped,
     );
 
@@ -208,37 +252,42 @@ export const make = Effect.fn("Cloudflare.make")(function* <
   const webSocketMessage = (socket: SocketTransport.Socket, message: string | ArrayBuffer) =>
     timed(
       Effect.gen(function* () {
-        const connection = yield* readAttachment(socket);
+        const attachment = yield* readAttachment(socket);
 
-        yield* hub.run(connection, connection.address, (runtime) =>
-          runtime.checkSubscription(connection.session),
-        );
+        yield* hub.checkConnection(attachment);
+        const live = connections.get(socket);
+
+        if (live === undefined) return yield* unavailable();
         yield* transport
           .message(socket, message)
-          .pipe(Effect.provideService(RpcHost.CurrentConnection, connection));
+          .pipe(Effect.provideService(ServerRpc.CurrentConnection, live.connection));
       }),
     ).pipe(
       Effect.catch((error) =>
-        error.reason === "Unavailable"
-          ? close(socket, 1013, "Source unavailable; reconnect and replay")
-          : close(socket, 4403, "Invalid request, expired session or revoked access"),
+        close(
+          socket,
+          error.reason === "Unavailable" ? 1013 : 4403,
+          error.reason === "Unavailable"
+            ? "Source unavailable; reconnect and replay"
+            : "Invalid request, expired session or revoked access",
+        ),
       ),
     );
 
   const departure = (socket: SocketTransport.Socket) =>
     Effect.gen(function* () {
-      const connection = yield* readAttachment(socket);
+      const live = connections.get(socket);
 
-      yield* close(socket, 1000, "Connection closed");
-      yield* hub.departure(connection);
-    }).pipe(Effect.catch(() => close(socket, 1011, "Connection closed")));
+      if (live === undefined) return yield* close(socket, 1000, "Connection closed");
+      yield* Scope.close(live.scope, Exit.void);
+    });
 
   return {
     fetch: (request) => timed(fetch(request)),
     webSocketMessage,
     webSocketClose: departure,
     webSocketError: departure,
-    alarm: hub.alarm,
+    alarm: hub.drainOutbox,
   };
 });
 

@@ -3,13 +3,15 @@ title: Getting started
 ---
 
 Yielded Sync separates a source's public contract from its authoritative host and
-its clients. Install the core package and its Effect peer:
+its clients. The core host runs wherever Effect runs. Install it with its Effect
+peer:
 
 ```sh
 bun add @yielded/sync@{{SYNC_VERSION}} effect
 ```
 
-For Cloudflare hosting, choose one framework adapter:
+For Cloudflare's native Worker and Durable Object lifecycle, optionally add one
+framework adapter:
 
 ```sh
 bun add @yielded/sync-platform-effect-cf@{{SYNC_VERSION}} effect-cf
@@ -17,19 +19,18 @@ bun add @yielded/sync-platform-effect-cf@{{SYNC_VERSION}} effect-cf
 bun add @yielded/sync-platform-alchemy-cf@{{SYNC_VERSION}} alchemy
 ```
 
-For durable client storage, install the optional persistence package:
+For durable client storage, choose a platform adapter:
 
 ```sh
-bun add @yielded/sync-persistence@{{SYNC_VERSION}}
-# Native Expo also requires:
-bun add expo-sqlite
+bun add @yielded/sync-local-indexeddb@{{SYNC_VERSION}}
+# Or, for native Expo:
+bun add @yielded/sync-local-expo@{{SYNC_VERSION}} expo-sqlite
 ```
 
 Keep Sync packages on the same exact version and satisfy the peer ranges in
-their manifests. Import `IndexedDb` from `@yielded/sync-persistence/indexeddb`
-for browsers, including Expo web, or `ExpoSqlite` from
-`@yielded/sync-persistence/expo` for native Expo. See
-[packages and hosts](../reference/packages.mdx) for platform constraints.
+their manifests. Expo web uses IndexedDB. Applications with custom client
+storage can use `@yielded/sync-persistence` for shared record policy or implement
+the core port directly. See [packages and hosts](../reference/packages.mdx).
 
 ## Define a shared contract
 
@@ -67,10 +68,12 @@ matching server definition and links to runnable applications.
 ## Connect server and client
 
 Use `Server.make` to supply private state, action handlers, authorization, and
-initialization. Provide the host's `SourceStorage`, using a SQLite Layer or your
-own implementation. An accepted action commits state, events, its exact outcome,
-and any outbox obligations atomically. The [counter example](../api/consumer.md)
-explains the server and host boundaries.
+initialization. Open one `Server.host` per storage authority, providing
+`SourceStorage`, `ServerCrypto`, and the definition's services. Its scoped
+connections carry authenticated sessions; `ServerRpc.handlers` binds the host to
+Effect RPC. The host commits state, events, exact outcomes, and optional outbox
+obligations atomically. Platform adapters add native transports and lifecycle
+hooks. The [counter example](../api/consumer.md) explains this composition.
 
 On the client, `Client.definition` supplies a pure event reducer and optional
 optimistic reducers. `Client.make` opens a session for one authenticated actor,

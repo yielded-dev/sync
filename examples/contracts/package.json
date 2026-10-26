@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "bun src/main.ts",
+    "server": "bun src/server.ts",
     "typecheck": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict"
   },
   "dependencies": {

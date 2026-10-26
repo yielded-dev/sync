@@ -1,7 +1,7 @@
 {
   "name": "@yielded/sync-persistence",
   "version": "0.1.0-beta.2",
-  "description": "Optional IndexedDB and Expo SQLite persistence for Effect Sync clients.",
+  "description": "Durable client persistence policy and driver contracts for Effect Sync.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -20,14 +20,6 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
-    },
-    "./indexeddb": {
-      "types": "./dist/browser.d.mts",
-      "import": "./dist/browser.mjs"
-    },
-    "./expo": {
-      "types": "./dist/expo.d.mts",
-      "import": "./dist/expo.mjs"
     }
   },
   "publishConfig": {
@@ -35,31 +27,18 @@
   },
   "scripts": {
     "build": "vp pack",
-    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict",
-    "test": "vp test"
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict"
   },
   "dependencies": {
     "@yielded/sync": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
     "effect": "catalog:",
-    "expo": "catalog:",
-    "expo-sqlite": "catalog:",
-    "playwright": "catalog:",
-    "react": "catalog:",
-    "react-native": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "peerDependencies": {
-    "effect": "catalog:",
-    "expo-sqlite": "catalog:"
-  },
-  "peerDependenciesMeta": {
-    "expo-sqlite": {
-      "optional": true
-    }
+    "effect": "catalog:"
   }
 }

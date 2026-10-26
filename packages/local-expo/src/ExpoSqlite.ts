@@ -1,7 +1,6 @@
+import { Persistence } from "@yielded/sync-persistence";
 import { ReplicaPersistence, type Client, type PersistenceError } from "@yielded/sync/client";
 import { Effect, Layer, Schema, Semaphore, type Scope } from "effect";
-
-import * as Persistence from "./Persistence.ts";
 
 export interface Options extends Persistence.Options {
   readonly directory?: string;

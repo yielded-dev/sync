@@ -1,4 +1,4 @@
-import { IndexedDb } from "@yielded/sync-persistence/indexeddb";
+import { IndexedDb } from "@yielded/sync-local-indexeddb";
 import { SourceAtom } from "@yielded/sync/atom";
 import { Client, type ClientError, type PersistenceError } from "@yielded/sync/client";
 import {

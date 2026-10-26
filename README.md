@@ -20,8 +20,8 @@
 </p>
 
 Effect-native realtime synchronization with optimistic clients and exact retries.
-Define a shared source contract, supply its server handlers, and connect scoped
-clients from a browser or native app.
+Define a shared source contract, run its authoritative host with Effect, and
+connect scoped clients from a browser or native app.
 
 Start with the [documentation](https://yielded.dev/sync/),
 [getting started guide](https://yielded.dev/sync/guide/getting-started/), or
@@ -29,13 +29,15 @@ Start with the [documentation](https://yielded.dev/sync/),
 
 ## Packages
 
-| Package                             | Responsibility                                                                    |
-| ----------------------------------- | --------------------------------------------------------------------------------- |
-| `@yielded/sync`                     | Shared contracts, with separate `./server`, `./client`, and `./atom` entry points |
-| `@yielded/sync-persistence`         | Optional browser and native client persistence, with shared driver policy         |
-| `@yielded/sync-platform-cloudflare` | Shared Cloudflare protocol and SQLite storage                                     |
-| `@yielded/sync-platform-effect-cf`  | Native effect-cf Worker and Durable Object integration                            |
-| `@yielded/sync-platform-alchemy-cf` | Native Alchemy Worker and Durable Object integration                              |
+| Package                             | Responsibility                                                      |
+| ----------------------------------- | ------------------------------------------------------------------- |
+| `@yielded/sync`                     | Shared contracts, portable server hosts, clients, and Atom bindings |
+| `@yielded/sync-persistence`         | Shared client persistence policy and driver contracts               |
+| `@yielded/sync-local-indexeddb`     | Browser client persistence                                          |
+| `@yielded/sync-local-expo`          | Native Expo SQLite client persistence                               |
+| `@yielded/sync-platform-cloudflare` | Cloudflare transport, lifecycle, and SQLite storage                 |
+| `@yielded/sync-platform-effect-cf`  | Native effect-cf Worker and Durable Object integration              |
+| `@yielded/sync-platform-alchemy-cf` | Native Alchemy Worker and Durable Object integration                |
 
 Applications own domain models, authentication, authorization, projection
 destinations, and UI. They supply server storage and may implement client journals
@@ -43,6 +45,11 @@ directly; core owns no persistence implementation. Sync coordinates atomic
 state/event/receipt commits, optional outbox obligations, ordered replay, and
 client recovery. Snapshot caches are disposable; unresolved command journals
 retain the identities needed for safe retry.
+
+`Server.host` and `ServerRpc` work without platform adapters. Try the
+[core server example](examples/contracts/README.md) with
+`vp run @yielded/example-contracts#server`. The Cloudflare packages add native
+Worker and Durable Object integration around the same host.
 
 See [packages and hosts](docs/src/content/docs/reference/packages.mdx) for adapter
 choices and [GitHub releases](https://github.com/yielded-dev/sync/releases) for
@@ -54,7 +61,7 @@ Install [Vite+](https://viteplus.dev/guide/), then run:
 
 ```sh
 vp install
-vp -C packages/persistence exec playwright install chromium
+vp -C packages/local-indexeddb exec playwright install chromium
 vp run ready
 ```
 

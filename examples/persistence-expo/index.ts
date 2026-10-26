@@ -1,4 +1,4 @@
-import { ExpoSqlite } from "@yielded/sync-persistence/expo";
+import { ExpoSqlite } from "@yielded/sync-local-expo";
 import { Client } from "@yielded/sync/client";
 import { Clock, Effect } from "effect";
 import { registerRootComponent } from "expo";

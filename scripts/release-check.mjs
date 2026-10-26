@@ -16,6 +16,8 @@ const packages = [
   ["platform-cloudflare", "@yielded/sync-platform-cloudflare"],
   ["platform-effect-cf", "@yielded/sync-platform-effect-cf"],
   ["platform-alchemy-cf", "@yielded/sync-platform-alchemy-cf"],
+  ["local-indexeddb", "@yielded/sync-local-indexeddb"],
+  ["local-expo", "@yielded/sync-local-expo"],
 ];
 
 const run = (command, args, cwd = root) => execFileSync(command, args, { cwd, stdio: "inherit" });
@@ -145,8 +147,8 @@ try {
       'export { Cloudflare, SqliteStorage } from "@yielded/sync-platform-cloudflare";',
       'export { EffectCf } from "@yielded/sync-platform-effect-cf";',
       'export { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";',
-      'export { IndexedDb } from "@yielded/sync-persistence/indexeddb";',
-      'export { ExpoSqlite } from "@yielded/sync-persistence/expo";',
+      'export { IndexedDb } from "@yielded/sync-local-indexeddb";',
+      'export { ExpoSqlite } from "@yielded/sync-local-expo";',
       "",
     ].join("\n"),
   );

@@ -11,7 +11,7 @@ the source's cursor and lifecycle.
 
 <FlowMap
   title="One contract, two separate storage boundaries"
-  description="Your shared source contract defines the client and server. The client sends commands and exact retries; the server returns snapshots and ordered events. You supply SourceStorage for the server and, for persistent clients, a separate ReplicaPersistence implementation."
+  description="Your shared source contract defines the client and portable server host. The client sends commands and exact retries; Server.host returns snapshots and ordered events. You supply SourceStorage for the server and, for persistent clients, a separate ReplicaPersistence implementation."
   columns={2}
   nodes={[
     {
@@ -35,7 +35,7 @@ the source's cursor and lifecycle.
       at: [2, 2],
       owner: "library",
       title: "Authoritative server",
-      code: "Server.make(…)",
+      code: "Server.host(…)",
       note: "Snapshots + ordered events",
     },
     {
@@ -67,8 +67,11 @@ the source's cursor and lifecycle.
 
 ## Authority and receipts
 
-The server keeps private state behind the public contract. Each action turn
-authorizes against stored state, checks for an existing receipt, or runs the
+`Server.make` defines private state and handlers behind the public contract.
+`Server.host` coordinates that definition within one storage authority. It runs
+without a platform adapter; `ServerRpc` connects it to an application's Effect
+RPC transport. Each action turn authorizes against stored state, checks for an
+existing receipt, or runs the
 application handler. A successful turn atomically stores the new state, events,
 exact result, receipt, and any outbox obligations. Declared domain rejections are
 also durable outcomes. Operational failures do not become domain rejections.
@@ -93,12 +96,12 @@ reconciliation.
 
 ## Ownership boundaries
 
-| Sync owns                                     | Your application owns                       |
-| --------------------------------------------- | ------------------------------------------- |
-| Source/action/plugin contracts and codecs     | Domain schemas and business rules           |
-| Atomic execution, receipts, replay, and retry | Authentication and authorization policy     |
-| Scoped client sessions and recovery           | Projection destinations and delivery policy |
-| Persistence ports and host adapters           | UI, bootstrap data, and migration decisions |
+| Sync owns                                     | Your application owns                        |
+| --------------------------------------------- | -------------------------------------------- |
+| Source/action/plugin contracts and codecs     | Domain schemas and business rules            |
+| Portable hosting, receipts, replay, and retry | Authentication and authorization policy      |
+| Scoped client sessions and recovery           | Projection destinations and delivery policy  |
+| Persistence ports and optional host adapters  | UI, transport, and durable wakeup scheduling |
 
 Server storage and client persistence are separate contracts. Disposable
 snapshot caches never replace the pending-intent journal. Choose an explicit
