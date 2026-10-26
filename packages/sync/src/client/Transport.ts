@@ -116,7 +116,7 @@ export const rpcTransport = <S extends Source.Spec>(
 export const layerRpcTransport = <S extends Source.Spec>(contract: Source.Definition<S>) =>
   Layer.effect(Transport, rpcTransport(contract));
 
-export interface WebSocketUrlOptions {
+export interface WebSocketTransportOptions {
   readonly url: string | Effect.Effect<string>;
 }
 
@@ -127,26 +127,22 @@ export interface SourceWebSocketOptions<S extends Source.Spec = Source.Spec> {
   readonly query?: UrlParams.Input;
 }
 
-export type WebSocketTransportOptions<S extends Source.Spec = Source.Spec> =
-  | WebSocketUrlOptions
-  | SourceWebSocketOptions<S>;
-
 /** The application supplies the socket constructor, credentials, and session lifetime. */
 export function layerWebSocketTransport<S extends Source.Spec>(
   contract: Source.Definition<S>,
-  options: WebSocketUrlOptions,
+  options: WebSocketTransportOptions,
 ): Layer.Layer<Transport, never, Socket.WebSocketConstructor>;
 
 export function layerWebSocketTransport<S extends Source.Spec>(
   contract: Source.Definition<S>,
-  options: WebSocketTransportOptions<NoInfer<S>>,
+  options: WebSocketTransportOptions | SourceWebSocketOptions<NoInfer<S>>,
 ): Layer.Layer<Transport, ProtocolError, Socket.WebSocketConstructor>;
 
 export function layerWebSocketTransport<S extends Source.Spec>(
   contract: Source.Definition<S>,
-  options: WebSocketTransportOptions<S>,
+  options: WebSocketTransportOptions | SourceWebSocketOptions<S>,
 ): Layer.Layer<Transport, ProtocolError, Socket.WebSocketConstructor> {
-  const transport = (url: WebSocketUrlOptions["url"]) =>
+  const transport = (url: WebSocketTransportOptions["url"]) =>
     layerRpcTransport(contract).pipe(
       Layer.provide(RpcClient.layerProtocolSocket({ retryTransientErrors: false })),
       Layer.provide(RpcSerialization.layerJson),

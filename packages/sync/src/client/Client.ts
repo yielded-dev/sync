@@ -18,7 +18,6 @@ export {
   Transport,
   type Request,
   type WebSocketTransportOptions,
-  type WebSocketUrlOptions,
   type SourceWebSocketOptions,
 } from "./Transport.ts";
 
