@@ -59,6 +59,7 @@ durable replica. This source needs no plugins.
 Server action handlers use `Effect.fn` and return `{ state, events, result }`.
 `events` update every replica; `result` is the reply to the caller. Yield a
 `CardRejected` error to reject an action. Sync commits accepted changes atomically.
+Authentication reads `HttpServerRequest` from the Worker's request context.
 
 ## Demo boundaries
 

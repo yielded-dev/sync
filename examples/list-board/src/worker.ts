@@ -4,6 +4,7 @@ import { EffectCfServices } from "@yielded/sync-platform-effect-cf";
 import { Server } from "@yielded/sync/server";
 import { Effect, Option, Schema } from "effect";
 import { Worker } from "effect-cf";
+import { HttpServerRequest } from "effect/http/HttpServerRequest";
 
 import { Board, CardRejected } from "./contract.ts";
 import { DemoActor } from "./demo.ts";
@@ -63,12 +64,13 @@ export type BoardObject = typeof BoardObject.Type;
 
 const Boards = BoardObject.binding("BOARDS");
 
-const authenticate = Effect.fn("authenticate")(function* (request: Request) {
-  const url = new URL(request.url);
+const authenticate = Effect.fn("authenticate")(function* () {
+  const request = yield* HttpServerRequest;
+  const url = new URL(request.originalUrl);
 
   // Public demo identities only. Browser WebSockets cannot set Authorization.
   // Replace this selection with the application's auth provider before deployment.
-  const token = request.headers.get("authorization");
+  const token = request.headers.authorization;
 
   const actorId = Option.getOrUndefined(
     Schema.decodeUnknownOption(DemoActor)(
@@ -76,7 +78,7 @@ const authenticate = Effect.fn("authenticate")(function* (request: Request) {
         ? "alice"
         : token === "Bearer bob-local"
           ? "bob"
-          : token === null
+          : token === undefined
             ? url.searchParams.get("actor")
             : undefined,
     ),
