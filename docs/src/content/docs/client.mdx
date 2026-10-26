@@ -33,8 +33,7 @@ export const program = Effect.gen(function* () {
   const counter = Client.view(lease);
 
   yield* counter.ready;
-  yield* lease.execute(Counter.actions.set, { value: 7 });
-  return (yield* counter.read).value;
+  return yield* lease.execute(Counter.actions.set, { value: 7 });
 });
 ```
 
@@ -115,7 +114,8 @@ It accepts no replacement payload and never allocates a new identity. Because an
 id may belong to any action, retry returns the union of action result/error types;
 `execute` retains the selected action's exact types.
 
-An event can confirm the edit before its return value arrives. The overlay then
+Action results and replicated views arrive independently; observe `changes` for
+updated state. An event can confirm the edit before its return value arrives. The overlay then
 clears, but `ConfirmedAwaitingResult` stays pending until the result is known.
 Expired results and ambiguous commands remain unresolved. An authority change
 marks old work `AuthorityChanged`; the application must reconcile it before
