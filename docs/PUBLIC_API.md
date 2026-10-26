@@ -233,6 +233,21 @@ the ports. Physical formats and cache bounds belong to the optional
 `@yielded/sync-local-indexeddb`. Applications may implement the ports directly with
 their own persistence strategy.
 
-`SourceAtom.make` uses the same runtime. Active atoms hold leases; passive reads
-never connect. Registry disposal releases leases. UI code owns no second command
-queue, retry loop, or replica store.
+`SourceAtom.bind(definition, { runtime, address, persistence })` binds one source
+to the application's Atom runtime. It lazily acquires one client and lease per
+registry, using the runtime's actor, transport, persistence, and definition
+services. `replica` projects root data; `action.<name>` exposes typed writable
+atoms. Declared plugins have the same bindings under `plugins.<id>`. `retry` and
+`recover` use the same lease and exact command identities. Action atoms follow
+Effect Atom's cancellation behavior; `actions.<name>.concurrent` opts into
+concurrent writes. Application workflows can await them with `get.setResult`.
+
+`presence(payloadAtom)` optionally publishes ephemeral heartbeats while observed
+and lists other actors' latest payloads by connection. Peers expire, leave on
+departure or disconnect, and are bounded independently of durable state. Its
+payload and rendering remain application-owned. Registry disposal releases the
+lease and all presence work.
+
+`SourceAtom.make` binds an existing headless runtime. Active atoms hold leases;
+passive reads never connect. UI code owns no second command queue, retry loop,
+or replica store.

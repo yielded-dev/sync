@@ -1,4 +1,4 @@
-import { useAtom, useAtomMount, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtom, useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Client } from "@yielded/sync/client";
 import { Cause, Option, Schema } from "effect";
 import { AsyncResult } from "effect/reactivity";
@@ -10,20 +10,16 @@ import {
   actorHref,
   actorId,
   addCardAtom,
-  announcePresenceAtom,
-  boardAtom,
+  board,
   type BoardError,
   boardId,
   cardDraftAtom,
   errorMessage,
   focusedCardAtom,
-  moveCardAtom,
   otherActor,
-  peersAtom,
+  presenceAtom,
   type Peer,
-  reconnectAtom,
   renameBoardAtom,
-  retryChangeAtom,
   titleDraftAtom,
 } from "./atoms.ts";
 
@@ -262,12 +258,14 @@ function BoardCard({
   readonly peers: ReadonlyArray<Peer>;
   readonly editable: boolean;
 }) {
-  const move = useAtomSet(moveCardAtom);
+  const move = useAtomSet(board.action.moveCard);
   const [focusedCard, focusCard] = useAtom(focusedCardAtom);
 
   const editors = [
     ...new Set(
-      peers.filter((peer) => peer.editingCardId === card.id).map((peer) => actorName(peer.actorId)),
+      peers
+        .filter((peer) => peer.value.editingCardId === card.id)
+        .map((peer) => actorName(peer.actorId)),
     ),
   ];
 
@@ -325,16 +323,14 @@ function Notice({ children }: { readonly children: ReactNode }) {
 }
 
 export function App() {
-  const result = useAtomValue(boardAtom);
-  const presence = useAtomValue(peersAtom);
-  const moveResult = useAtomValue(moveCardAtom);
-  const [reconnectResult, reconnect] = useAtom(reconnectAtom);
-  const [retryResult, retry] = useAtom(retryChangeAtom);
-
-  useAtomMount(announcePresenceAtom);
+  const result = useAtomValue(board.replica);
+  const presence = useAtomValue(presenceAtom);
+  const moveResult = useAtomValue(board.action.moveCard);
+  const [reconnectResult, reconnect] = useAtom(board.recover);
+  const [retryResult, retry] = useAtom(board.retry);
   const replica = Option.getOrUndefined(AsyncResult.value(result));
   const snapshot = replica?.value ?? replica?.provisional;
-  const cards = snapshot?.source.cards ?? [];
+  const cards = snapshot?.cards ?? [];
   const connection = replica?.connection ?? "connecting";
   const editable = connection === "live" && snapshot !== undefined;
 
@@ -355,10 +351,7 @@ export function App() {
             <span className="eyebrow">A little space to make things happen</span>
             <ConnectionStatus connection={connection} pending={pending.length} />
           </div>
-          <BoardTitle
-            title={snapshot?.plugins.board.title || "Your shared board"}
-            editable={editable}
-          />
+          <BoardTitle title={snapshot?.title || "Your shared board"} editable={editable} />
           <p className="board-description">
             From the first idea to the final check. Better, together.
           </p>

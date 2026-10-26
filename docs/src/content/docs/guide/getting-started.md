@@ -86,8 +86,9 @@ explains this composition.
 On the client, `Client.definition` supplies a pure event reducer and optional
 optimistic reducers. `Client.make` opens a session for one authenticated actor,
 with an application transport and explicit persistence. Open a source address,
-wait for `ready`, then execute a registered action. `SourceAtom.make` adds UI
-bindings over that session.
+wait for `ready`, then execute a registered action. For a UI, `SourceAtom.bind`
+handles session acquisition and exposes the replica and typed `action.<name>`
+atoms through the application's Atom runtime.
 
 Use `{ mode: "volatile" }` for disposable client state or `{ mode: "persistent" }`
 with a `ReplicaPersistence` Layer. Persistent journals retain unresolved command

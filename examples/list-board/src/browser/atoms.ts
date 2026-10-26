@@ -3,12 +3,12 @@ import type { ProtocolError } from "@yielded/sync";
 import { IndexedDb } from "@yielded/sync-local-indexeddb";
 import { SourceAtom } from "@yielded/sync/atom";
 import { Client, type ClientError, type PersistenceError } from "@yielded/sync/client";
-import { Clock, Context, Crypto, Effect, Layer, Option, Schedule, Schema, Stream } from "effect";
-import { AsyncResult, Atom } from "effect/reactivity";
+import { Crypto, Effect, Layer, Option, Schema } from "effect";
+import { Atom } from "effect/reactivity";
 import { Socket } from "effect/socket";
 
 import { BoardClient } from "../client.ts";
-import { BoardId, type CardRejected, Cards, type Lane } from "../contract.ts";
+import { Board, BoardId, type CardRejected } from "../contract.ts";
 import { DemoActor } from "../demo.ts";
 
 const page = new URL(window.location.href);
@@ -34,47 +34,26 @@ export const actorHref = (actor: typeof DemoActor.Type) => {
   return url.href;
 };
 
-const address = Cards.address(boardId);
+const transport = Client.layerWebSocketTransport(Board, {
+  origin: page.origin,
+  id: boardId,
+  query: { actor: actorId },
+}).pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal));
 
-const transport = Layer.unwrap(
-  Effect.gen(function* () {
-    const { actorId } = yield* Client.CurrentActor;
-
-    return Client.layerWebSocketTransport(Cards, {
-      origin: page.origin,
-      id: boardId,
-      query: { actor: actorId },
-    }).pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal));
-  }),
-);
-
-const makeSession = Effect.gen(function* () {
-  const client = yield* Client.make(BoardClient, { persistence: { mode: "persistent" } });
-  const lease = yield* client.open(address);
-
-  return { atoms: SourceAtom.make(client), lease };
-});
-
-class BoardSession extends Context.Service<BoardSession, Effect.Success<typeof makeSession>>()(
-  "list-board/BoardSession",
-) {
-  static readonly layer = Layer.effect(this, makeSession);
-}
-
-// One registry owns the actor's socket, IndexedDB handle, and source leases.
 const runtime = Atom.runtime(
-  BoardSession.layer.pipe(
-    Layer.provide([IndexedDb.layer({ namespace: "list-board-demo-v1" }), transport]),
-    Layer.provide(Layer.succeed(Client.CurrentActor, { actorId })),
-    Layer.merge(BrowserCrypto.layer),
-  ),
+  Layer.mergeAll(
+    transport,
+    IndexedDb.layer({ namespace: "list-board-demo-v1" }),
+    BrowserCrypto.layer,
+  ).pipe(Layer.provideMerge(Layer.succeed(Client.CurrentActor, { actorId }))),
 );
 
-const sessionAtom = runtime.atom(BoardSession);
-
-export const boardAtom = Atom.make((get) =>
-  AsyncResult.flatMap(get(sessionAtom), ({ atoms }) => get(atoms.replica(address))),
-).pipe(Atom.setIdleTTL(0));
+export const board = SourceAtom.bind(BoardClient, {
+  runtime,
+  address: Board.address(boardId),
+  persistence: { mode: "persistent" },
+  actions: { moveCard: { concurrent: true } },
+});
 
 export const cardDraftAtom = Atom.make("");
 export const titleDraftAtom = Atom.make<string | null>(null);
@@ -85,11 +64,10 @@ export const addCardAtom = runtime.fn<void>()(
     const title = get(cardDraftAtom).trim();
 
     if (title.length === 0) return;
-    const { atoms } = yield* BoardSession;
     const crypto = yield* Crypto.Crypto;
     const id = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
 
-    yield* atoms.execute(address, Cards.actions.add, { id, title });
+    yield* get.setResult(board.action.addCard, { id, title });
     get.set(cardDraftAtom, "");
   }),
 );
@@ -99,96 +77,16 @@ export const renameBoardAtom = runtime.fn<void>()(
     const title = get(titleDraftAtom)?.trim();
 
     if (title === undefined || title.length === 0) return;
-    const { atoms } = yield* BoardSession;
-
-    yield* atoms.execute(address, Cards.plugins.board.actions.rename, title);
+    yield* get.setResult(board.action.rename, title);
     get.set(titleDraftAtom, null);
   }),
 );
 
-export const moveCardAtom = runtime.fn<{ readonly id: string; readonly lane: typeof Lane.Type }>()(
-  Effect.fnUntraced(function* (payload) {
-    const { atoms } = yield* BoardSession;
-
-    return yield* atoms.execute(address, Cards.actions.move, payload);
-  }),
-  { concurrent: true },
+export const presenceAtom = board.presence(
+  Atom.make((get) => ({ editingCardId: get(focusedCardAtom) })),
 );
 
-export const retryChangeAtom = runtime.fn<string>()(
-  Effect.fnUntraced(function* (commandId) {
-    const { atoms } = yield* BoardSession;
-
-    return yield* atoms.retry(address, commandId);
-  }),
-);
-
-export const reconnectAtom = runtime.fn<void>()(
-  Effect.fnUntraced(function* () {
-    const { atoms } = yield* BoardSession;
-
-    yield* atoms.recover(address);
-  }),
-);
-
-export interface Peer {
-  readonly actorId: string;
-  readonly connectionId: string;
-  readonly editingCardId: string | null;
-  readonly expiresAtMillis: number;
-}
-
-// Presence is bounded, expires, and never enters the durable replica or journal.
-export const peersAtom = runtime
-  .atom(
-    Stream.unwrap(Effect.map(BoardSession, ({ lease }) => lease.messages)).pipe(
-      Stream.merge(Stream.fromSchedule(Schedule.spaced("5 seconds")).pipe(Stream.map(() => null))),
-      Stream.mapEffect((frame) => Effect.map(Clock.currentTimeMillis, (now) => ({ frame, now }))),
-      Stream.scan(
-        (): ReadonlyArray<Peer> => [],
-        (peers, { frame, now }) => {
-          const current = peers.filter(
-            (peer) => peer.expiresAtMillis > now && peer.connectionId !== frame?.connectionId,
-          );
-
-          if (frame === null || frame._tag === "MessageLeave" || frame.actorId === actorId)
-            return current;
-          if (frame.message.namespace !== "$source") return current;
-
-          return [
-            ...current.slice(-31),
-            {
-              actorId: frame.actorId,
-              connectionId: frame.connectionId,
-              editingCardId: frame.message.payload.editingCardId,
-              expiresAtMillis: now + 25_000,
-            },
-          ];
-        },
-      ),
-    ),
-    { initialValue: [] },
-  )
-  .pipe(Atom.setIdleTTL(0));
-
-export const announcePresenceAtom = runtime
-  .atom((get) => {
-    const editingCardId = get(focusedCardAtom);
-    const board = get(boardAtom);
-
-    if (board._tag !== "Success" || board.value.connection !== "live") return Effect.void;
-
-    return Effect.gen(function* () {
-      const { lease } = yield* BoardSession;
-
-      // Missed ephemeral announcements can be dropped; the next heartbeat replaces them.
-      yield* lease
-        .publishMessage({ editingCardId })
-        .pipe(Effect.ignore, Effect.repeat(Schedule.spaced("8 seconds")));
-    });
-  })
-  .pipe(Atom.setIdleTTL(0));
-
+export type Peer = Atom.Success<typeof presenceAtom>[number];
 export type BoardError = ClientError | CardRejected | PersistenceError | ProtocolError;
 
 export const errorMessage = (error: BoardError) => {

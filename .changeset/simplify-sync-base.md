@@ -9,4 +9,4 @@
 
 Host sources with caller-provided storage or Cloudflare platform defaults and shared, typed routes; optional outbox delivery defaults to batches of 10 and a 60-second retry interval.
 
-Simplify client setup and optional plugins, keep IndexedDB and custom persistence separate from core, and remove the Expo adapter in favor of one runnable browser example.
+Bind replicas, typed action atoms, and optional presence to an application's Atom runtime; keep plugins optional and IndexedDB or custom persistence separate from core, and replace the Expo adapter with one runnable browser example.

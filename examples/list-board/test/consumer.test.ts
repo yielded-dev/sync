@@ -7,12 +7,12 @@ import { Socket } from "effect/socket";
 import { afterEach, expect, it } from "vite-plus/test";
 
 import { BoardClient } from "../src/client.ts";
-import { BoardId, CardRejected, Cards } from "../src/contract.ts";
+import { BoardId, CardRejected, Board } from "../src/contract.ts";
 import type { BoardObject } from "../src/worker.ts";
 
 const bindings = env as { BOARDS: DurableObjectNamespace<BoardObject> };
-const address = Cards.address(BoardId.make("shared"));
-const stub = () => bindings.BOARDS.getByName("board:shared");
+const address = Board.address(BoardId.make("shared"));
+const stub = () => bindings.BOARDS.getByName("boards:shared");
 
 const unavailable = () =>
   ProtocolError.make({ reason: "Unavailable", message: "Response lost after commit" });
@@ -59,7 +59,7 @@ it("runs two public clients against a durable board with exact retry, rollback, 
     Effect.scoped(
       Effect.gen(function* () {
         const services = yield* Layer.build(
-          Client.layerRpcTransport(Cards).pipe(
+          Client.layerRpcTransport(Board).pipe(
             Layer.provide(socketProtocol()),
             Layer.provideMerge(Layer.succeed(Client.CurrentActor, { actorId: "alice" })),
           ),
@@ -90,7 +90,7 @@ it("runs two public clients against a durable board with exact retry, rollback, 
         let bobSocket: WebSocket | undefined;
 
         const bobServices = yield* Layer.build(
-          Client.layerRpcTransport(Cards).pipe(
+          Client.layerRpcTransport(Board).pipe(
             Layer.provide(
               socketProtocol((socket) => {
                 bobSocket = socket;
@@ -111,7 +111,7 @@ it("runs two public clients against a durable board with exact retry, rollback, 
         yield* bobLease.ready;
 
         const first = yield* Effect.result(
-          aliceLease.execute(Cards.actions.add, { id: "one", title: "First" }),
+          aliceLease.execute(Board.actions.addCard, { id: "one", title: "First" }),
         );
 
         if (
@@ -126,7 +126,7 @@ it("runs two public clients against a durable board with exact retry, rollback, 
           Stream.take(1),
           Stream.runDrain,
         );
-        yield* bobLease.execute(Cards.actions.add, { id: "two", title: "Second" });
+        yield* bobLease.execute(Board.actions.addCard, { id: "two", title: "Second" });
         yield* Effect.promise(() => evictDurableObject(stub()));
         if (bobSocket === undefined) return yield* Effect.die("Bob did not connect");
         // Wake the new activation, then let native RPC reset and reconnect its lost streams.
@@ -143,15 +143,15 @@ it("runs two public clients against a durable board with exact retry, rollback, 
           { concurrency: 2, discard: true },
         );
         expect(yield* aliceLease.retry(first.failure.commandId)).toEqual({ id: "one", count: 1 });
-        yield* bobLease.execute(Cards.plugins.board.actions.rename, "Planning");
+        yield* bobLease.execute(Board.actions.rename, "Planning");
         yield* aliceLease.changes.pipe(
-          Stream.filter((state) => state.value?.plugins.board.title === "Planning"),
+          Stream.filter((state) => state.value?.source.title === "Planning"),
           Stream.take(1),
           Stream.runDrain,
         );
 
         const rejected = yield* Effect.result(
-          bobLease.execute(Cards.actions.add, { id: "one", title: "Duplicate" }),
+          bobLease.execute(Board.actions.addCard, { id: "one", title: "Duplicate" }),
         );
 
         expect(rejected._tag).toBe("Failure");
@@ -186,7 +186,7 @@ it("runs two public clients against a durable board with exact retry, rollback, 
           Stream.take(1),
           Stream.runDrain,
         );
-        yield* aliceLease.execute(Cards.actions.move, { id: "one", lane: "doing" });
+        yield* aliceLease.execute(Board.actions.moveCard, { id: "one", lane: "doing" });
         yield* bobLease.changes.pipe(
           Stream.filter((state) => state.value?.source.cards[0]?.lane === "doing"),
           Stream.take(1),

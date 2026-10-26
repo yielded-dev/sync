@@ -1,34 +1,34 @@
 import { Client } from "@yielded/sync/client";
 
-import { Board, Cards } from "./contract.ts";
+import { Board } from "./contract.ts";
 
-export const BoardClient = Client.definition(Cards, {
+export const BoardClient = Client.definition(Board, {
   applyEvent: (snapshot, event) => {
     switch (event._tag) {
       case "Added":
-        return { cards: [...snapshot.cards, event.card] };
+        return { ...snapshot, cards: [...snapshot.cards, event.card] };
       case "Moved":
         return {
+          ...snapshot,
           cards: snapshot.cards.map((card) =>
             card.id === event.id ? { ...card, lane: event.lane } : card,
           ),
         };
+      case "Renamed":
+        return { ...snapshot, title: event.title };
     }
   },
   optimistic: {
-    add: (snapshot, payload) => ({
+    addCard: (snapshot, payload) => ({
+      ...snapshot,
       cards: [...snapshot.cards, { ...payload, lane: "todo" as const }],
     }),
-    move: (snapshot, payload) => ({
+    moveCard: (snapshot, payload) => ({
+      ...snapshot,
       cards: snapshot.cards.map((card) =>
         card.id === payload.id ? { ...card, lane: payload.lane } : card,
       ),
     }),
+    rename: (snapshot, title) => ({ ...snapshot, title }),
   },
-  plugins: [
-    Client.plugin(Board, {
-      applyEvent: (_snapshot, event) => event,
-      optimistic: { rename: (_snapshot, title) => ({ title }) },
-    }),
-  ],
 });

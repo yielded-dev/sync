@@ -4,7 +4,7 @@ title: Headless clients and Atom
 
 import { Trace } from "@yielded/starlight-theme/components";
 
-Create one client session per authenticated actor. It owns the source connections,
+A client session captures one authenticated actor. It owns the source connections,
 optimistic state, and recovery; UI bindings read that same state.
 
 ## Open a source
@@ -212,16 +212,69 @@ deleting local data or changing namespaces.
 
 ## Atom bindings
 
-`SourceAtom.make(session)` binds UI state to the same headless client:
+`SourceAtom.bind` creates a source instance with typed action atoms. Supply an
+`Atom.runtime` containing `CurrentActor`, `Transport`, and any services required
+by the client definition. Persistent mode also requires `ReplicaPersistence`.
 
-| Binding                       | Behavior                                                             |
-| ----------------------------- | -------------------------------------------------------------------- |
-| `replica(address)`            | Acquires a source lease and exposes an `AsyncResult` replica         |
-| `passiveReplica(address)`     | Reads an `AsyncResult` without connecting                            |
-| `status(address)`             | Reads connection status without connecting                           |
-| `execute`, `retry`, `recover` | Return Effects that acquire a temporary lease and wait for authority |
+```tsx
+import { useAtom } from "@effect/atom-react";
+import { SourceAtom } from "@yielded/sync/atom";
 
-Registry disposal releases its leases. React reads atoms and dispatches Effects
-through the application's runtime; it needs no second replica store or retry loop.
+export const counter = SourceAtom.bind(definition, {
+  runtime,
+  address: Counter.address(CounterId.make("demo")),
+  persistence: { mode: "volatile" },
+});
+
+function SetCounter() {
+  const [result, set] = useAtom(counter.action.set);
+
+  return (
+    <button disabled={result.waiting} onClick={() => set({ value: 7 })}>
+      Set to 7
+    </button>
+  );
+}
+```
+
+Define bindings once, or use `Atom.family` for parameterized addresses. Their
+client and lease are acquired lazily and shared within the registry. Disposal
+releases them; dispose the old registry before switching actors.
 The [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
-shows `RegistryProvider`, an actor-scoped `Atom.runtime`, IndexedDB, and presence.
+shows complete runtime and `RegistryProvider` setup.
+
+| Binding             | Behavior                                                                        |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `replica`           | An `AsyncResult` replica whose snapshots contain root data directly             |
+| `status`            | Connection state; observing it keeps the source connected                       |
+| `action.<name>`     | A writable atom accepting the declared payload and exposing its result or error |
+| `retry` / `recover` | Writable atoms accepting a saved command ID / no input                          |
+| `plugins.<id>`      | The declared plugin's `replica`, `action`, and `presence` bindings              |
+
+Action atoms use Effect Atom's shared mutation state and cancellation semantics.
+Set `actions: { set: { concurrent: true } }` to allow overlapping writes;
+plugin options use `plugins.<id>.actions`. Interrupted waits do not delete
+admitted commands. Use `get.setResult(counter.action.set, payload)` inside a
+sequenced workflow to await success before updating draft state.
+
+For ephemeral presence, define `counter.presence(payloadAtom)` when the source
+declares a message schema. Observing the returned atom announces the current
+payload and lists other actors' peers as `{ actorId, connectionId, value,
+expiresAtMillis }`. Payload changes publish immediately; heartbeats refresh
+unchanged values. Departures and disconnects clear peers, and unmounting stops
+both publication and observation. Presence never enters the journal.
+
+| Presence option     | Default                                                 |
+| ------------------- | ------------------------------------------------------- |
+| `heartbeatInterval` | 8 seconds                                               |
+| `timeToLive`        | 25 seconds; expiry is checked every 5 seconds or sooner |
+| `maxPeers`          | 32 connections, retaining the most recently heard       |
+
+Durations must be finite and positive, with the heartbeat shorter than the TTL.
+`maxPeers` must be a positive integer. Transient publication failures are dropped;
+the next heartbeat sends the latest value.
+
+For an existing headless session, `SourceAtom.make(session)` supplies
+`replica(address)`, `passiveReplica(address)`, and `status(address)` atoms, plus
+Effect-returning `execute`, `retry`, and `recover` methods. Its passive replicas
+and status reads do not connect; active replicas hold leases.

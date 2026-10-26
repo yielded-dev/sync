@@ -3,14 +3,12 @@ import { Effect, Stream } from "effect";
 import type * as Action from "../Action.ts";
 import type * as Source from "../Source.ts";
 import type { ClientError, Replica } from "./Model.ts";
-import type { Actions, Lease, Snapshot } from "./Runtime.ts";
+import type { Actions, Lease } from "./Runtime.ts";
 
 interface CompositeSnapshot {
   readonly source?: unknown;
   readonly plugins: Readonly<Record<string, unknown>>;
 }
-
-type Field<Value, Key extends PropertyKey> = Key extends keyof Value ? Value[Key] : never;
 
 /** A snapshot slot with the owning lease's lifetime and source-wide status. */
 export interface View<Snapshot, Rejection = never> {
@@ -22,13 +20,16 @@ export interface View<Snapshot, Rejection = never> {
 /** Project root data without changing the source's composite snapshot contract. */
 export function view<S extends Source.Spec>(
   lease: Lease<S>,
-): View<Field<Snapshot<S>, "source">, Action.Error<Actions<S>>>;
+): View<S["snapshot"]["Type"], Action.Error<Actions<S>>>;
 
 /** Project a declared plugin's data from the same replica and connection. */
 export function view<S extends Source.Spec, Id extends S["plugins"][number]["id"]>(
   lease: Lease<S>,
   plugin: Id,
-): View<Field<Field<Snapshot<S>, "plugins">, Id>, Action.Error<Actions<S>>>;
+): View<
+  Extract<S["plugins"][number], { readonly id: Id }>["snapshot"]["Type"],
+  Action.Error<Actions<S>>
+>;
 
 export function view<Snapshot, Rejection>(
   lease: View<Snapshot, Rejection>,
