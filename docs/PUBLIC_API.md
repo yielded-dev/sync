@@ -152,12 +152,18 @@ connection closure and wakeup requests to native sockets and alarms. See the
 [Cloudflare host API](../packages/platform-cloudflare/README.md) for shared
 handlers and framework integration.
 
-`EffectCf.make(definition, options)` returns the native Durable Object class;
-its `binding(name)` supplies the typed namespace client and Worker layer.
-`AlchemyCf.make(name, definition, options)` returns Alchemy's native declaration.
-Both use the same Cloudflare platform defaults, with optional storage and crypto
-layer overrides. Platform layers are also available for custom composition.
-Storage opens only in the object runtime, never during infrastructure planning.
+`DurableObject.make(server, options)` in `@yielded/sync-platform-cloudflare`
+defines the source and platform settings without choosing a framework or opening
+resources. At application composition, `definition.provide(EffectCfServices)`
+constructs the native effect-cf class; its `binding(name)` supplies the typed
+namespace client and Worker layer. `definition.provide(AlchemyServices(name))`
+constructs Alchemy's native resource declaration with an explicit logical name.
+These construction providers preserve the framework's native lifecycle and
+registration. Each adapter package also exports `layer(options)` for per-object services in
+ordinary Effect composition. Both use shared SQLite and crypto defaults, with
+optional layer overrides. Storage opens only in the object runtime, never during
+infrastructure planning. Shared request preparation, remote clients, and protocol
+types belong to the Cloudflare package.
 
 Generated Effect CF bindings expose `handler({ authenticate, objectName? })`;
 Alchemy declarations expose a handler factory that acquires their native binding.

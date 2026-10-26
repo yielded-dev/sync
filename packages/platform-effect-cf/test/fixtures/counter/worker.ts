@@ -1,18 +1,19 @@
-import { EffectCf } from "@yielded/sync-platform-effect-cf";
+import { DurableObject } from "@yielded/sync-platform-cloudflare";
+import { EffectCfServices } from "@yielded/sync-platform-effect-cf";
 import { Effect } from "effect";
 import { Worker } from "effect-cf";
 
 import { authenticate } from "./auth.ts";
 import { CounterServer } from "./server.ts";
 
-export const CounterObject = EffectCf.make(CounterServer, {
+export const CounterObject = DurableObject.make(CounterServer, {
   storage: { namespace: "counter-v1", maxPendingOutbox: 100 },
   replay: { maxEvents: 4, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 32, bufferSize: 16 },
   outbox: {
     deliver: () => Effect.succeed({ _tag: "Delivered" as const }),
   },
-});
+}).provide(EffectCfServices);
 
 export type CounterObject = InstanceType<typeof CounterObject>;
 

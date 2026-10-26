@@ -1,6 +1,9 @@
-import { ProtocolError, type Action, type Source } from "@yielded/sync";
-import { Cloudflare } from "@yielded/sync-platform-cloudflare";
-import type { Server, ServerCrypto, SourceStorage, StorageError } from "@yielded/sync/server";
+import { ProtocolError, type Source } from "@yielded/sync";
+import {
+  Cloudflare,
+  type DurableObject as SyncDurableObject,
+} from "@yielded/sync-platform-cloudflare";
+import type { ServerCrypto, SourceStorage, StorageError } from "@yielded/sync/server";
 import { Context, Effect, Layer } from "effect";
 import {
   DurableObject,
@@ -12,29 +15,9 @@ import {
 } from "effect-cf";
 import { RpcServer } from "effect/rpc";
 
-export type Options<DeliveryR = never, E = never, R = never> = Cloudflare.Options<DeliveryR, E, R>;
-export type Identity = Cloudflare.Identity;
-
-export type HandlerOptions<
-  S extends Source.Spec = Source.Spec,
-  R = never,
-> = Cloudflare.HandlerOptions<S, R>;
-
-export type ClientOptions<Kind extends string, E = never, R = never> = Cloudflare.ClientOptions<
-  Kind,
-  E,
-  R
->;
-
-export type Command<A extends Action.Definition> = Cloudflare.Command<A>;
-export type RemoteClient<S extends Source.Spec> = Cloudflare.RemoteClient<S>;
-export const prepareRequest: typeof Cloudflare.prepareRequest = Cloudflare.prepareRequest;
-export const errorResponse = Cloudflare.errorResponse;
-export const client: typeof Cloudflare.client = Cloudflare.client;
-
 /** Default platform services for custom composition in an effect-cf object. */
 export const layer = <DeliveryR = never, E = never, R = never>(
-  options: Options<DeliveryR, E, R> = {},
+  options: Cloudflare.Options<DeliveryR, E, R> = {},
 ): Layer.Layer<
   SourceStorage | ServerCrypto,
   StorageError | E,
@@ -46,17 +29,18 @@ export const layer = <DeliveryR = never, E = never, R = never>(
     ),
   );
 
-/** Construct a native Durable Object with per-instance platform services. */
-export const make = <
+/** Construct an effect-cf object at application composition; acquire services per instance. */
+export const EffectCfServices = <
   S extends Source.Spec,
   R extends DurableObject.RuntimeContext<SourceStorage | ServerCrypto>,
   DeliveryR extends DurableObject.RuntimeContext<SourceStorage | ServerCrypto> = never,
   E = never,
   PlatformR extends DurableObject.RuntimeContext<never> = never,
 >(
-  definition: Server.Definition<S, R>,
-  options: Options<DeliveryR, E, PlatformR> = {},
+  declaration: SyncDurableObject.Definition<S, R, DeliveryR, E, PlatformR>,
 ) => {
+  const { server: definition, options } = declaration;
+
   const runtime = Context.Service<Cloudflare.Handlers>(
     `@yielded/sync-platform-effect-cf/${definition.contract.kind}`,
   );
@@ -109,7 +93,7 @@ export const make = <
         layer: namespace.layer({ binding: name }),
         getByName: namespace.getByName,
         fetch: namespace.fetch,
-        handler: <R>(options: HandlerOptions<S, R>) => {
+        handler: <R>(options: Cloudflare.HandlerOptions<S, R>) => {
           const handle = Cloudflare.handler(definition.contract, {
             ...options,
             fetch: (name, request) =>

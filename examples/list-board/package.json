@@ -13,6 +13,7 @@
     "@yielded/sync": "workspace:*",
     "@yielded/sync-local-indexeddb": "workspace:*",
     "@yielded/sync-platform-browser": "workspace:*",
+    "@yielded/sync-platform-cloudflare": "workspace:*",
     "@yielded/sync-platform-effect-cf": "workspace:*",
     "effect": "catalog:",
     "effect-cf": "catalog:",

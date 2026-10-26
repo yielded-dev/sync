@@ -1,5 +1,6 @@
 import { ProtocolError } from "@yielded/sync";
-import { EffectCf } from "@yielded/sync-platform-effect-cf";
+import { DurableObject } from "@yielded/sync-platform-cloudflare";
+import { EffectCfServices } from "@yielded/sync-platform-effect-cf";
 import { Server } from "@yielded/sync/server";
 import { Effect, Option, Schema } from "effect";
 import { Worker } from "effect-cf";
@@ -52,11 +53,11 @@ const BoardServer = Server.make(Board, {
   },
 });
 
-export const BoardObject = EffectCf.make(BoardServer, {
+export const BoardObject = DurableObject.make(BoardServer, {
   storage: { namespace: "list-board-v1" },
   replay: { maxEvents: 16, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 32, bufferSize: 32 },
-});
+}).provide(EffectCfServices);
 
 export type BoardObject = InstanceType<typeof BoardObject>;
 

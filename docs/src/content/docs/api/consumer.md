@@ -102,8 +102,9 @@ pending delivery before disabling it.
 
 The optional [Cloudflare adapters](../reference/packages.mdx) wrap this same host
 with native SQLite, crypto, request, WebSocket, and alarm handling. Use
-`EffectCf.make(CounterServer, options)` or
-`AlchemyCf.make("CounterObject", CounterServer, options)` to construct the object.
+`DurableObject.make(CounterServer, options)` from `@yielded/sync-platform-cloudflare`
+to define the object, then `.provide(EffectCfServices)` or
+`.provide(AlchemyServices("CounterObject"))` to select the framework at app composition.
 Pass a custom `SourceStorage` Layer in `storage` to replace SQLite.
 An Effect CF binding exposes `Counters.handler({ authenticate })`; an Alchemy
 declaration exposes `CounterObject.handler({ authenticate })`. Both use the shared
@@ -123,8 +124,8 @@ Create one session per authenticated actor with `Client.make`, then open
 `execute(Counter.actions.set, { value: 7 })`. See the [client guide](../client.mdx)
 for transport, persistence, and Atom setup.
 
-For server-side calls, `EffectCf.client` and `AlchemyCf.client` provide scoped
-HTTP clients with `snapshot`, `execute`, and `result`. Supply the address,
+For server-side calls, `Cloudflare.client` from `@yielded/sync-platform-cloudflare`
+provides a scoped HTTP client with `snapshot`, `execute`, and `result`. Supply the address,
 authenticated identity, and an effectful `fetch` forwarding to the selected stub.
 Keep the command id, admitted generation, and payload unchanged for retries and
 result lookup. Live subscriptions and optional presence use WebSockets.
@@ -133,4 +134,4 @@ A reusable capability uses `Plugin.make`. Add it to the source's `plugins` list
 and provide matching `Server.plugin` and `Client.plugin` definitions. Omit
 `plugins` in all three constructors when the source has none. Each plugin owns
 its snapshot slot and actions; all share the source's authorization, ordered
-cursor, and lifetime. The runnable board uses one for its title.
+cursor, and lifetime. The runnable board keeps its actions directly on the source.

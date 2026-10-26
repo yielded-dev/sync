@@ -1,11 +1,16 @@
 # @yielded/sync-platform-cloudflare
 
-Cloudflare request, WebSocket, and alarm integration around Sync's portable
-`Server.host`, with SQLite Durable Object storage by default.
-Use [effect-cf](../platform-effect-cf/README.md) or
-[Alchemy](../platform-alchemy-cf/README.md) for framework integration.
+Define Cloudflare Durable Objects around Sync's portable `Server.host`, with
+SQLite storage, request handling, WebSockets, and alarms supplied by default.
 
-`Cloudflare.make(server, state, options)` acquires platform services and adapts
+`DurableObject.make(server, options)` creates a framework-independent definition.
+At application composition, call `definition.provide(EffectCfServices)` for
+[effect-cf](../platform-effect-cf/README.md), or
+`definition.provide(AlchemyServices("CounterObject"))` for
+[Alchemy](../platform-alchemy-cf/README.md). These return the framework's native
+class or resource declaration. Storage opens only when an object activates.
+
+For custom native integration, `Cloudflare.make(server, state, options)` acquires platform services and adapts
 one source per object. It returns fetch and WebSocket lifecycle handlers plus an
 `alarm` Effect. Acquire it in the native object's scope. Run the same alarm
 Effect for each native notification; framework

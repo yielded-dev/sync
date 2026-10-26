@@ -1,5 +1,5 @@
 import { ProtocolError } from "@yielded/sync";
-import { EffectCf } from "@yielded/sync-platform-effect-cf";
+import { Cloudflare } from "@yielded/sync-platform-cloudflare";
 import { SELF, env, reset, runInDurableObject, evictDurableObject } from "cloudflare:test";
 import { Effect, Schema } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -62,7 +62,7 @@ describe("public source on a SQLite Durable Object", () => {
   it("uses authenticated Worker identity instead of a supplied session header", async () => {
     await Effect.runPromise(
       Effect.gen(function* () {
-        const client = yield* EffectCf.client(Counter, {
+        const client = yield* Cloudflare.client(Counter, {
           address,
           identity: {
             actorId: "bob",

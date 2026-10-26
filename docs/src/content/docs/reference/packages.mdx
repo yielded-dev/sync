@@ -7,30 +7,31 @@ import { OwnershipLadder } from "@yielded/starlight-theme/components";
 Core contracts and `Server.host` are portable. Add an optional server adapter for
 native transport and lifecycle hooks, and client persistence for restart recovery.
 
-| Entry point                         | Use it for                                                      |
-| ----------------------------------- | --------------------------------------------------------------- |
-| `@yielded/sync`                     | Shared contracts, with `./client` and `./atom` entry points     |
-| `@yielded/sync/server`              | `Server.host`, `ServerRpc`, execution, and server storage ports |
-| `@yielded/sync-platform-browser`    | `BrowserSource`: browser services and source Atom bindings      |
-| `@yielded/sync-persistence`         | `Persistence`: shared record policy and custom drivers          |
-| `@yielded/sync-local-indexeddb`     | `IndexedDb`: browser persistence                                |
-| `@yielded/sync-platform-cloudflare` | `Cloudflare` transport and lifecycle; `SqliteStorage`           |
-| `@yielded/sync-platform-effect-cf`  | `EffectCf`: native effect-cf Workers and Durable Objects        |
-| `@yielded/sync-platform-alchemy-cf` | `AlchemyCf`: native Alchemy Workers and Durable Objects         |
+| Entry point                         | Use it for                                                         |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `@yielded/sync`                     | Shared contracts, with `./client` and `./atom` entry points        |
+| `@yielded/sync/server`              | `Server.host`, `ServerRpc`, execution, and server storage ports    |
+| `@yielded/sync-platform-browser`    | `BrowserSource`: browser services and source Atom bindings         |
+| `@yielded/sync-persistence`         | `Persistence`: shared record policy and custom drivers             |
+| `@yielded/sync-local-indexeddb`     | `IndexedDb`: browser persistence                                   |
+| `@yielded/sync-platform-cloudflare` | `DurableObject` definitions; `Cloudflare` runtime; `SqliteStorage` |
+| `@yielded/sync-platform-effect-cf`  | `EffectCfServices`: native effect-cf integration                   |
+| `@yielded/sync-platform-alchemy-cf` | `AlchemyServices`: native Alchemy integration                      |
 
 `Server.host` owns ordering, subscriptions, publication, and optional outbox
 delivery. Supply `SourceStorage` and `ServerCrypto`; connect it to Effect RPC with
 `ServerRpc.handlers`. Applications own authentication, routing, transport,
 durable wakeup scheduling, and projection destinations.
 
-The Cloudflare packages adapt this same host to native requests, WebSockets, and
-alarms. Pick the framework matching your application; neither requires the other.
-They supply native SQLite and crypto by default; pass a custom `SourceStorage`
-Layer in `storage` to replace SQLite. Generated handlers share the source's path
-and ID schema with the client; the application supplies authentication.
-Their `layer(options)` functions expose
-the same platform services for custom composition. Server
-implementations are not exported from root or client entry points.
+`DurableObject.make(server, options)` defines a Cloudflare object independently
+of the framework. At application composition, use `.provide(EffectCfServices)` or
+`.provide(AlchemyServices("CounterObject"))` to construct its native class or
+resource declaration. Each provider supplies SQLite, crypto, requests, WebSockets,
+and alarms. Pass a custom `SourceStorage` Layer in `storage` to replace SQLite.
+Generated handlers share the source's path and ID schema with the client; the
+application supplies authentication. Each adapter's `layer(options)` export exposes
+the same platform services for custom composition. Server implementations are
+not exported from root or client entry points.
 
 For browser clients, `BrowserSource.bind` derives the connection from the client
 definition and ID, supplies browser crypto, and creates the Atom runtime. Supply
