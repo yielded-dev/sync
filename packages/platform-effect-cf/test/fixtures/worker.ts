@@ -1,8 +1,7 @@
 import { Action, Source } from "@yielded/sync";
 import { EffectCf } from "@yielded/sync-platform-effect-cf";
 import { Server } from "@yielded/sync/server";
-import { Effect, Layer, Schema } from "effect";
-import { DurableObject } from "effect-cf";
+import { Effect, Schema } from "effect";
 
 export { CounterObject, default } from "../../../../examples/cloudflare/src/worker.ts";
 
@@ -34,12 +33,8 @@ const server = Server.make(Publication, {
   plugins: [],
 });
 
-const sync = EffectCf.make(server, {
+export const PublicationObject = EffectCf.make(server, {
+  storage: { namespace: "publication" },
   replay: { maxEvents: 4, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 4, bufferSize: 16 },
 });
-
-export const PublicationObject = DurableObject.make(
-  sync.layer.pipe(Layer.provide(EffectCf.sqlite({ namespace: "publication", replayWindow: 4 }))),
-  sync.handlers,
-);

@@ -14,6 +14,7 @@ import { RpcSerialization, RpcServer } from "effect/rpc";
 import { makeClient, type ClientConstructor } from "./RemoteClient.ts";
 import * as RpcHost from "./RpcHost.ts";
 import * as SocketTransport from "./SocketTransport.ts";
+import * as SqliteStorage from "./SqliteStorage.ts";
 
 const invalid = () =>
   ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source request" });
@@ -30,12 +31,15 @@ export type {
   Factory as TransportFactory,
 } from "./SocketTransport.ts";
 
-export interface Options<R = never> {
-  readonly replay: NonNullable<Server.HostOptions["replay"]>;
-  readonly sockets: NonNullable<Server.HostOptions["connections"]>;
+export interface Options<DeliveryR = never, E = never, R = never> {
+  readonly replay?: Server.HostOptions["replay"];
+  readonly sockets?: Server.HostOptions["connections"];
   readonly maxQueuedTurns?: number;
   readonly turnTimeoutMillis?: number;
-  readonly outbox?: Omit<NonNullable<Server.HostOptions<R>["outbox"]>, "schedule">;
+  readonly outbox?: Omit<NonNullable<Server.HostOptions<DeliveryR>["outbox"]>, "schedule">;
+  /** SQLite options, or a replacement that prevents SQLite from being opened. */
+  readonly storage?: Partial<SqliteStorage.Options> | Layer.Layer<SourceStorage, E, R>;
+  readonly crypto?: Layer.Layer<ServerCrypto, E, R>;
 }
 
 export type { ClientOptions, Command, RemoteClient } from "./RemoteClient.ts";
@@ -67,6 +71,23 @@ const CryptoLive = Layer.succeed(ServerCrypto, {
     }),
 });
 
+/** Build in the object's scope. The same defaults serve both framework integrations. */
+export const layer = <DeliveryR = never, E = never, R = never>(
+  native: DurableObjectStorage,
+  options: Options<DeliveryR, E, R> = {},
+): Layer.Layer<SourceStorage | ServerCrypto, StorageError | E, R> => {
+  const storage: Layer.Layer<SourceStorage, StorageError | E, R> =
+    options.storage !== undefined && "pipe" in options.storage
+      ? options.storage
+      : SqliteStorage.layer(native, {
+          namespace: options.storage?.namespace ?? "sync",
+          replayWindow: options.storage?.replayWindow ?? options.replay?.maxEvents ?? 512,
+          maxPendingOutbox: options.storage?.maxPendingOutbox ?? (options.outbox ? 1_000 : 0),
+        });
+
+  return Layer.merge(options.crypto ?? CryptoLive, storage);
+};
+
 const decode = <S extends Schema.Codec<unknown, unknown>>(schema: S, value: unknown) =>
   Schema.decodeUnknownEffect(schema)(value).pipe(Effect.mapError(invalid));
 
@@ -86,13 +107,19 @@ export const make = Effect.fn("Cloudflare.make")(function* <
   S extends Source.Spec,
   R,
   DeliveryR = never,
+  E = never,
+  PlatformR = never,
 >(
   definition: Server.Definition<S, R>,
   state: SocketTransport.ObjectState,
-  options: Options<DeliveryR>,
+  options: Options<DeliveryR, E, PlatformR> = {},
   transportFactory?: SocketTransport.Factory,
-): Effect.fn.Return<Handlers, StorageError, Scope.Scope | SourceStorage | R | DeliveryR> {
-  const context = yield* Layer.build(CryptoLive);
+): Effect.fn.Return<
+  Handlers,
+  StorageError | E,
+  Scope.Scope | PlatformR | Exclude<R | DeliveryR, SourceStorage | ServerCrypto>
+> {
+  const context = yield* Layer.build(layer(state.storage, options));
   const scope = yield* Scope.Scope;
 
   const connections = new Map<
@@ -122,7 +149,8 @@ export const make = Effect.fn("Cloudflare.make")(function* <
     );
   }
 
-  const serialization = ServerRpc.serialization(options.replay.maxBatchBytes);
+  const maxBatchBytes = options.replay?.maxBatchBytes ?? 600_000;
+  const serialization = ServerRpc.serialization(maxBatchBytes);
 
   const transport = yield* (transportFactory ?? SocketTransport.make(state)).pipe(
     Effect.provideService(RpcSerialization.RpcSerialization, serialization),
@@ -131,13 +159,15 @@ export const make = Effect.fn("Cloudflare.make")(function* <
   const close = (socket: SocketTransport.Socket, code: number, reason: string) =>
     closeNative(socket, code, reason).pipe(Effect.andThen(transport.close(socket)));
 
-  const { sockets, outbox, ...hostOptions } = options;
+  const { outbox } = options;
   // Native handlers dispatch dynamically; the source's codecs retain their concrete schemas.
   const source = definition as unknown as Server.Definition<Source.Spec, R>;
 
   const hub = yield* Server.host(source, {
-    ...hostOptions,
-    connections: sockets,
+    replay: options.replay,
+    connections: options.sockets,
+    maxQueuedTurns: options.maxQueuedTurns,
+    turnTimeoutMillis: options.turnTimeoutMillis,
     ...(outbox === undefined
       ? {}
       : {
@@ -229,7 +259,7 @@ export const make = Effect.fn("Cloudflare.make")(function* <
     }
     if (request.method !== "POST")
       return new Response("Expected POST or WebSocket", { status: 405 });
-    const body = yield* readBody(request, options.replay.maxBatchBytes);
+    const body = yield* readBody(request, maxBatchBytes);
 
     const boundedRequest = new Request(request.url, {
       method: "POST",

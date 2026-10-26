@@ -11,7 +11,7 @@ the source's cursor and lifecycle.
 
 <FlowMap
   title="One contract, two separate storage boundaries"
-  description="Your shared source contract defines the client and portable server host. The client sends commands and exact retries; Server.host returns snapshots and ordered events. You supply SourceStorage for the server and, for persistent clients, a separate ReplicaPersistence implementation."
+  description="Your shared source contract defines the client and portable server host. The client sends commands and exact retries; Server.host returns snapshots and ordered events. The platform or application supplies SourceStorage for the server. Persistent clients use a separate ReplicaPersistence implementation."
   columns={2}
   nodes={[
     {
@@ -52,7 +52,7 @@ the source's cursor and lifecycle.
       owner: "app",
       title: "Server storage",
       code: "SourceStorage",
-      note: "Atomic durable writes",
+      note: "Platform default or your store",
     },
   ]}
   edges={[

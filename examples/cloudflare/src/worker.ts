@@ -1,13 +1,14 @@
 import { ProtocolError } from "@yielded/sync";
 import { EffectCf } from "@yielded/sync-platform-effect-cf";
-import { Context, Effect, Layer } from "effect";
-import { DurableObject, DurableObjectNamespace, Worker } from "effect-cf";
+import { Effect } from "effect";
+import { Worker } from "effect-cf";
 
 import { authenticate } from "./auth.ts";
 import { Counter } from "./contract.ts";
 import { CounterServer } from "./server.ts";
 
-const sync = EffectCf.make(CounterServer, {
+export const CounterObject = EffectCf.make(CounterServer, {
+  storage: { namespace: "counter-v1", maxPendingOutbox: 100 },
   replay: { maxEvents: 4, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 32, bufferSize: 16 },
   outbox: {
@@ -17,23 +18,9 @@ const sync = EffectCf.make(CounterServer, {
   },
 });
 
-export const CounterObject = DurableObject.make(
-  sync.layer.pipe(
-    Layer.provide(
-      EffectCf.sqlite({ namespace: "counter-v1", replayWindow: 4, maxPendingOutbox: 100 }),
-    ),
-  ),
-  sync.handlers,
-);
-
 export type CounterObject = InstanceType<typeof CounterObject>;
 
-class Counters extends Context.Service<
-  Counters,
-  DurableObjectNamespace.DurableObjectNamespaceEffectClient<CounterObject>
->()("Counters") {
-  static readonly layer = DurableObjectNamespace.layer(this, { binding: "COUNTERS" });
-}
+const Counters = CounterObject.binding("COUNTERS");
 
 const fetch = Effect.gen(function* () {
   const request = yield* Worker.NativeRequest;
@@ -47,8 +34,7 @@ const fetch = Effect.gen(function* () {
   });
 
   const identity = yield* authenticate(request.headers.get("authorization"));
-  const counters = yield* Counters;
-  const stub = yield* counters.getByName(`counter:${id}`);
+  const stub = yield* Counters.getByName(`counter:${id}`);
 
   const prepared = yield* EffectCf.prepareRequest(Counter, {
     request,
@@ -56,7 +42,7 @@ const fetch = Effect.gen(function* () {
     identity,
   });
 
-  return yield* counters.fetch(stub, prepared);
+  return yield* Counters.fetch(stub, prepared);
 }).pipe(
   Effect.catchTag("DurableObjectFetchError", () =>
     Effect.fail(ProtocolError.make({ reason: "Unavailable", message: "Source unavailable" })),

@@ -93,8 +93,10 @@ protection that prevents re-execution.
 `Server.make` supplies private state, initialization, snapshot projection,
 authorization, and handlers. Authorized viewers of a source receive the same
 public snapshot. Viewer-private projections need a separate authorization boundary.
-Hosts require an application-provided `SourceStorage`. SQLite is an explicit
-adapter choice. Durable outbox delivery is an optional storage capability;
+The portable host requires `SourceStorage` and `ServerCrypto`. Cloudflare
+integrations supply these through a per-object platform layer, using native
+SQLite by default. A custom storage layer replaces SQLite without opening it.
+Durable outbox delivery is an optional storage capability;
 omitting it must reject any nonempty outbox commit before state is committed.
 
 `Server.host(definition, options)` supplies platform-independent ordering,
@@ -136,6 +138,13 @@ Cloudflare adapters bind one source to each object and adapt the core host's
 connection closure and wakeup requests to native sockets and alarms. See the
 [Cloudflare host API](../packages/platform-cloudflare/README.md) for shared
 handlers and framework integration.
+
+`EffectCf.make(definition, options)` returns the native Durable Object class;
+its `binding(name)` supplies the typed namespace client and Worker layer.
+`AlchemyCf.make(name, definition, options)` returns Alchemy's native declaration.
+Both use the same Cloudflare platform defaults, with optional storage and crypto
+layer overrides. Platform layers are also available for custom composition.
+Storage opens only in the object runtime, never during infrastructure planning.
 
 Applications authenticate callers, select typed stubs, and pass the request,
 address, and identity to `prepareRequest`. It replaces internal identity headers.

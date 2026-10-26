@@ -1,11 +1,18 @@
 import type { Action, ProtocolError, Source } from "@yielded/sync";
-import { Cloudflare, SqliteStorage } from "@yielded/sync-platform-cloudflare";
-import type { Server, SourceStorage, StorageError } from "@yielded/sync/server";
-import { DurableObjectState, type WebSocket } from "alchemy/Cloudflare/Workers";
+import { Cloudflare } from "@yielded/sync-platform-cloudflare";
+import type { Server, ServerCrypto, SourceStorage, StorageError } from "@yielded/sync/server";
+import type { Container } from "alchemy/Cloudflare";
+import {
+  DurableObject,
+  DurableObjectState,
+  type DurableObjectServices,
+  type WebSocket,
+  type Worker,
+} from "alchemy/Cloudflare/Workers";
 import { Context, Effect, Layer, Scope } from "effect";
 import { type HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
 
-export type Options<R = never> = Cloudflare.Options<R>;
+export type Options<DeliveryR = never, E = never, R = never> = Cloudflare.Options<DeliveryR, E, R>;
 export type Identity = Cloudflare.Identity;
 
 export type ClientOptions<Kind extends string, E = never, R = never> = Cloudflare.ClientOptions<
@@ -18,12 +25,12 @@ export type Command<A extends Action.Definition> = Cloudflare.Command<A>;
 export type RemoteClient<S extends Source.Spec> = Cloudflare.RemoteClient<S>;
 export const client: typeof Cloudflare.client = Cloudflare.client;
 
-/** Build in the returned runtime Effect, after Alchemy has supplied native storage. */
-export const sqlite = (
-  options: SqliteStorage.Options,
-): Layer.Layer<SourceStorage, StorageError, DurableObjectState> =>
+/** Build in an object's runtime Effect, after Alchemy has supplied native storage. */
+export const layer = <DeliveryR = never, E = never, R = never>(
+  options: Options<DeliveryR, E, R> = {},
+): Layer.Layer<SourceStorage | ServerCrypto, StorageError | E, DurableObjectState | R> =>
   Layer.unwrap(
-    Effect.map(DurableObjectState, (state) => SqliteStorage.layer(state.raw.storage, options)),
+    Effect.map(DurableObjectState, (state) => Cloudflare.layer(state.raw.storage, options)),
   );
 
 export type Handlers = {
@@ -44,23 +51,35 @@ export type Handlers = {
 /** Native responses, especially WebSocket upgrades, must pass through intact. */
 const response = (value: Response) => HttpServerResponse.raw(value, { status: value.status });
 
-/** Supplies Alchemy's construction/runtime Effects to its native DurableObject API. */
-export const make: <S extends Source.Spec, R, DeliveryR = never>(
+/** Declare an Alchemy Durable Object; acquire platform services only at runtime. */
+export const make = <
+  S extends Source.Spec,
+  R extends DurableObjectServices | SourceStorage | ServerCrypto,
+  DeliveryR extends DurableObjectServices | SourceStorage | ServerCrypto = never,
+  E = never,
+  PlatformR extends DurableObjectServices = never,
+>(
+  name: string,
   definition: Server.Definition<S, R>,
-  options: Options<DeliveryR>,
-) => Effect.Effect<
-  Effect.Effect<Handlers, never, Scope.Scope | SourceStorage>,
+  options: Options<DeliveryR, E, PlatformR> = {},
+): Effect.Effect<
+  DurableObject<Handlers>,
   never,
-  DurableObjectState | R | DeliveryR
-> = Effect.fn("AlchemyCf.make")(
-  <S extends Source.Spec, R, DeliveryR = never>(
-    definition: Server.Definition<S, R>,
-    options: Options<DeliveryR>,
-  ) =>
+  | Worker
+  | Extract<
+      Exclude<R | DeliveryR, SourceStorage | ServerCrypto> | PlatformR,
+      Container.Application<unknown>
+    >
+> & { new (_: never): Handlers } =>
+  DurableObject<Handlers>()(
+    name,
     Effect.map(
-      Effect.all([DurableObjectState, Effect.context<R | DeliveryR>()]),
+      Effect.all([
+        DurableObjectState,
+        Effect.context<Exclude<R | DeliveryR, SourceStorage | ServerCrypto> | PlatformR>(),
+      ]),
       ([state, services]) =>
-        Effect.gen(function* () {
+        Effect.gen(function* (): Effect.fn.Return<Handlers, never, Scope.Scope> {
           const scope = yield* Scope.Scope;
 
           // Alchemy constructors have no typed failure channel; initialization failure aborts activation.
@@ -93,7 +112,7 @@ export const make: <S extends Source.Spec, R, DeliveryR = never>(
           };
         }),
     ),
-);
+  );
 
 /** Prepare the native request for the application's authenticated Alchemy route. */
 export interface RequestOptions<Kind extends string> {

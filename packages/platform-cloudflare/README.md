@@ -1,21 +1,37 @@
 # @yielded/sync-platform-cloudflare
 
 Cloudflare request, WebSocket, and alarm integration around Sync's portable
-`Server.host`, plus optional SQLite Durable Object storage.
+`Server.host`, with SQLite Durable Object storage by default.
 Use [effect-cf](../platform-effect-cf/README.md) or
 [Alchemy](../platform-alchemy-cf/README.md) for framework integration.
 
-`Cloudflare.make(server, state, options)` adapts one source per object from an
-application-provided `SourceStorage`. It returns fetch and WebSocket lifecycle
-handlers plus an `alarm` Effect. Acquire storage and handlers in the native
-object's scope. Run the same alarm Effect for each native notification; framework
+`Cloudflare.make(server, state, options)` acquires platform services and adapts
+one source per object. It returns fetch and WebSocket lifecycle handlers plus an
+`alarm` Effect. Acquire it in the native object's scope. Run the same alarm
+Effect for each native notification; framework
 adapters supply the callback. For other environments, use `Server.host` and
 `ServerRpc` directly from `@yielded/sync/server`.
 
-`SqliteStorage.layer(nativeStorage, { namespace, replayWindow })` explicitly
-selects SQLite. Custom stores need only implement the
+`Cloudflare.layer(nativeStorage, options)` exposes the shared `SourceStorage` and
+`ServerCrypto` defaults for custom composition. Set `storage` to SQLite options
+or a replacement `SourceStorage` Layer; a replacement prevents SQLite from being
+opened. `crypto` accepts a replacement `ServerCrypto` Layer.
+Custom stores implement the
 [transaction contract](../sync/src/server/SourceStorage.ts); durable delivery adds
 the optional `outbox` capability.
+
+| Option                                 | Default                                     |
+| -------------------------------------- | ------------------------------------------- |
+| `storage.namespace`                    | `sync`                                      |
+| `storage.replayWindow`                 | `replay.maxEvents`, or 512                  |
+| `storage.maxPendingOutbox`             | 1,000 with delivery configured; otherwise 0 |
+| `replay`                               | 512 events / 600,000 bytes                  |
+| `sockets`                              | 100 connections / 256 queued frames         |
+| `maxQueuedTurns` / `turnTimeoutMillis` | 128 / 5,000 ms                              |
+| `outbox`                               | Disabled                                    |
+
+Use `SqliteStorage.layer(nativeStorage, options)` when only the storage service
+is needed. Its required namespace and replay window are explicit.
 
 ## Authentication and transport
 
@@ -56,9 +72,10 @@ replay rows only; receipts are retained for exact retry.
 `allowUnboundCommands` defaults to false. Enabling it reserves those command
 identities across authority generations.
 
-Outbox delivery is optional. For SQLite, set `maxPendingOutbox` to a positive
-capacity on the storage layer and supply the host's `outbox` options:
-`batchSize`, `retryMillis`, and `deliver`. Without a storage outbox capability,
+Outbox delivery is optional. Supply `outbox: { batchSize, retryMillis, deliver }`;
+the default SQLite store enables bounded capacity automatically. Override it with
+`storage.maxPendingOutbox`. A custom store must supply its own outbox capability.
+Without a storage outbox capability,
 nonempty outbox plans fail before commit. Host acquisition requires delivery
 configuration and the storage capability to be enabled together.
 

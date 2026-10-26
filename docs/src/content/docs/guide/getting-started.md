@@ -72,8 +72,9 @@ initialization. Open one `Server.host` per storage authority, providing
 `SourceStorage`, `ServerCrypto`, and the definition's services. Its scoped
 connections carry authenticated sessions; `ServerRpc.handlers` binds the host to
 Effect RPC. The host commits state, events, exact outcomes, and optional outbox
-obligations atomically. Platform adapters add native transports and lifecycle
-hooks. The [counter example](../api/consumer.md) explains this composition.
+obligations atomically. Cloudflare adapters supply SQLite, crypto, native transports,
+and lifecycle hooks automatically. The [counter example](../api/consumer.md)
+explains this composition.
 
 On the client, `Client.definition` supplies a pure event reducer and optional
 optimistic reducers. `Client.make` opens a session for one authenticated actor,

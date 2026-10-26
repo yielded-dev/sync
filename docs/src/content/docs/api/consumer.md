@@ -105,8 +105,11 @@ on each wakeup. The destination must deduplicate stable obligation ids. Drain
 pending delivery before disabling it.
 
 The optional [Cloudflare adapters](../reference/packages.mdx) wrap this same host
-with native request, WebSocket, and alarm handling. Their `sqlite` helpers select
-storage explicitly. The application still owns routing, typed object bindings,
+with native SQLite, crypto, request, WebSocket, and alarm handling. Use
+`EffectCf.make(CounterServer, options)` or
+`AlchemyCf.make("CounterObject", CounterServer, options)` to construct the object.
+Pass a custom `SourceStorage` Layer in `storage` to replace SQLite.
+The application still owns routing, object identities,
 and authentication before calling `prepareRequest` and forwarding to a stub.
 
 ## Connect a client

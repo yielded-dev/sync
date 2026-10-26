@@ -1,8 +1,9 @@
 # Alchemy Cloudflare counter
 
 The [counter and label plugin](../cloudflare/README.md), hosted with native Alchemy
-Workers and Durable Objects. Sync supplies object handlers and authenticated
-request preparation; the application owns the Worker, routes, and typed bindings.
+Workers and Durable Objects. `AlchemyCf.make` declares the object and supplies
+native SQLite and crypto defaults. The application owns the Worker, routes,
+object identities, and authentication.
 
 From the repository root:
 

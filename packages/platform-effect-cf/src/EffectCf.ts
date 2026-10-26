@@ -1,8 +1,10 @@
-import type { Action, ProtocolError, Source } from "@yielded/sync";
-import { Cloudflare, SqliteStorage } from "@yielded/sync-platform-cloudflare";
-import type { Server, SourceStorage, StorageError } from "@yielded/sync/server";
+import type { Action, Source } from "@yielded/sync";
+import { Cloudflare } from "@yielded/sync-platform-cloudflare";
+import type { Server, ServerCrypto, SourceStorage, StorageError } from "@yielded/sync/server";
 import { Context, Effect, Layer } from "effect";
 import {
+  DurableObject,
+  DurableObjectDefinition,
   DurableObjectRpcWebSocket,
   DurableObjectState,
   DurableObjectWebSocket,
@@ -10,7 +12,7 @@ import {
 } from "effect-cf";
 import { RpcServer } from "effect/rpc";
 
-export type Options<R = never> = Cloudflare.Options<R>;
+export type Options<DeliveryR = never, E = never, R = never> = Cloudflare.Options<DeliveryR, E, R>;
 export type Identity = Cloudflare.Identity;
 
 export type ClientOptions<Kind extends string, E = never, R = never> = Cloudflare.ClientOptions<
@@ -25,52 +27,36 @@ export const prepareRequest: typeof Cloudflare.prepareRequest = Cloudflare.prepa
 export const errorResponse = Cloudflare.errorResponse;
 export const client: typeof Cloudflare.client = Cloudflare.client;
 
-/** Select native SQLite storage for this object's source. */
-export const sqlite = (
-  options: SqliteStorage.Options,
-): Layer.Layer<SourceStorage, StorageError, DurableObjectState.DurableObjectState> =>
+/** Default platform services for custom composition in an effect-cf object. */
+export const layer = <DeliveryR = never, E = never, R = never>(
+  options: Options<DeliveryR, E, R> = {},
+): Layer.Layer<
+  SourceStorage | ServerCrypto,
+  StorageError | E,
+  DurableObjectState.DurableObjectState | R
+> =>
   Layer.unwrap(
     Effect.map(DurableObjectState.DurableObjectState, (state) =>
-      SqliteStorage.layer(state.raw.storage, options),
+      Cloudflare.layer(state.raw.storage, options),
     ),
   );
 
-export interface Host<R> {
-  readonly layer: Layer.Layer<
-    Cloudflare.Handlers,
-    StorageError,
-    DurableObjectState.DurableObjectState | SourceStorage | R
-  >;
-  readonly handlers: {
-    readonly fetch: Effect.Effect<
-      Response,
-      ProtocolError,
-      Worker.NativeRequest | Cloudflare.Handlers
-    >;
-    readonly webSocketMessage: (
-      socket: DurableObjectWebSocket.DurableWebSocket,
-      message: string | ArrayBuffer,
-    ) => Effect.Effect<void, never, Cloudflare.Handlers>;
-    readonly webSocketClose: (
-      socket: DurableObjectWebSocket.DurableWebSocket,
-    ) => Effect.Effect<void, never, Cloudflare.Handlers>;
-    readonly webSocketError: (
-      socket: DurableObjectWebSocket.DurableWebSocket,
-    ) => Effect.Effect<void, never, Cloudflare.Handlers>;
-    readonly alarm: () => Effect.Effect<void, ProtocolError | StorageError, Cloudflare.Handlers>;
-  };
-}
-
-/** Pass the returned Layer and handlers to effect-cf's DurableObject.make. */
-export const make = <S extends Source.Spec, R, DeliveryR = never>(
+/** Construct a native Durable Object with per-instance platform services. */
+export const make = <
+  S extends Source.Spec,
+  R extends DurableObject.RuntimeContext<SourceStorage | ServerCrypto>,
+  DeliveryR extends DurableObject.RuntimeContext<SourceStorage | ServerCrypto> = never,
+  E = never,
+  PlatformR extends DurableObject.RuntimeContext<never> = never,
+>(
   definition: Server.Definition<S, R>,
-  options: Options<DeliveryR>,
-): Host<R | DeliveryR> => {
+  options: Options<DeliveryR, E, PlatformR> = {},
+) => {
   const runtime = Context.Service<Cloudflare.Handlers>(
     `@yielded/sync-platform-effect-cf/${definition.contract.kind}`,
   );
 
-  const layer = Layer.effect(
+  const live = Layer.effect(
     runtime,
     Effect.flatMap(DurableObjectState.DurableObjectState, (state) => {
       const transport: Cloudflare.TransportFactory = Effect.gen(function* () {
@@ -110,5 +96,15 @@ export const make = <S extends Source.Spec, R, DeliveryR = never>(
     alarm: () => Effect.flatMap(runtime, (source) => source.alarm),
   };
 
-  return { layer, handlers };
+  return Object.assign(DurableObject.make(live, handlers), {
+    binding: <const Name extends string>(name: Name) => {
+      const namespace = DurableObjectDefinition.make(name, {});
+
+      return {
+        layer: namespace.layer({ binding: name }),
+        getByName: namespace.getByName,
+        fetch: namespace.fetch,
+      };
+    },
+  });
 };

@@ -40,8 +40,9 @@ Start with the [documentation](https://yielded.dev/sync/),
 | `@yielded/sync-platform-alchemy-cf` | Native Alchemy Worker and Durable Object integration                |
 
 Applications own domain models, authentication, authorization, projection
-destinations, and UI. They supply server storage and may implement client journals
-directly; core owns no persistence implementation. Sync coordinates atomic
+destinations, and UI. Core hosts accept application-provided server storage;
+Cloudflare integrations supply native SQLite by default. Applications may implement
+client journals directly; core owns no persistence implementation. Sync coordinates atomic
 state/event/receipt commits, optional outbox obligations, ordered replay, and
 client recovery. Snapshot caches are disposable; unresolved command journals
 retain the identities needed for safe retry.

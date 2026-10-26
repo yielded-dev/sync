@@ -1,8 +1,8 @@
 import { ProtocolError } from "@yielded/sync";
 import { EffectCf } from "@yielded/sync-platform-effect-cf";
 import { Server } from "@yielded/sync/server";
-import { Context, Effect, Layer, Option, Schema } from "effect";
-import { DurableObject, DurableObjectNamespace, Worker } from "effect-cf";
+import { Effect, Option, Schema } from "effect";
+import { Worker } from "effect-cf";
 
 import { Board, CardRejected, Cards } from "./contract.ts";
 import { DemoActor } from "./demo.ts";
@@ -66,24 +66,15 @@ const server = Server.make(Cards, {
   plugins: [board],
 });
 
-const sync = EffectCf.make(server, {
+export const BoardObject = EffectCf.make(server, {
+  storage: { namespace: "list-board-v1" },
   replay: { maxEvents: 16, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 32, bufferSize: 32 },
 });
 
-export const BoardObject = DurableObject.make(
-  sync.layer.pipe(Layer.provide(EffectCf.sqlite({ namespace: "list-board-v1", replayWindow: 16 }))),
-  sync.handlers,
-);
-
 export type BoardObject = InstanceType<typeof BoardObject>;
 
-class Boards extends Context.Service<
-  Boards,
-  DurableObjectNamespace.DurableObjectNamespaceEffectClient<BoardObject>
->()("Boards") {
-  static readonly layer = DurableObjectNamespace.layer(this, { binding: "BOARDS" });
-}
+const Boards = BoardObject.binding("BOARDS");
 
 const fetch = Effect.gen(function* () {
   const request = yield* Worker.NativeRequest;
@@ -119,8 +110,7 @@ const fetch = Effect.gen(function* () {
       message: "Demo credentials required",
     });
 
-  const boards = yield* Boards;
-  const stub = yield* boards.getByName(`board:${id}`);
+  const stub = yield* Boards.getByName(`board:${id}`);
 
   const prepared = yield* EffectCf.prepareRequest(Cards, {
     request,
@@ -128,7 +118,7 @@ const fetch = Effect.gen(function* () {
     identity: { actorId, principal: { actorId }, expiresAtMillis: 4_000_000_000_000 },
   });
 
-  return yield* boards.fetch(stub, prepared);
+  return yield* Boards.fetch(stub, prepared);
 }).pipe(
   Effect.catchTag("DurableObjectFetchError", () =>
     Effect.fail(ProtocolError.make({ reason: "Unavailable", message: "Source unavailable" })),

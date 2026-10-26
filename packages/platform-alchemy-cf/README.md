@@ -1,58 +1,42 @@
 # @yielded/sync-platform-alchemy-cf
 
-Optional Alchemy Cloudflare Worker and Durable Object integration around
-`Server.host`. Core owns synchronization; this adapter supplies native transport,
-lifecycle, and alarm handling. The application supplies `SourceStorage`; this
-example selects SQLite.
+Declare an Alchemy Durable Object directly from a Sync server definition.
+The adapter supplies native SQLite storage, crypto, transport, and lifecycle
+handling around the portable `Server.host`.
 
 ```ts
 import { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";
-import * as Cloudflare from "alchemy/Cloudflare";
-import { Effect, Layer } from "effect";
 
 import { CounterServer } from "./server";
 
-export class CounterObject extends Cloudflare.DurableObject<CounterObject>()(
-  "CounterObject",
-  AlchemyCf.make(CounterServer, {
-    replay: { maxEvents: 512, maxBatchBytes: 600_000 },
-    sockets: { maxConnections: 100, bufferSize: 256 },
-  }).pipe(
-    Effect.map((runtime) =>
-      Effect.gen(function* () {
-        const storage = yield* Layer.build(
-          AlchemyCf.sqlite({ namespace: "counter-v1", replayWindow: 512 }),
-        );
-
-        return yield* runtime.pipe(Effect.provideContext(storage));
-      }).pipe(Effect.orDie),
-    ),
-  ),
-) {}
+export const CounterObject = AlchemyCf.make("CounterObject", CounterServer, {
+  storage: { namespace: "counter-v1" },
+});
 ```
 
-`make` supplies the construction and runtime Effects to Alchemy's native
-constructor. The construction Effect can run during infrastructure planning.
-Build storage inside the returned runtime Effect with `Layer.build` so its
-resources share the native object's scope. Provide infrastructure dependencies
-around the construction Effect; use `Server.provide` for services acquired within
-each source operation. Initialization and alarm failures surface as defects
-because those native hooks have no typed error channel.
+Use `yield* CounterObject` in an Alchemy Worker to obtain its typed namespace.
+Alchemy owns the resource declaration and binding; Sync acquires its platform
+services only in the native object's runtime. Infrastructure planning does not
+open storage. Initialization and alarm failures surface as defects because
+those native hooks have no typed error channel.
 
-Construct the Worker with Alchemy's API. After routing and authentication, call
-`AlchemyCf.prepareRequest` with `{ request, address, identity }`, then pass the
-returned Effect HTTP request to the selected stub's `fetch`. The identity contains
-`actorId`, a Schema JSON `principal`, and `expiresAtMillis`. Request preparation
-replaces internal identity headers; only authenticated routes should expose the
-object binding. WebSocket subscriptions and optional presence use the same
-authenticated source lifecycle.
+The application owns routes and authentication. Call `AlchemyCf.prepareRequest`
+with `{ request, address, identity }`, then pass the returned Effect HTTP request
+to the selected stub's `fetch`. The identity contains `actorId`, a Schema JSON
+`principal`, and `expiresAtMillis`. Request preparation replaces internal identity
+headers; only authenticated routes should expose the binding.
 
-To enable durable delivery, set `maxPendingOutbox` on `AlchemyCf.sqlite` and supply
-`outbox: { batchSize, retryMillis, deliver }` to `AlchemyCf.make`. Drain pending work
-before disabling delivery. Sync uses the object's alarm for delivery; other alarm
-jobs need an application scheduler.
+To replace SQLite, pass a `SourceStorage` Layer as `storage`; the default store
+will not be opened. `crypto` accepts a replacement `ServerCrypto` Layer.
+`AlchemyCf.layer(options)` exposes the same platform services for custom
+composition inside an Alchemy object's runtime Effect. Use `Server.provide` for
+services acquired and released within each source operation.
 
-See the [runnable Alchemy counter](../../examples/alchemy-cloudflare/README.md)
-and shared [Cloudflare storage and protocol](../platform-cloudflare/README.md).
+Outbox delivery is optional. Supply `outbox: { batchSize, retryMillis, deliver }`
+to enable it with bounded SQLite capacity and native alarm scheduling. Drain
+pending work before disabling delivery. Other alarm jobs need an application
+scheduler. See the shared [options and defaults](../platform-cloudflare/README.md).
+
+See the [runnable Alchemy counter](../../examples/alchemy-cloudflare/README.md).
 Preserve object identity when changing frameworks, or explicitly migrate the
 Cloudflare namespace to retain its durable data.

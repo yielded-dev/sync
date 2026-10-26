@@ -3,6 +3,8 @@
 A counter and label plugin hosted in a SQLite Durable Object. It demonstrates
 private server state, exact action results, and RPC subscriptions. The
 [Alchemy counter](../alchemy-cloudflare/README.md) reuses the same domain code.
+`EffectCf.make` creates the Durable Object with native SQLite and crypto defaults;
+its `binding` helper supplies the Worker namespace client.
 
 From the repository root, after `vp install` and `vp run build`:
 
