@@ -5,6 +5,9 @@ export class InvalidValue extends Schema.TaggedError<InvalidValue>()("InvalidVal
   maximum: Schema.Int,
 }) {}
 
+export const CounterId = Schema.NonEmptyString.pipe(Schema.brand("CounterId"));
+export type CounterId = typeof CounterId.Type;
+
 export const Label = Plugin.make("label", {
   snapshot: Schema.Struct({ text: Schema.String }),
   event: Schema.Struct({ text: Schema.String }),
@@ -16,6 +19,8 @@ export const Label = Plugin.make("label", {
 
 export const Counter = Source.make({
   kind: "counter",
+  id: CounterId,
+  path: "/sync/counters",
   schemaVersion: 1,
   snapshot: Schema.Struct({ value: Schema.Int }),
   event: Schema.Struct({ value: Schema.Int }),

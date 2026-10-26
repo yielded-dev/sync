@@ -7,11 +7,11 @@ import { Socket } from "effect/socket";
 import { afterEach, expect, it } from "vite-plus/test";
 
 import { BoardClient } from "../src/client.ts";
-import { CardRejected, Cards } from "../src/contract.ts";
+import { BoardId, CardRejected, Cards } from "../src/contract.ts";
 import type { BoardObject } from "../src/worker.ts";
 
 const bindings = env as { BOARDS: DurableObjectNamespace<BoardObject> };
-const address = Cards.address("shared");
+const address = Cards.address(BoardId.make("shared"));
 const stub = () => bindings.BOARDS.getByName("board:shared");
 
 const unavailable = () =>

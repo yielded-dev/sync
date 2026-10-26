@@ -1,4 +1,4 @@
-import type { Action, ProtocolError, Source } from "@yielded/sync";
+import { ProtocolError, type Action, type Source } from "@yielded/sync";
 import { Cloudflare } from "@yielded/sync-platform-cloudflare";
 import type { Server, ServerCrypto, SourceStorage, StorageError } from "@yielded/sync/server";
 import type { Container } from "alchemy/Cloudflare";
@@ -6,6 +6,7 @@ import {
   DurableObject,
   DurableObjectState,
   type DurableObjectServices,
+  Request as NativeRequest,
   type WebSocket,
   type Worker,
 } from "alchemy/Cloudflare/Workers";
@@ -14,6 +15,11 @@ import { type HttpServerError, HttpServerRequest, HttpServerResponse } from "eff
 
 export type Options<DeliveryR = never, E = never, R = never> = Cloudflare.Options<DeliveryR, E, R>;
 export type Identity = Cloudflare.Identity;
+
+export type HandlerOptions<
+  S extends Source.Spec = Source.Spec,
+  R = never,
+> = Cloudflare.HandlerOptions<S, R>;
 
 export type ClientOptions<Kind extends string, E = never, R = never> = Cloudflare.ClientOptions<
   Kind,
@@ -70,8 +76,21 @@ export const make = <
       Exclude<R | DeliveryR, SourceStorage | ServerCrypto> | PlatformR,
       Container.Application<unknown>
     >
-> & { new (_: never): Handlers } =>
-  DurableObject<Handlers>()(
+> & {
+  new (_: never): Handlers;
+  handler<AuthR>(
+    options: HandlerOptions<S, AuthR>,
+  ): Effect.Effect<
+    Effect.Effect<HttpServerResponse.HttpServerResponse, never, NativeRequest | AuthR>,
+    never,
+    | Worker
+    | Extract<
+        Exclude<R | DeliveryR, SourceStorage | ServerCrypto> | PlatformR,
+        Container.Application<unknown>
+      >
+  >;
+} => {
+  const object = DurableObject<Handlers>()(
     name,
     Effect.map(
       Effect.all([
@@ -113,6 +132,28 @@ export const make = <
         }),
     ),
   );
+
+  return Object.assign(object, {
+    handler: <AuthR>(options: HandlerOptions<S, AuthR>) =>
+      Effect.map(object, (namespace) => {
+        const handle = Cloudflare.handler(definition.contract, {
+          ...options,
+          fetch: (name, request) =>
+            namespace
+              .getByName(name)
+              .fetch(HttpServerRequest.fromWeb(request))
+              .pipe(
+                Effect.map(HttpServerResponse.toWeb),
+                Effect.mapError(() =>
+                  ProtocolError.make({ reason: "Unavailable", message: "Source unavailable" }),
+                ),
+              ),
+        });
+
+        return Effect.flatMap(NativeRequest, handle).pipe(Effect.map(response));
+      }),
+  });
+};
 
 /** Prepare the native request for the application's authenticated Alchemy route. */
 export interface RequestOptions<Kind extends string> {

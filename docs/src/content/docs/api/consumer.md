@@ -19,7 +19,7 @@ import { Server } from "@yielded/sync/server";
 import { Effect, Schema } from "effect";
 
 import { authorize, Principal } from "./auth";
-import { Counter } from "./counter";
+import { Counter, CounterId } from "./counter";
 
 export const CounterServer = Server.make(Counter, {
   principal: Principal,
@@ -62,7 +62,7 @@ Within that scope, with an authenticated `session`:
 ```ts
 const readCounter = Effect.gen(function* () {
   const host = yield* Server.host(CounterServer);
-  const address = Counter.address("demo");
+  const address = Counter.address(CounterId.make("demo"));
   const connection = yield* host.connect({ address, session });
 
   return yield* host.snapshot(connection, address);
@@ -109,8 +109,12 @@ with native SQLite, crypto, request, WebSocket, and alarm handling. Use
 `EffectCf.make(CounterServer, options)` or
 `AlchemyCf.make("CounterObject", CounterServer, options)` to construct the object.
 Pass a custom `SourceStorage` Layer in `storage` to replace SQLite.
-The application still owns routing, object identities,
-and authentication before calling `prepareRequest` and forwarding to a stub.
+An Effect CF binding exposes `Counters.handler({ authenticate })`; an Alchemy
+declaration exposes `CounterObject.handler({ authenticate })`. Both use the shared
+path and branded ID schema, prepare trusted metadata, and forward to the object.
+The application supplies authentication. Object names default to `<kind>:<id>`;
+use `objectName` to preserve an existing scheme. Custom routes can still use
+`prepareRequest` and forward directly.
 
 ## Connect a client
 
@@ -119,7 +123,7 @@ value, and an optional `set` optimistic reducer reads the submitted value.
 Actions without an optimistic reducer wait for the authoritative event.
 
 Create one session per authenticated actor with `Client.make`, then open
-`Counter.address("demo")`, await `ready`, and call
+`Counter.address(CounterId.make("demo"))`, await `ready`, and call
 `execute(Counter.actions.set, { value: 7 })`. See the [client guide](../client.mdx)
 for transport, persistence, and Atom setup.
 

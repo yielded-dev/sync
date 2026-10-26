@@ -2,8 +2,9 @@
 
 The [counter and label plugin](../cloudflare/README.md), hosted with native Alchemy
 Workers and Durable Objects. `AlchemyCf.make` declares the object and supplies
-native SQLite and crypto defaults. The application owns the Worker, routes,
-object identities, and authentication.
+native SQLite and crypto defaults. Its `handler({ authenticate })` uses the same
+shared path and branded ID schema as the client. The application supplies the
+Worker and authentication.
 
 From the repository root:
 

@@ -4,11 +4,11 @@ import { SELF, env, reset, runInDurableObject, evictDurableObject } from "cloudf
 import { Effect, Schema } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { Counter } from "../../../examples/cloudflare/src/contract.ts";
+import { Counter, CounterId } from "../../../examples/cloudflare/src/contract.ts";
 import type { CounterObject } from "../../../examples/cloudflare/src/worker.ts";
 
 const bindings = env as { COUNTERS: DurableObjectNamespace<InstanceType<typeof CounterObject>> };
-const address = Counter.address("test");
+const address = Counter.address(CounterId.make("test"));
 const header = { protocolVersion: 1, schemaVersion: 1, address };
 const stub = () => bindings.COUNTERS.getByName("counter:test");
 const Json = Schema.decodeUnknownSync(Schema.Json);

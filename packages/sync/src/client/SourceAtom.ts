@@ -1,4 +1,4 @@
-import { Effect, Stream } from "effect";
+import { Effect, Schema, Stream } from "effect";
 import { Atom } from "effect/reactivity";
 
 import type * as Action from "../Action.ts";
@@ -9,13 +9,13 @@ import type { Actions, Runtime, Snapshot } from "./Runtime.ts";
 
 /** Bindings own leases, while every registry observes the same headless state. */
 export const make = <S extends Source.Spec>(runtime: Runtime<S>) => {
-  type Address = { readonly kind: S["kind"]; readonly id: string };
+  type Address = Source.Address<S>;
   const key = (address: SourceAddress) => JSON.stringify([address.kind, address.id]);
 
   const address = (key: string): Address => {
     const [kind, id] = JSON.parse(key) as [S["kind"], string];
 
-    return { kind, id };
+    return Schema.decodeSync(runtime.contract.addressSchema)({ kind, id });
   };
 
   const passive = Atom.family((key: string) =>

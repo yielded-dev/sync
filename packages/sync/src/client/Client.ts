@@ -18,6 +18,8 @@ export {
   Transport,
   type Request,
   type WebSocketTransportOptions,
+  type WebSocketUrlOptions,
+  type SourceWebSocketOptions,
 } from "./Transport.ts";
 
 export { ClientError, EncodedCommand, Intent, type Replica, type Connection } from "./Model.ts";

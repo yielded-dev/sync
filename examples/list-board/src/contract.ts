@@ -2,6 +2,8 @@ import { Action, Plugin, Source } from "@yielded/sync";
 import { Schema } from "effect";
 
 export const Lane = Schema.Literals(["todo", "doing", "done"]);
+export const BoardId = Schema.NonEmptyString.pipe(Schema.brand("BoardId"));
+export type BoardId = typeof BoardId.Type;
 
 export const Card = Schema.Struct({
   id: Schema.NonEmptyString,
@@ -28,6 +30,8 @@ export const Board = Plugin.make("board", {
 
 export const Cards = Source.make({
   kind: "cards",
+  id: BoardId,
+  path: "/sync/boards",
   schemaVersion: 1,
   snapshot: Schema.Struct({ cards: Schema.Array(Card) }),
   event: Schema.Union([

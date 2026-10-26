@@ -120,13 +120,10 @@ export interface Lease<S extends Source.Spec> {
 export interface Runtime<S extends Source.Spec> {
   readonly actorId: string;
   readonly contract: Source.Definition<S>;
-  readonly open: (address: {
-    readonly kind: S["kind"];
-    readonly id: string;
-  }) => Effect.Effect<Lease<S>, ClientError, Scope.Scope>;
-  readonly read: (address: SourceAddress) => Effect.Effect<State<S>, ClientError>;
+  readonly open: (address: Source.Address<S>) => Effect.Effect<Lease<S>, ClientError, Scope.Scope>;
+  readonly read: (address: Source.Address<S>) => Effect.Effect<State<S>, ClientError>;
   /** Passive observations never acquire a source lease. Slow observers coalesce views. */
-  readonly changes: (address: SourceAddress) => Stream.Stream<State<S>, ClientError>;
+  readonly changes: (address: Source.Address<S>) => Stream.Stream<State<S>, ClientError>;
   readonly flush: Effect.Effect<void, ClientError>;
 }
 
@@ -905,10 +902,9 @@ const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R
   const changes = (address: SourceAddress) =>
     Stream.fromPubSub(changed).pipe(Stream.mapEffect(() => read(address)));
 
-  const open = Effect.fn("Client.open")(function* (input: {
-    readonly kind: S["kind"];
-    readonly id: string;
-  }): Effect.fn.Return<Lease<S>, ClientError, Scope.Scope> {
+  const open = Effect.fn("Client.open")(function* (
+    input: Source.Address<S>,
+  ): Effect.fn.Return<Lease<S>, ClientError, Scope.Scope> {
     const address = yield* decode(wire.addressSchema, input);
     const leaseScope = yield* Effect.scope;
 

@@ -1,4 +1,4 @@
-import { ProtocolError, SourceAddress, type Source } from "@yielded/sync";
+import { ProtocolError, Source, SourceAddress } from "@yielded/sync";
 import {
   Server,
   ServerCrypto,
@@ -6,9 +6,19 @@ import {
   StorageError,
   type SourceStorage,
 } from "@yielded/sync/server";
-import { Crypto, DateTime, Effect, Exit, Layer, PlatformError, Schema, Scope } from "effect";
+import {
+  Crypto,
+  DateTime,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  PlatformError,
+  Schema,
+  Scope,
+} from "effect";
 import { Hex } from "effect/encoding";
-import { HttpServerRequest, HttpServerResponse } from "effect/http";
+import { HttpServerRequest, HttpServerResponse, Url } from "effect/http";
 import { RpcSerialization, RpcServer } from "effect/rpc";
 
 import { makeClient, type ClientConstructor } from "./RemoteClient.ts";
@@ -364,6 +374,46 @@ const readBody = Effect.fn("Cloudflare.readBody")(function* (request: Request, m
 });
 
 export type Identity = Omit<Server.Session, "connectionId">;
+
+export interface HandlerOptions<S extends Source.Spec = Source.Spec, R = never> {
+  /** Authenticate before forwarding; incoming Sync identity headers are never trusted. */
+  readonly authenticate: (
+    request: Request,
+    address: Source.Address<S>,
+  ) => Effect.Effect<Identity, ProtocolError, R>;
+  /** Keep existing object keys when adopting shared routing. Defaults to `<kind>:<id>`. */
+  readonly objectName?: (id: Source.Id<S>) => string;
+}
+
+/** Match the shared route and forward one authenticated HTTP request or WebSocket upgrade. */
+export const handler = <S extends Source.Spec, R, FetchR>(
+  contract: Source.Definition<S>,
+  options: HandlerOptions<NoInfer<S>, R> & {
+    readonly fetch: (
+      name: string,
+      request: Request,
+    ) => Effect.Effect<Response, ProtocolError, FetchR>;
+  },
+): ((request: Request) => Effect.Effect<Response, never, R | FetchR>) =>
+  Effect.fn("Cloudflare.handler")(
+    function* (request: Request) {
+      const url = yield* Effect.fromResult(Url.fromString(request.url)).pipe(
+        Effect.mapError(invalid),
+      );
+
+      const matched = yield* Source.matchPath(contract, url.pathname);
+
+      if (Option.isNone(matched)) return new Response("Not found", { status: 404 });
+      const address = matched.value;
+
+      const identity = yield* options.authenticate(request, address);
+      const prepared = yield* prepareRequest(contract, { request, address, identity });
+      const name = options.objectName?.(address.id) ?? `${contract.kind}:${address.id}`;
+
+      return yield* options.fetch(name, prepared);
+    },
+    Effect.catchTag("ProtocolError", (error) => Effect.succeed(errorResponse(error))),
+  );
 
 /** The caller owns routing, authentication and its typed object binding. */
 export interface RequestOptions<Kind extends string> {

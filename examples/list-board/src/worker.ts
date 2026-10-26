@@ -76,18 +76,8 @@ export type BoardObject = InstanceType<typeof BoardObject>;
 
 const Boards = BoardObject.binding("BOARDS");
 
-const fetch = Effect.gen(function* () {
-  const request = yield* Worker.NativeRequest;
+const authenticate = Effect.fn("authenticate")(function* (request: Request) {
   const url = new URL(request.url);
-  const match = /^\/sync\/boards\/([^/]+)\/?$/.exec(url.pathname);
-
-  if (match === null) return new Response("Not found", { status: 404 });
-
-  const id = yield* Schema.decodeEffect(Schema.StringFromUriComponent)(match[1]).pipe(
-    Effect.mapError(() =>
-      ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source id" }),
-    ),
-  );
 
   // Public demo identities only. Browser WebSockets cannot set Authorization.
   // Replace this selection with the application's auth provider before deployment.
@@ -111,20 +101,9 @@ const fetch = Effect.gen(function* () {
       message: "Demo credentials required",
     });
 
-  const stub = yield* Boards.getByName(`board:${id}`);
+  return { actorId, principal: { actorId }, expiresAtMillis: 4_000_000_000_000 };
+});
 
-  const prepared = yield* EffectCf.prepareRequest(Cards, {
-    request,
-    address: Cards.address(id),
-    identity: { actorId, principal: { actorId }, expiresAtMillis: 4_000_000_000_000 },
-  });
-
-  return yield* Boards.fetch(stub, prepared);
-}).pipe(
-  Effect.catchTag("DurableObjectFetchError", () =>
-    Effect.fail(ProtocolError.make({ reason: "Unavailable", message: "Source unavailable" })),
-  ),
-  Effect.catchTag("ProtocolError", (error) => Effect.succeed(EffectCf.errorResponse(error))),
-);
+const fetch = Boards.handler({ authenticate, objectName: (id) => `board:${id}` });
 
 export default Worker.makeFetchHandler(Boards.layer, { fetch });

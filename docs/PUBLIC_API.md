@@ -39,6 +39,15 @@ result, rejection, and service types.
 messages, actions, and plugins. `address(id)` identifies one source authority.
 Application entity revisions are separate from source cursors.
 
+Optional `id` supplies a string identity schema, including a branded type; its
+type-side validation applies to addresses and URL segments. The default is a
+nonempty string. Optional `path` supplies a fixed absolute base path without a
+trailing slash; it defaults to `/sync/<encoded kind>`. `Source.pathFor` encodes one
+ID segment, and `Source.matchPath` decodes it with the same schema, returning
+`Option.none` for unmatched paths. Invalid matched IDs fail with `ProtocolError`.
+HTTP IDs must be valid Unicode and cannot be `.` or `..`. HTTP routing metadata
+never changes source identity or storage keys.
+
 Omit `message` when there are no ephemeral messages; it defaults to `Schema.Never`.
 Omit `plugins` when a source has none. If the contract declares plugins,
 `Server.make` and `Client.definition` require matching implementations.
@@ -146,9 +155,17 @@ Both use the same Cloudflare platform defaults, with optional storage and crypto
 layer overrides. Platform layers are also available for custom composition.
 Storage opens only in the object runtime, never during infrastructure planning.
 
-Applications authenticate callers, select typed stubs, and pass the request,
-address, and identity to `prepareRequest`. It replaces internal identity headers.
-Only authenticated boundaries may expose the binding. Check authorization for
+Generated Effect CF bindings expose `handler({ authenticate, objectName? })`;
+Alchemy declarations expose a handler factory that acquires their native binding.
+Both delegate to the shared Cloudflare request handler. It matches the source's
+path, validates the ID, authenticates the request, replaces trusted metadata, and
+forwards HTTP or WebSocket requests. Unmatched paths return 404; protocol failures
+retain their HTTP status. The default object key is `<kind>:<id>`; `objectName`
+preserves application-specific keys independently of public paths.
+
+Applications supply authentication and authorization policy. Custom routes may
+use `prepareRequest` directly with a trusted identity and source address. Only
+authenticated boundaries may expose the binding. Check authorization for
 snapshots, subscriptions, actions, results, and messages, and revalidate bound
 identity and expiry after hibernation.
 
@@ -165,6 +182,11 @@ scheduling.
 choice for its lifetime. Concurrent scoped opens share one coordinator per address.
 Closing a lease cancels its operations; closing the last releases the connection.
 Close the old session before changing actors. All resources and queues are bounded.
+
+`Client.layerWebSocketTransport(source, { origin, id, query? })` derives the URL
+from the shared path and ID schema, including percent encoding and WebSocket
+scheme selection. The existing `{ url }` form supports custom connection setup.
+Applications supply credentials and the socket constructor.
 
 `Client.view(lease)` exposes root snapshot data through `read`, `changes`, and
 `ready`; `Client.view(lease, id)` exposes a declared plugin's data. Views share the

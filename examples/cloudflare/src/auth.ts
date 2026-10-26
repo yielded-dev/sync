@@ -8,7 +8,9 @@ export const Principal = Schema.Struct({ actorId: ActorId }).pipe(Schema.brand("
 export type Principal = typeof Principal.Type;
 
 // Local demonstration credentials. Replace with the application's auth provider.
-export const authenticate = Effect.fn("authenticate")(function* (token: string | null | undefined) {
+export const authenticate = Effect.fn("authenticate")(function* (request: Request) {
+  const token = request.headers.get("authorization");
+
   const actorId =
     token === "Bearer alice-local" ? "alice" : token === "Bearer bob-local" ? "bob" : undefined;
 

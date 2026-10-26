@@ -42,8 +42,11 @@ or are persisted.
 import { Action, Source } from "@yielded/sync";
 import { Schema } from "effect";
 
+export const CounterId = Schema.NonEmptyString.pipe(Schema.brand("CounterId"));
+
 export const Counter = Source.make({
   kind: "counter",
+  id: CounterId,
   schemaVersion: 1,
   snapshot: Schema.Struct({ value: Schema.Number }),
   event: Schema.Struct({ value: Schema.Number }),
@@ -59,6 +62,12 @@ export const Counter = Source.make({
   ],
 });
 ```
+
+The optional `id` schema gives addresses a branded string type and validates IDs
+on both sides of the connection. Without it, IDs are nonempty strings. The default
+HTTP path is `/sync/counter/<id>`; set `path: "/sync/counters"` in this shared
+definition to override the base path for both client and server. IDs are encoded
+as one path segment; dot-only IDs (`.` and `..`) cannot be used in HTTP routes.
 
 The root import is portable between server and client. Server implementations
 come from `@yielded/sync/server`; headless clients come from

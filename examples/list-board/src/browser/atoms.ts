@@ -1,3 +1,4 @@
+import type { ProtocolError } from "@yielded/sync";
 import { IndexedDb } from "@yielded/sync-local-indexeddb";
 import { SourceAtom } from "@yielded/sync/atom";
 import { Client, type ClientError, type PersistenceError } from "@yielded/sync/client";
@@ -17,7 +18,7 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { Socket } from "effect/socket";
 
 import { BoardClient } from "../client.ts";
-import { type CardRejected, Cards, type Lane } from "../contract.ts";
+import { BoardId, type CardRejected, Cards, type Lane } from "../contract.ts";
 import { DemoActor } from "../demo.ts";
 
 const webCrypto = Crypto.make({
@@ -44,8 +45,8 @@ export const actorId = Option.getOrElse(
 );
 
 export const boardId = Option.getOrElse(
-  Schema.decodeUnknownOption(Schema.NonEmptyString)(page.searchParams.get("board")),
-  () => "shared",
+  Schema.decodeUnknownOption(BoardId)(page.searchParams.get("board")),
+  () => BoardId.make("shared"),
 );
 
 export const otherActor = actorId === "alice" ? "bob" : "alice";
@@ -64,14 +65,12 @@ const address = Cards.address(boardId);
 const transport = Layer.unwrap(
   Effect.gen(function* () {
     const { actorId } = yield* Client.CurrentActor;
-    const socketUrl = new URL(`/sync/boards/${encodeURIComponent(boardId)}`, page.origin);
 
-    socketUrl.protocol = page.protocol === "https:" ? "wss:" : "ws:";
-    socketUrl.searchParams.set("actor", actorId);
-
-    return Client.layerWebSocketTransport(Cards, { url: socketUrl.href }).pipe(
-      Layer.provide(Socket.layerWebSocketConstructorGlobal),
-    );
+    return Client.layerWebSocketTransport(Cards, {
+      origin: page.origin,
+      id: boardId,
+      query: { actor: actorId },
+    }).pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal));
   }),
 );
 
@@ -214,7 +213,7 @@ export const announcePresenceAtom = runtime
   })
   .pipe(Atom.setIdleTTL(0));
 
-export type BoardError = ClientError | CardRejected | PersistenceError;
+export type BoardError = ClientError | CardRejected | PersistenceError | ProtocolError;
 
 export const errorMessage = (error: BoardError) => {
   if (error._tag === "CardRejected")

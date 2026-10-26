@@ -21,7 +21,7 @@ Using the `Counter` from [getting started](./guide/getting-started.md):
 import { Client } from "@yielded/sync/client";
 import { Effect } from "effect";
 
-import { Counter } from "./counter";
+import { Counter, CounterId } from "./counter";
 
 const definition = Client.definition(Counter, {
   applyEvent: (_snapshot, event) => ({ value: event.value }),
@@ -29,7 +29,7 @@ const definition = Client.definition(Counter, {
 
 export const program = Effect.gen(function* () {
   const session = yield* Client.make(definition, { persistence: { mode: "volatile" } });
-  const lease = yield* session.open(Counter.address("demo"));
+  const lease = yield* session.open(Counter.address(CounterId.make("demo")));
   const counter = Client.view(lease);
 
   yield* counter.ready;
@@ -153,10 +153,25 @@ when inactive.
 
 ## Transport
 
-`Client.layerWebSocketTransport(contract, { url })` provides `Client.Transport`
-with JSON RPC. Supply `Socket.WebSocketConstructor`, such as
-`Socket.layerWebSocketConstructorGlobal` in a browser. The application owns the
-authenticated URL and session lifetime. A route serving one address needs one
+`Client.layerWebSocketTransport` provides `Client.Transport` with JSON RPC. Use
+the shared source definition to construct the URL:
+
+```ts
+Client.layerWebSocketTransport(Counter, {
+  origin: window.location.origin,
+  id: CounterId.make("demo"),
+});
+```
+
+It uses the source's `path`, encodes the ID, and chooses `ws` or `wss` from the
+origin. Optional `query` supplies application parameters, such as short-lived
+connection credentials. Invalid origins or IDs fail the Layer with `ProtocolError`.
+For a custom URL, pass `{ url }` instead; it accepts a string or an Effect that
+produces one when connecting.
+
+Supply `Socket.WebSocketConstructor`, such as
+`Socket.layerWebSocketConstructorGlobal` in a browser. The application owns
+authentication and session lifetime. A route serving one address needs one
 transport; multi-address applications need a routing transport.
 
 Use `Client.layerRpcTransport(contract)` with your own `RpcClient.Protocol` for

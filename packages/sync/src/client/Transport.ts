@@ -1,9 +1,10 @@
 import { Context, Effect, Layer, Schema, Stream, type Scope } from "effect";
+import { Url, UrlParams } from "effect/http";
 import { RpcClient, RpcSerialization } from "effect/rpc";
 import { Socket } from "effect/socket";
 
 import { ProtocolError, type SourceAddress, type SourcePosition } from "../Model.ts";
-import type * as Source from "../Source.ts";
+import * as Source from "../Source.ts";
 import type { EncodedCommand } from "./Model.ts";
 
 export interface Request {
@@ -115,17 +116,66 @@ export const rpcTransport = <S extends Source.Spec>(
 export const layerRpcTransport = <S extends Source.Spec>(contract: Source.Definition<S>) =>
   Layer.effect(Transport, rpcTransport(contract));
 
-export interface WebSocketTransportOptions {
+export interface WebSocketUrlOptions {
   readonly url: string | Effect.Effect<string>;
 }
 
+export interface SourceWebSocketOptions<S extends Source.Spec = Source.Spec> {
+  readonly origin: string;
+  readonly id: Source.Id<S>;
+  /** Application query parameters, such as short-lived connection credentials. */
+  readonly query?: UrlParams.Input;
+}
+
+export type WebSocketTransportOptions<S extends Source.Spec = Source.Spec> =
+  | WebSocketUrlOptions
+  | SourceWebSocketOptions<S>;
+
 /** The application supplies the socket constructor, credentials, and session lifetime. */
-export const layerWebSocketTransport = <S extends Source.Spec>(
+export function layerWebSocketTransport<S extends Source.Spec>(
   contract: Source.Definition<S>,
-  options: WebSocketTransportOptions,
-): Layer.Layer<Transport, never, Socket.WebSocketConstructor> =>
-  layerRpcTransport(contract).pipe(
-    Layer.provide(RpcClient.layerProtocolSocket({ retryTransientErrors: false })),
-    Layer.provide(RpcSerialization.layerJson),
-    Layer.provide(Socket.layerWebSocket(options.url)),
+  options: WebSocketUrlOptions,
+): Layer.Layer<Transport, never, Socket.WebSocketConstructor>;
+
+export function layerWebSocketTransport<S extends Source.Spec>(
+  contract: Source.Definition<S>,
+  options: WebSocketTransportOptions<NoInfer<S>>,
+): Layer.Layer<Transport, ProtocolError, Socket.WebSocketConstructor>;
+
+export function layerWebSocketTransport<S extends Source.Spec>(
+  contract: Source.Definition<S>,
+  options: WebSocketTransportOptions<S>,
+): Layer.Layer<Transport, ProtocolError, Socket.WebSocketConstructor> {
+  const transport = (url: WebSocketUrlOptions["url"]) =>
+    layerRpcTransport(contract).pipe(
+      Layer.provide(RpcClient.layerProtocolSocket({ retryTransientErrors: false })),
+      Layer.provide(RpcSerialization.layerJson),
+      Layer.provide(Socket.layerWebSocket(url)),
+    );
+
+  if ("url" in options) return transport(options.url);
+
+  const url = Effect.gen(function* () {
+    const path = yield* Source.pathFor(contract, options.id);
+    const url = yield* Effect.fromResult(Url.fromString(options.origin));
+
+    if (!["http:", "https:", "ws:", "wss:"].includes(url.protocol))
+      return yield* ProtocolError.make({
+        reason: "UnsupportedVersion",
+        message: "Invalid source origin",
+      });
+
+    url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:";
+    url.pathname = path;
+    url.search = "";
+    url.hash = "";
+
+    return Url.setUrlParams(url, UrlParams.fromInput(options.query ?? {})).href;
+  }).pipe(
+    Effect.mapError(() =>
+      ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source URL" }),
+    ),
   );
+
+  return Layer.unwrap(Effect.map(url, transport));
+}

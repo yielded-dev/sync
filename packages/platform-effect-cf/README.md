@@ -6,7 +6,9 @@ handling around the portable `Server.host`.
 
 ```ts
 import { EffectCf } from "@yielded/sync-platform-effect-cf";
+import { Worker } from "effect-cf";
 
+import { authenticate } from "./auth";
 import { CounterServer } from "./server";
 
 export const CounterObject = EffectCf.make(CounterServer, {
@@ -14,18 +16,25 @@ export const CounterObject = EffectCf.make(CounterServer, {
 });
 
 const Counters = CounterObject.binding("COUNTERS");
+const fetch = Counters.handler({ authenticate });
+
+export default Worker.makeFetchHandler(Counters.layer, { fetch });
 ```
 
-Register `CounterObject` as a SQLite Durable Object in Wrangler. Supply
-`Counters.layer` to `Worker.makeFetchHandler`; its `getByName` and `fetch` methods
-use that binding without a handwritten service class.
+Register `CounterObject` as a SQLite Durable Object in Wrangler. The handler uses
+the shared source's `path` and `id` schema. Its default URL is `/sync/<kind>/<id>`;
+the default object key is `<kind>:<id>`. Supply `objectName: (id) => string` to retain
+an existing key scheme. Changing a URL does not change the object key.
 
-The application owns routes and authentication. Call `EffectCf.prepareRequest`
-with `{ request, address, identity }`, then forward the result with
-`Counters.fetch(stub, prepared)`. The identity contains `actorId`, a Schema JSON
-`principal`, and `expiresAtMillis`. Request preparation replaces internal identity
-headers; only authenticated routes should expose the binding.
-`EffectCf.errorResponse` maps a `ProtocolError` to its HTTP response.
+`authenticate(request, address)` returns an Effect with `actorId`, a Schema JSON
+`principal`, and `expiresAtMillis`, or fails with `ProtocolError`. Its address has
+the source's branded ID type. The handler validates the route, authenticates,
+replaces internal identity headers, and forwards HTTP or WebSocket requests.
+Unmatched paths return 404. Protocol failures use `EffectCf.errorResponse`.
+
+For custom routing, use `EffectCf.prepareRequest` with `{ request, address, identity }`,
+then `Counters.getByName` and `Counters.fetch`. Only authenticated routes should
+expose the binding.
 
 To replace SQLite, pass a `SourceStorage` Layer as `storage`; the default store
 will not be opened. `crypto` accepts a replacement `ServerCrypto` Layer.

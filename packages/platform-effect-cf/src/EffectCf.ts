@@ -1,4 +1,4 @@
-import type { Action, Source } from "@yielded/sync";
+import { ProtocolError, type Action, type Source } from "@yielded/sync";
 import { Cloudflare } from "@yielded/sync-platform-cloudflare";
 import type { Server, ServerCrypto, SourceStorage, StorageError } from "@yielded/sync/server";
 import { Context, Effect, Layer } from "effect";
@@ -14,6 +14,11 @@ import { RpcServer } from "effect/rpc";
 
 export type Options<DeliveryR = never, E = never, R = never> = Cloudflare.Options<DeliveryR, E, R>;
 export type Identity = Cloudflare.Identity;
+
+export type HandlerOptions<
+  S extends Source.Spec = Source.Spec,
+  R = never,
+> = Cloudflare.HandlerOptions<S, R>;
 
 export type ClientOptions<Kind extends string, E = never, R = never> = Cloudflare.ClientOptions<
   Kind,
@@ -104,6 +109,21 @@ export const make = <
         layer: namespace.layer({ binding: name }),
         getByName: namespace.getByName,
         fetch: namespace.fetch,
+        handler: <R>(options: HandlerOptions<S, R>) => {
+          const handle = Cloudflare.handler(definition.contract, {
+            ...options,
+            fetch: (name, request) =>
+              Effect.flatMap(namespace.getByName(name), (stub) =>
+                namespace.fetch(stub, request),
+              ).pipe(
+                Effect.mapError(() =>
+                  ProtocolError.make({ reason: "Unavailable", message: "Source unavailable" }),
+                ),
+              ),
+          });
+
+          return Effect.flatMap(Worker.NativeRequest, handle);
+        },
       };
     },
   });

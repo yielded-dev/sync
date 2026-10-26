@@ -8,8 +8,6 @@
 "@yielded/sync-platform-alchemy-cf": minor
 ---
 
-Expose platform-independent server coordination and RPC handlers from `@yielded/sync/server`, with application-provided `SourceStorage` and optional outbox delivery. Construct Durable Objects directly from server definitions through the optional Effect CF or Alchemy integrations, with native SQLite and crypto defaults and replaceable platform services.
+Host sources through portable server APIs with caller-provided storage, or generate Cloudflare Durable Objects with default platform services and shared, typed routes.
 
-Keep core persistence to journal and optional cache ports. Browser and Expo storage remain in `@yielded/sync-local-indexeddb` and `@yielded/sync-local-expo`, backed by shared `@yielded/sync-persistence` policy. Applications can also implement the core ports directly.
-
-Omit unused plugin, message, reducer, and outbox configuration, and use the smaller client API without catalog, history, manual hydration, or persistence-management hooks.
+Simplify client setup and optional plugin configuration while keeping persistence in separate, reusable packages, including IndexedDB and Expo integrations.

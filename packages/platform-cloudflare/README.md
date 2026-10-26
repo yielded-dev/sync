@@ -35,10 +35,18 @@ is needed. Its required namespace and replay window are explicit.
 
 ## Authentication and transport
 
-Authenticate every route before preparing and forwarding its request. Request
-preparation with `Cloudflare.prepareRequest` replaces internal identity headers.
-The object binding is a trusted capability; additional routes and service bindings
-need equivalent authentication.
+`Cloudflare.handler(source, { authenticate, fetch, objectName? })` returns a native
+Request handler Effect. It matches the source's shared path and ID schema, calls
+`authenticate(request, address)`, then forwards through `fetch(objectName, request)`.
+The default path is `/sync/<kind>/<id>` and the default object name is `<kind>:<id>`.
+The source's `path` overrides the base path; `objectName` overrides storage identity
+independently. Unmatched paths return 404; protocol failures become HTTP responses.
+
+Authentication returns `actorId`, a Schema JSON `principal`, and `expiresAtMillis`,
+or fails with `ProtocolError`. The handler replaces internal identity headers.
+For custom routing, call `Cloudflare.prepareRequest` with an authenticated identity
+before forwarding. The object binding is a trusted capability; additional routes
+and service bindings need equivalent authentication.
 Use `Server.provide` for services acquired and released within each source operation.
 
 For authenticated server-side calls,
