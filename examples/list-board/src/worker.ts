@@ -83,10 +83,11 @@ const fetch = Effect.gen(function* () {
 
   if (match === null) return new Response("Not found", { status: 404 });
 
-  const id = yield* Effect.try({
-    try: () => decodeURIComponent(match[1]),
-    catch: () => ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source id" }),
-  });
+  const id = yield* Schema.decodeEffect(Schema.StringFromUriComponent)(match[1]).pipe(
+    Effect.mapError(() =>
+      ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source id" }),
+    ),
+  );
 
   // Public demo identities only. Browser WebSockets cannot set Authorization.
   // Replace this selection with the application's auth provider before deployment.

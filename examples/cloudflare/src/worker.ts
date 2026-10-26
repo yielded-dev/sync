@@ -1,6 +1,6 @@
 import { ProtocolError } from "@yielded/sync";
 import { EffectCf } from "@yielded/sync-platform-effect-cf";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { Worker } from "effect-cf";
 
 import { authenticate } from "./auth.ts";
@@ -28,10 +28,11 @@ const fetch = Effect.gen(function* () {
 
   if (match === null) return new Response("Not found", { status: 404 });
 
-  const id = yield* Effect.try({
-    try: () => decodeURIComponent(match[1]),
-    catch: () => ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source id" }),
-  });
+  const id = yield* Schema.decodeEffect(Schema.StringFromUriComponent)(match[1]).pipe(
+    Effect.mapError(() =>
+      ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source id" }),
+    ),
+  );
 
   const identity = yield* authenticate(request.headers.get("authorization"));
   const stub = yield* Counters.getByName(`counter:${id}`);

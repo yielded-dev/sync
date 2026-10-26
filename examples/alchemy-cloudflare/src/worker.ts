@@ -1,7 +1,7 @@
 import { ProtocolError } from "@yielded/sync";
 import { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";
 import * as Cloudflare from "alchemy/Cloudflare";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { authenticate } from "../../cloudflare/src/auth.ts";
@@ -35,11 +35,11 @@ export default class CounterWorker extends Cloudflare.Worker<CounterWorker>()(
 
         if (match === null) return HttpServerResponse.text("Not found", { status: 404 });
 
-        const id = yield* Effect.try({
-          try: () => decodeURIComponent(match[1]),
-          catch: () =>
+        const id = yield* Schema.decodeEffect(Schema.StringFromUriComponent)(match[1]).pipe(
+          Effect.mapError(() =>
             ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source id" }),
-        });
+          ),
+        );
 
         const identity = yield* authenticate(request.headers.authorization);
         const stub = counters.getByName(`counter:${id}`);
