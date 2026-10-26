@@ -9,7 +9,7 @@ import { env, reset, runInDurableObject, evictDurableObject } from "cloudflare:t
 import { Deferred, Effect, Fiber } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
-import type { CounterObject } from "../../../examples/cloudflare/src/worker.ts";
+import type { CounterObject } from "./fixtures/counter/worker.ts";
 
 const bindings = env as { COUNTERS: DurableObjectNamespace<CounterObject> };
 const stub = () => bindings.COUNTERS.getByName("storage-proof");

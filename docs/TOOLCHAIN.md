@@ -29,13 +29,13 @@ and `vp help` for command options.
 | `vp run typecheck`                        | Root and workspace TypeScript/Effect diagnostics     |
 | `vp run check`                            | Formatting, linting, and typechecks                  |
 | `vp run test`                             | Workspace tests                                      |
-| `vp run build`                            | Packages, examples, and public docs                  |
+| `vp run build`                            | Packages, the board example, and public docs         |
 | `vp run release:check`                    | Pack packages and verify a clean consumer            |
 | `vp run ready`                            | Build, check, test, and packed-consumer verification |
 | `vp run docs:dev` / `vp run docs:preview` | Serve source / built documentation                   |
 | `vp run docs:build`                       | Build the documentation site                         |
 
-`vp run typecheck` checks root tooling, all libraries, and all examples
+`vp run typecheck` checks root tooling, all libraries, and the board example
 with `effect-tsrs diagnostics --project tsconfig.json --type-check --strict`. It
 checks TypeScript types and Effect diagnostics; configured errors and warnings
 fail the check. The packed-consumer check uses `tsrs --noEmit`; the docs workspace
@@ -52,18 +52,15 @@ are documented in [AGENTS.md](../AGENTS.md#compiler-diagnostics).
 Use the [testing skill](../.agents/skills/testing/SKILL.md) to select sufficient
 proof. Existing checks cover different environments:
 
-| Boundary                       | Existing check                                                |
-| ------------------------------ | ------------------------------------------------------------- |
-| Portable client                | Core suite with Effect's test clock                           |
-| Cloudflare storage and RPC     | effect-cf and board suites in workerd with SQLite             |
-| Browser persistence            | IndexedDB suite in Chromium                                   |
-| SQLite storage                 | Expo adapter suite using file-backed Node SQLite              |
-| Native Expo bridge and restart | [Manual native probe](../examples/persistence-expo/README.md) |
-| Public package exports         | Contracts example and clean packed-consumer check             |
+| Boundary                   | Existing check                                     |
+| -------------------------- | -------------------------------------------------- |
+| Portable client            | Core suite with Effect's test clock                |
+| Cloudflare storage and RPC | effect-cf and board suites in workerd with SQLite  |
+| Browser persistence        | IndexedDB suite in Chromium                        |
+| Public package exports     | Core type fixtures and clean packed-consumer check |
 
-Desktop SQLite does not establish native bridge or device restart behavior.
-Follow the native probe when that boundary changes. See the
-[examples index](../examples/README.md) for development commands.
+See the [board example](../examples/list-board/README.md) for development commands
+and the browser workflow.
 
 ## Hooks and CI
 

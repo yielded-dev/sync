@@ -178,7 +178,6 @@ jobs:
           command: >-
             vp run -v --concurrency-limit 2
             -F './packages/*' -F './examples/*'
-            -F '!@yielded/sync-local-expo'
             -F '!@yielded/sync-local-indexeddb'
             -F '!@yielded/sync-platform-effect-cf'
             -F '!sync-list-board-example' test
@@ -195,7 +194,6 @@ jobs:
           retry-errors: "true"
           command: >-
             vp run -v --parallel --concurrency-limit 1 --fail-if-no-match
-            -F '@yielded/sync-local-expo'
             -F '@yielded/sync-local-indexeddb'
             -F '@yielded/sync-platform-effect-cf'
             -F 'sync-list-board-example' test --retry.count 0

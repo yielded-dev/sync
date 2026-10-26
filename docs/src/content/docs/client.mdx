@@ -191,9 +191,7 @@ Core requires only an actor-bound journal; a snapshot cache is optional.
 
 Use `IndexedDb` from
 [`@yielded/sync-local-indexeddb`](https://github.com/yielded-dev/sync/blob/main/packages/local-indexeddb/README.md)
-in browsers, or `ExpoSqlite` from
-[`@yielded/sync-local-expo`](https://github.com/yielded-dev/sync/blob/main/packages/local-expo/README.md)
-on native Expo. Keep the persistence Layer alive for the complete client session.
+in browsers. Keep the persistence Layer alive for the complete client session.
 For custom storage, implement the
 [`ReplicaPersistence` port](https://github.com/yielded-dev/sync/blob/main/packages/sync/src/client/ReplicaPersistence.ts)
 directly or use the shared `Persistence` driver policy from

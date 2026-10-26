@@ -47,7 +47,6 @@ to enable it with bounded SQLite capacity and native alarm scheduling. Drain
 pending work before disabling delivery. Other alarm jobs need an application
 scheduler. See the shared [options and defaults](../platform-cloudflare/README.md).
 
-See the [runnable counter](../../examples/cloudflare/README.md) and
-[React board](../../examples/list-board/README.md). Keep class names, named-object
+See the [React board](../../examples/list-board/README.md). Keep class names, named-object
 keys, and storage namespaces stable to retain authority, receipts, and pending
 outbox records.

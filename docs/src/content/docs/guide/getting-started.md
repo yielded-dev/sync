@@ -19,16 +19,14 @@ bun add @yielded/sync-platform-effect-cf@{{SYNC_VERSION}} effect-cf
 bun add @yielded/sync-platform-alchemy-cf@{{SYNC_VERSION}} alchemy
 ```
 
-For durable client storage, choose a platform adapter:
+For durable browser storage, add IndexedDB persistence:
 
 ```sh
 bun add @yielded/sync-local-indexeddb@{{SYNC_VERSION}}
-# Or, for native Expo:
-bun add @yielded/sync-local-expo@{{SYNC_VERSION}} expo-sqlite
 ```
 
 Keep Sync packages on the same exact version and satisfy the peer ranges in
-their manifests. Expo web uses IndexedDB. Applications with custom client
+their manifests. Applications with custom client
 storage can use `@yielded/sync-persistence` for shared record policy or implement
 the core port directly. See [packages and hosts](../reference/packages.mdx).
 
@@ -72,7 +70,7 @@ as one path segment; dot-only IDs (`.` and `..`) cannot be used in HTTP routes.
 The root import is portable between server and client. Server implementations
 come from `@yielded/sync/server`; headless clients come from
 `@yielded/sync/client`. The [consumer example](../api/consumer.md) shows the
-matching server definition and links to runnable applications.
+matching server definition and links to the runnable React board.
 
 ## Connect server and client
 

@@ -17,7 +17,6 @@ const packages = [
   ["platform-effect-cf", "@yielded/sync-platform-effect-cf"],
   ["platform-alchemy-cf", "@yielded/sync-platform-alchemy-cf"],
   ["local-indexeddb", "@yielded/sync-local-indexeddb"],
-  ["local-expo", "@yielded/sync-local-expo"],
 ];
 
 const run = (command, args, cwd = root) => execFileSync(command, args, { cwd, stdio: "inherit" });
@@ -82,7 +81,6 @@ try {
   dependencies.effect = rootManifest.catalog.effect;
   dependencies["effect-cf"] = rootManifest.catalog["effect-cf"];
   dependencies.alchemy = rootManifest.catalog.alchemy;
-  dependencies["expo-sqlite"] = rootManifest.catalog["expo-sqlite"];
 
   await writeFile(
     join(consumer, "package.json"),
@@ -148,7 +146,6 @@ try {
       'export { EffectCf } from "@yielded/sync-platform-effect-cf";',
       'export { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";',
       'export { IndexedDb } from "@yielded/sync-local-indexeddb";',
-      'export { ExpoSqlite } from "@yielded/sync-local-expo";',
       "",
     ].join("\n"),
   );

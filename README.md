@@ -34,7 +34,6 @@ Start with the [documentation](https://yielded.dev/sync/),
 | `@yielded/sync`                     | Shared contracts, portable server hosts, clients, and Atom bindings |
 | `@yielded/sync-persistence`         | Shared client persistence policy and driver contracts               |
 | `@yielded/sync-local-indexeddb`     | Browser client persistence                                          |
-| `@yielded/sync-local-expo`          | Native Expo SQLite client persistence                               |
 | `@yielded/sync-platform-cloudflare` | Cloudflare transport, lifecycle, and SQLite storage                 |
 | `@yielded/sync-platform-effect-cf`  | Native effect-cf Worker and Durable Object integration              |
 | `@yielded/sync-platform-alchemy-cf` | Native Alchemy Worker and Durable Object integration                |
@@ -47,10 +46,9 @@ state/event/receipt commits, optional outbox obligations, ordered replay, and
 client recovery. Snapshot caches are disposable; unresolved command journals
 retain the identities needed for safe retry.
 
-`Server.host` and `ServerRpc` work without platform adapters. Try the
-[core server example](examples/contracts/README.md) with
-`vp run @yielded/example-contracts#server`. The Cloudflare packages add native
-Worker and Durable Object integration around the same host.
+`Server.host` and `ServerRpc` work with application-provided storage and transport.
+The Cloudflare packages add native Worker and Durable Object integration around
+the same host, as shown in the [React board](examples/list-board/README.md).
 
 See [packages and hosts](docs/src/content/docs/reference/packages.mdx) for adapter
 choices and [GitHub releases](https://github.com/yielded-dev/sync/releases) for
@@ -74,7 +72,7 @@ packages.
 
 Use `vp run docs:dev` for the docs site or
 `vp run sync-list-board-example#dev` for the React board and its local Worker.
-See [all examples](examples/README.md), [toolchain commands](docs/TOOLCHAIN.md),
+See the [example guide](examples/list-board/README.md), [toolchain commands](docs/TOOLCHAIN.md),
 [API boundaries](docs/PUBLIC_API.md), and [contributor guidance](AGENTS.md).
 
 ## License

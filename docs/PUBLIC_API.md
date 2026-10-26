@@ -19,7 +19,6 @@ wire formats and implementation details.
 | `@yielded/sync-platform-alchemy-cf` | Native Alchemy integration                                                         |
 | `@yielded/sync-persistence`         | Optional durable client persistence policy and driver contracts                    |
 | `@yielded/sync-local-indexeddb`     | Browser client persistence                                                         |
-| `@yielded/sync-local-expo`          | Native Expo client persistence                                                     |
 
 Adapters depend inward on core. Root and client imports never expose server
 implementations or platform dependencies. The Cloudflare adapters use the same
@@ -123,8 +122,9 @@ group and handler services. Applications supply `ServerRpc.CurrentConnection`
 from authenticated context and choose an Effect RPC transport. Native socket,
 request, and process APIs stay outside core.
 
-`Server.commit` constructs a plan. The runtime validates it and atomically commits
-private state, contiguous events, the exact outcome, receipts, and outbox work
+Action handlers return `{ state, events, result, outbox? }`. `Server.commit` is an
+optional helper that defaults `outbox` to an empty array. The runtime validates the
+plan and atomically commits private state, contiguous events, the exact outcome, receipts, and outbox work
 before publication or reply. Changed state must emit an event. Authorization,
 receipt lookup, handler evaluation, and commit share one serialized source turn;
 a storage adapter cannot introduce a check/commit race.
@@ -229,9 +229,9 @@ generations remain distinct.
 
 [ReplicaPersistence.ts](../packages/sync/src/client/ReplicaPersistence.ts) defines
 the ports. Physical formats and cache bounds belong to the optional
-`@yielded/sync-persistence` package. Browser and native drivers live separately in
-`@yielded/sync-local-indexeddb` and `@yielded/sync-local-expo`. Applications may
-implement the ports directly with their own persistence strategy.
+`@yielded/sync-persistence` package. The browser driver lives separately in
+`@yielded/sync-local-indexeddb`. Applications may implement the ports directly with
+their own persistence strategy.
 
 `SourceAtom.make` uses the same runtime. Active atoms hold leases; passive reads
 never connect. Registry disposal releases leases. UI code owns no second command

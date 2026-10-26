@@ -2,7 +2,7 @@ import { Action, type ProtocolError } from "@yielded/sync";
 import { Context, Effect, Layer, Schema, Stream } from "effect";
 import { type Rpc } from "effect/rpc";
 
-import { Counter } from "../src/counter.ts";
+import { Counter } from "../fixtures/counter.ts";
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;

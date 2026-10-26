@@ -2,7 +2,7 @@ import { SourceAtom } from "@yielded/sync/atom";
 import { Client, type ClientError } from "@yielded/sync/client";
 import { Context, Effect, Layer, type Scope } from "effect";
 
-import { Counter, type InvalidValue, Label } from "../src/counter.ts";
+import { Counter, type InvalidValue, Label } from "../fixtures/counter.ts";
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;

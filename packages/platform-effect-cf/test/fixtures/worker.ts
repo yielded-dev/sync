@@ -3,7 +3,7 @@ import { EffectCf } from "@yielded/sync-platform-effect-cf";
 import { Server } from "@yielded/sync/server";
 import { Effect, Schema } from "effect";
 
-export { CounterObject, default } from "../../../../examples/cloudflare/src/worker.ts";
+export { CounterObject, default } from "./counter/worker.ts";
 
 export const Publication = Source.make({
   kind: "publication",

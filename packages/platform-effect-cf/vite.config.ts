@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       main: "./test/fixtures/worker.ts",
-      wrangler: { configPath: "../../examples/cloudflare/wrangler.jsonc" },
+      wrangler: { configPath: "./test/wrangler.jsonc" },
       miniflare: {
         durableObjects: { PUBLICATION: { className: "PublicationObject", useSQLite: true } },
       },

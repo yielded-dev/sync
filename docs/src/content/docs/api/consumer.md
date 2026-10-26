@@ -4,10 +4,9 @@ title: Counter example
 
 A source has three parts: a shared contract, server handlers, and client reducers.
 This example implements the `Counter` contract from
-[getting started](../guide/getting-started.md). For complete applications, use the
-[effect-cf counter](https://github.com/yielded-dev/sync/tree/main/examples/cloudflare),
-[Alchemy counter](https://github.com/yielded-dev/sync/tree/main/examples/alchemy-cloudflare),
-or [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board).
+[getting started](../guide/getting-started.md). The
+[React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
+is the complete runnable application, including IndexedDB persistence.
 
 ## Implement the server
 
@@ -28,14 +27,13 @@ export const CounterServer = Server.make(Counter, {
   snapshot: (state) => ({ value: state.value }),
   authorize,
   actions: {
-    set: ({ state, payload, principal }) =>
-      Effect.succeed(
-        Server.commit({
-          state: { value: payload.value, lastActorId: principal.actorId },
-          events: [{ value: payload.value }],
-          result: { previous: state.value, current: payload.value },
-        }),
-      ),
+    set: Effect.fn("Counter.set")(function* ({ state, payload, principal }) {
+      return {
+        state: { value: payload.value, lastActorId: principal.actorId },
+        events: [{ value: payload.value }],
+        result: { previous: state.value, current: payload.value },
+      };
+    }),
   },
 });
 ```
@@ -46,11 +44,12 @@ It returns an Effect that fails with `ProtocolError` when access is denied.
 Authentication happens at the application boundary; an actor id supplied by a
 client is not proof of identity.
 
-`Server.commit` builds a plan. Sync validates and atomically commits the state,
-events, result, and optional outbox obligations. Changed state must emit an event.
+The handler returns a plan: `state` is private server state, `events` update
+replicas, and `result` is the caller's typed reply. Sync validates and atomically
+commits these with any optional `outbox` obligations. Changed state must emit an event.
 Retrying a set from 0 to 7 returns `{ previous: 0, current: 7 }` even after another command
-changes the counter. Actions with a declared error Schema can return a typed
-domain rejection; that rejection is also retained for exact retry.
+changes the counter. Actions with a declared error Schema can yield a typed
+domain rejection from the generator; that rejection is also retained for exact retry.
 
 ## Host the source
 
@@ -74,13 +73,6 @@ connection. A failure of `connection.closed` requests transport closure; normal
 scope disposal completes it successfully. Cancelling a subscription does not
 close the connection. The host opens and releases definition resources for each operation;
 `Server.provide` supplies services with that lifetime.
-
-For a complete workflow with snapshot, subscription, dispatch, and exact retry,
-run the [core server example](https://github.com/yielded-dev/sync/tree/main/examples/contracts):
-
-```sh
-vp run @yielded/example-contracts#server
-```
 
 `ServerRpc.handlers(host)` returns the source's `group` and handler `services` for
 an Effect `RpcServer`. Supply `ServerRpc.CurrentConnection` from authenticated
@@ -141,5 +133,4 @@ A reusable capability uses `Plugin.make`. Add it to the source's `plugins` list
 and provide matching `Server.plugin` and `Client.plugin` definitions. Omit
 `plugins` in all three constructors when the source has none. Each plugin owns
 its snapshot slot and actions; all share the source's authorization, ordered
-cursor, and lifetime. The runnable counter includes a label plugin, and the board
-uses one for its title.
+cursor, and lifetime. The runnable board uses one for its title.

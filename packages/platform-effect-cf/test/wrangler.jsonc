@@ -1,7 +1,7 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "yielded-sync-counter",
-  "main": "src/worker.ts",
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "sync-effect-cf-tests",
+  "main": "fixtures/worker.ts",
   "compatibility_date": "2026-08-22",
   "compatibility_flags": ["nodejs_compat"],
   "durable_objects": { "bindings": [{ "name": "COUNTERS", "class_name": "CounterObject" }] },

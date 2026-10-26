@@ -45,6 +45,10 @@ client; registry disposal releases them. `CurrentActor` is provided once to the
 client, transport, and IndexedDB Layers. Presence uses ephemeral messages and
 stays outside the durable replica.
 
+Server action handlers use `Effect.fn` and return `{ state, events, result }`.
+`events` update every replica; `result` is the reply to the caller. Yield a
+`CardRejected` error to reject an action. Sync commits accepted changes atomically.
+
 ## Demo boundaries
 
 The endpoint is `/sync/boards/:id`. Browser WebSockets select a public demo

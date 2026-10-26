@@ -32,14 +32,12 @@ Reconcile receipts, unresolved commands, and pending projections before switchin
 
 ## Editing and recovery
 
-Each action needs an optimistic reducer, including an identity reducer when the
-edit should wait for authority. Domain rejections remove optimism; uncertain
+Add optimistic reducers for edits that need immediate feedback; omit them when
+the edit should wait for authority. Domain rejections remove optimism; uncertain
 transport outcomes retain the original command for exact retry. Web and mobile
 sessions close on identity change and reopen against the correct actor journal.
 
 Presentation code reads atoms and dispatches Effects. It needs no second command
 queue or socket cursor. Catalog and checkpoint destinations must deduplicate
-outbox delivery using the stable obligation id. Use the
-[native persistence probe](../examples/persistence-expo/README.md) when checking
-mobile restart recovery; application projection delivery requires its own
-integration check.
+outbox delivery using the stable obligation id. Check restart recovery on the
+application's storage platform and projection delivery at its destination.

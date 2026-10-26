@@ -2,7 +2,7 @@ import { type ProtocolError } from "@yielded/sync";
 import { Server } from "@yielded/sync/server";
 import { Context, DateTime, Effect, Layer, Schema, type Scope } from "effect";
 
-import { Counter, InvalidValue, Label } from "../src/counter.ts";
+import { Counter, InvalidValue, Label } from "../fixtures/counter.ts";
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;

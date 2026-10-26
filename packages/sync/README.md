@@ -17,17 +17,17 @@ authorization, projection destinations, and UI.
 subscriptions, publication, and optional outbox delivery. Provide `SourceStorage`,
 `ServerCrypto`, and the definition's services in its scope. `ServerRpc.handlers(host)`
 connects it to Effect RPC; platform transport and scheduling remain application
-choices. See the [core server example](../../examples/contracts/README.md).
+choices. The [server guide](../../docs/src/content/docs/api/consumer.md) explains
+the host and its platform integrations.
 
-`Server.commit` builds a plan; the runtime atomically commits state, events, exact
-outcomes, and outbox obligations. Changed state must emit an event. Declared
+Action handlers return `{ state, events, result, outbox? }`; the runtime atomically
+commits state, events, exact outcomes, and outbox obligations. Changed state must emit an event. Declared
 rejections are durable outcomes; operational failures are not. Retrying an
 identical command returns its original result.
 
 Core owns persistence contracts; applications supply server storage and client
-journals. `@yielded/sync-local-indexeddb` provides browser storage and
-`@yielded/sync-local-expo` provides native Expo SQLite; `@yielded/sync-persistence`
-supplies shared record policy for custom drivers. Sources may omit messages and
+journals. `@yielded/sync-local-indexeddb` provides browser storage;
+`@yielded/sync-persistence` supplies shared record policy for custom drivers. Sources may omit messages and
 plugins; client definitions may omit optimistic reducers.
 
 Clients require an actor, transport, explicit persistence choice, and a live scope.
@@ -37,5 +37,5 @@ bindings share that session and release their leases on registry disposal.
 
 Start with [getting started](../../docs/src/content/docs/guide/getting-started.md),
 the [client guide](../../docs/src/content/docs/client.mdx), or the
-[runnable examples](../../examples/README.md). Contributor contracts are in
+[React board](../../examples/list-board/README.md). Contributor contracts are in
 [API boundaries](../../docs/PUBLIC_API.md).

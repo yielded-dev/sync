@@ -54,6 +54,5 @@ to enable it with bounded SQLite capacity and native alarm scheduling. Drain
 pending work before disabling delivery. Other alarm jobs need an application
 scheduler. See the shared [options and defaults](../platform-cloudflare/README.md).
 
-See the [runnable Alchemy counter](../../examples/alchemy-cloudflare/README.md).
 Preserve object identity when changing frameworks, or explicitly migrate the
 Cloudflare namespace to retain its durable data.

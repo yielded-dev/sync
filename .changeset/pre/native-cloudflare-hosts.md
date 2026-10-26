@@ -4,7 +4,6 @@
 "@yielded/sync-platform-effect-cf": minor
 "@yielded/sync-platform-alchemy-cf": minor
 "@yielded/sync-local-indexeddb": patch
-"@yielded/sync-local-expo": patch
 ---
 
 Add native effect-cf and Alchemy v2 Cloudflare adapters over one shared SQLite and

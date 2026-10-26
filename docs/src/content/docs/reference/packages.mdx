@@ -12,8 +12,7 @@ native transport and lifecycle hooks, and client persistence for restart recover
 | `@yielded/sync`                     | Shared contracts, with `./client` and `./atom` entry points     |
 | `@yielded/sync/server`              | `Server.host`, `ServerRpc`, execution, and server storage ports |
 | `@yielded/sync-persistence`         | `Persistence`: shared record policy and custom drivers          |
-| `@yielded/sync-local-indexeddb`     | `IndexedDb`: browser persistence, including Expo web            |
-| `@yielded/sync-local-expo`          | `ExpoSqlite`: native Expo SQLite persistence                    |
+| `@yielded/sync-local-indexeddb`     | `IndexedDb`: browser persistence                                |
 | `@yielded/sync-platform-cloudflare` | `Cloudflare` transport and lifecycle; `SqliteStorage`           |
 | `@yielded/sync-platform-effect-cf`  | `EffectCf`: native effect-cf Workers and Durable Objects        |
 | `@yielded/sync-platform-alchemy-cf` | `AlchemyCf`: native Alchemy Workers and Durable Objects         |
@@ -39,7 +38,7 @@ For client persistence, choose how much implementation to supply:
   levels={[
     { name: "Core port", api: "ReplicaPersistence" },
     { name: "Shared policy", api: "Persistence.make(…)" },
-    { name: "Platform adapter", api: "IndexedDb / ExpoSqlite" },
+    { name: "Browser adapter", api: "IndexedDb" },
   ]}
   layers={[
     {
@@ -47,7 +46,7 @@ For client persistence, choose how much implementation to supply:
       cells: [
         { owner: "app", note: "Supply an actor-bound journal and optional cache." },
         { owner: "app", note: "Supply two scoped AtomicStore drivers." },
-        { owner: "library", note: "Browser IndexedDB or native Expo SQLite." },
+        { owner: "library", note: "Browser IndexedDB." },
       ],
     },
     {
@@ -66,11 +65,10 @@ For client persistence, choose how much implementation to supply:
   }}
 />
 
-Only `@yielded/sync-local-expo` requires the `expo-sqlite` peer. IndexedDB remains
-subject to browser quota and eviction. Both adapters use `@yielded/sync-persistence`
-and retain unresolved command journals separately from disposable snapshot
+IndexedDB remains subject to browser quota and eviction. It uses
+`@yielded/sync-persistence` and retains unresolved command journals separately from disposable snapshot
 caches. See [client persistence](../client.mdx#persistence).
 
 Keep Sync packages on the same exact version. Package manifests declare supported
-Effect, framework, and Expo peer ranges; the repository catalog pins the development
+Effect and framework peer ranges; the repository catalog pins the development
 combination. Read the [upgrade guidance](../RELEASE.md) before changing versions.

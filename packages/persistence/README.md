@@ -2,7 +2,7 @@
 
 Shared durable-record policy for Sync client storage adapters. Use
 [`@yielded/sync-local-indexeddb`](../local-indexeddb/README.md) in browsers or
-[`@yielded/sync-local-expo`](../local-expo/README.md) on native Expo.
+supply your own storage drivers.
 
 ## Custom storage
 

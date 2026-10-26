@@ -4,8 +4,8 @@ import { SELF, env, reset, runInDurableObject, evictDurableObject } from "cloudf
 import { Effect, Schema } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { Counter, CounterId } from "../../../examples/cloudflare/src/contract.ts";
-import type { CounterObject } from "../../../examples/cloudflare/src/worker.ts";
+import { Counter, CounterId } from "./fixtures/counter/contract.ts";
+import type { CounterObject } from "./fixtures/counter/worker.ts";
 
 const bindings = env as { COUNTERS: DurableObjectNamespace<InstanceType<typeof CounterObject>> };
 const address = Counter.address(CounterId.make("test"));

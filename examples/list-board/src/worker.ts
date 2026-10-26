@@ -7,7 +7,7 @@ import { Worker } from "effect-cf";
 import { Board, CardRejected, Cards } from "./contract.ts";
 import { DemoActor } from "./demo.ts";
 
-const Principal = Schema.Struct({ actorId: Schema.String });
+const Principal = Schema.Struct({ actorId: Schema.String }).pipe(Schema.brand("Principal"));
 
 const board = Server.plugin(Board, {
   principal: Principal,
@@ -15,14 +15,13 @@ const board = Server.plugin(Board, {
   initialize: Effect.succeed({ title: "Board" }),
   snapshot: (state) => state,
   actions: {
-    rename: ({ state, payload }) =>
-      Effect.succeed(
-        Server.commit({
-          state: { ...state, title: payload },
-          events: [{ title: payload }],
-          result: payload,
-        }),
-      ),
+    rename: Effect.fn("Board.rename")(function* ({ state, payload }) {
+      return {
+        state: { ...state, title: payload },
+        events: [{ title: payload }],
+        result: payload,
+      };
+    }),
   },
 });
 
@@ -33,35 +32,31 @@ const server = Server.make(Cards, {
   snapshot: (state) => state,
   authorize: () => Effect.void,
   actions: {
-    add: ({ state, payload }) => {
+    add: Effect.fn("Cards.add")(function* ({ state, payload }) {
       if (state.cards.some((card) => card.id === payload.id))
-        return Effect.fail(CardRejected.make({ reason: "Duplicate" }));
+        return yield* CardRejected.make({ reason: "Duplicate" });
       const card = { ...payload, lane: "todo" as const };
 
-      return Effect.succeed(
-        Server.commit({
-          state: { cards: [...state.cards, card] },
-          events: [{ _tag: "Added" as const, card }],
-          result: { id: card.id, count: state.cards.length + 1 },
-        }),
-      );
-    },
-    move: ({ state, payload }) => {
+      return {
+        state: { cards: [...state.cards, card] },
+        events: [{ _tag: "Added", card }],
+        result: { id: card.id, count: state.cards.length + 1 },
+      };
+    }),
+    move: Effect.fn("Cards.move")(function* ({ state, payload }) {
       if (!state.cards.some((card) => card.id === payload.id))
-        return Effect.fail(CardRejected.make({ reason: "Missing" }));
+        return yield* CardRejected.make({ reason: "Missing" });
 
-      return Effect.succeed(
-        Server.commit({
-          state: {
-            cards: state.cards.map((card) =>
-              card.id === payload.id ? { ...card, lane: payload.lane } : card,
-            ),
-          },
-          events: [{ _tag: "Moved" as const, ...payload }],
-          result: payload,
-        }),
-      );
-    },
+      return {
+        state: {
+          cards: state.cards.map((card) =>
+            card.id === payload.id ? { ...card, lane: payload.lane } : card,
+          ),
+        },
+        events: [{ _tag: "Moved", ...payload }],
+        result: payload,
+      };
+    }),
   },
   plugins: [board],
 });
