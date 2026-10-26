@@ -25,6 +25,7 @@ export default class CounterWorker extends Cloudflare.Worker<CounterWorker>()(
 ```
 
 `provide(AlchemyServices("CounterObject"))` returns Alchemy's native declaration.
+Use `typeof CounterObject.Type` for its declared instance type.
 The name identifies the infrastructure resource; keep it stable across deployments.
 `CounterObject.handler` acquires the native binding and returns the Worker's fetch
 Effect. It uses the shared source's `path` and `id` schema. The default URL is

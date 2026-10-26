@@ -15,7 +15,7 @@ export const CounterObject = DurableObject.make(CounterServer, {
   },
 }).provide(EffectCfServices);
 
-export type CounterObject = InstanceType<typeof CounterObject>;
+export type CounterObject = typeof CounterObject.Type;
 
 const Counters = CounterObject.binding("COUNTERS");
 

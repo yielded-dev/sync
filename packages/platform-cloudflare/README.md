@@ -8,7 +8,8 @@ At application composition, call `definition.provide(EffectCfServices)` for
 [effect-cf](../platform-effect-cf/README.md), or
 `definition.provide(AlchemyServices("CounterObject"))` for
 [Alchemy](../platform-alchemy-cf/README.md). These return the framework's native
-class or resource declaration. Storage opens only when an object activates.
+class or resource declaration. Use `typeof CounterObject.Type` to extract its
+instance type. Storage opens only when an object activates.
 
 For custom native integration, `Cloudflare.make(server, state, options)` acquires platform services and adapts
 one source per object. It returns fetch and WebSocket lifecycle handlers plus an

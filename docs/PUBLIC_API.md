@@ -158,6 +158,8 @@ resources. At application composition, `definition.provide(EffectCfServices)`
 constructs the native effect-cf class; its `binding(name)` supplies the typed
 namespace client and Worker layer. `definition.provide(AlchemyServices(name))`
 constructs Alchemy's native resource declaration with an explicit logical name.
+The provided object exposes a type-only `Type` member for its native instance:
+`typeof CounterObject.Type`.
 These construction providers preserve the framework's native lifecycle and
 registration. Each adapter package also exports `layer(options)` for per-object services in
 ordinary Effect composition. Both use shared SQLite and crypto defaults, with

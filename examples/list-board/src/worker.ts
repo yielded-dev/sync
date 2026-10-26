@@ -59,7 +59,7 @@ export const BoardObject = DurableObject.make(BoardServer, {
   sockets: { maxConnections: 32, bufferSize: 32 },
 }).provide(EffectCfServices);
 
-export type BoardObject = InstanceType<typeof BoardObject>;
+export type BoardObject = typeof BoardObject.Type;
 
 const Boards = BoardObject.binding("BOARDS");
 
