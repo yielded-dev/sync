@@ -11,6 +11,7 @@ native transport and lifecycle hooks, and client persistence for restart recover
 | ----------------------------------- | --------------------------------------------------------------- |
 | `@yielded/sync`                     | Shared contracts, with `./client` and `./atom` entry points     |
 | `@yielded/sync/server`              | `Server.host`, `ServerRpc`, execution, and server storage ports |
+| `@yielded/sync-platform-browser`    | `BrowserSource`: browser services and source Atom bindings      |
 | `@yielded/sync-persistence`         | `Persistence`: shared record policy and custom drivers          |
 | `@yielded/sync-local-indexeddb`     | `IndexedDb`: browser persistence                                |
 | `@yielded/sync-platform-cloudflare` | `Cloudflare` transport and lifecycle; `SqliteStorage`           |
@@ -30,6 +31,11 @@ and ID schema with the client; the application supplies authentication.
 Their `layer(options)` functions expose
 the same platform services for custom composition. Server
 implementations are not exported from root or client entry points.
+
+For browser clients, `BrowserSource.bind` derives the connection from the client
+definition and ID, supplies browser crypto, and creates the Atom runtime. Supply
+an actor and either a persistence Layer or `"volatile"`; credentials remain
+application-owned. Use `SourceAtom.bind` for custom runtime composition.
 
 For client persistence, choose how much implementation to supply:
 

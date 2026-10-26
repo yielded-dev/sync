@@ -32,6 +32,7 @@ Start with the [documentation](https://yielded.dev/sync/),
 | Package                             | Responsibility                                                      |
 | ----------------------------------- | ------------------------------------------------------------------- |
 | `@yielded/sync`                     | Shared contracts, portable server hosts, clients, and Atom bindings |
+| `@yielded/sync-platform-browser`    | Browser services and Atom bindings with caller-provided persistence |
 | `@yielded/sync-persistence`         | Shared client persistence policy and driver contracts               |
 | `@yielded/sync-local-indexeddb`     | Browser client persistence                                          |
 | `@yielded/sync-platform-cloudflare` | Cloudflare transport, lifecycle, and SQLite storage                 |

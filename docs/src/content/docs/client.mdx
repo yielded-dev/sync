@@ -212,18 +212,18 @@ deleting local data or changing namespaces.
 
 ## Atom bindings
 
-`SourceAtom.bind` creates a source instance with typed action atoms. Supply an
-`Atom.runtime` containing `CurrentActor`, `Transport`, and any services required
-by the client definition. Persistent mode also requires `ReplicaPersistence`.
+`BrowserSource.bind` creates a browser source instance with typed action atoms.
+It supplies the WebSocket transport, browser crypto, current actor, and Atom
+runtime. The client definition already contains the source contract.
 
 ```tsx
 import { useAtom } from "@effect/atom-react";
-import { SourceAtom } from "@yielded/sync/atom";
+import { BrowserSource } from "@yielded/sync-platform-browser";
 
-export const counter = SourceAtom.bind(definition, {
-  runtime,
-  address: Counter.address(CounterId.make("demo")),
-  persistence: { mode: "volatile" },
+export const counter = BrowserSource.bind(definition, {
+  id: CounterId.make("demo"),
+  actorId: "alice",
+  persistence: "volatile",
 });
 
 function SetCounter() {
@@ -237,11 +237,24 @@ function SetCounter() {
 }
 ```
 
+The origin defaults to the current page; optional `origin` and `query` configure
+the connection. The actor scopes local ownership and does not authenticate it.
+Pass a `ReplicaPersistence` Layer, such as `IndexedDb.layer({ namespace: "counter" })`,
+instead of `"volatile"` for persistent operation. The Layer receives the current
+actor; storage setup failures never switch to volatile mode.
+
+Use `counter.runtime.fn` for application workflows needing the supplied browser
+services. For an existing runtime or custom transport, `SourceAtom.bind(definition,
+{ runtime, address, persistence })` accepts an `Atom.runtime` containing
+`CurrentActor`, `Transport`, and the definition's services. Its persistence option
+is `{ mode: "volatile" }` or `{ mode: "persistent" }`; persistent mode requires
+`ReplicaPersistence` in that runtime.
+
 Define bindings once, or use `Atom.family` for parameterized addresses. Their
 client and lease are acquired lazily and shared within the registry. Disposal
 releases them; dispose the old registry before switching actors.
 The [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
-shows complete runtime and `RegistryProvider` setup.
+shows browser persistence, workflows, and `RegistryProvider` setup.
 
 | Binding             | Behavior                                                                        |
 | ------------------- | ------------------------------------------------------------------------------- |

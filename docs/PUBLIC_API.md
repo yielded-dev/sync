@@ -14,6 +14,7 @@ wire formats and implementation details.
 | `@yielded/sync/server`              | Private state, portable hosting, RPC handlers, storage and outbox contracts        |
 | `@yielded/sync/client`              | Scoped replicas, transport, recovery, and persistence ports                        |
 | `@yielded/sync/atom`                | Atom bindings over the headless client                                             |
+| `@yielded/sync-platform-browser`    | Browser services and source bindings with caller-provided persistence              |
 | `@yielded/sync-platform-cloudflare` | Native Cloudflare transport, lifecycle, scheduling, and SQLite storage             |
 | `@yielded/sync-platform-effect-cf`  | Native effect-cf integration                                                       |
 | `@yielded/sync-platform-alchemy-cf` | Native Alchemy integration                                                         |
@@ -241,6 +242,19 @@ atoms. Declared plugins have the same bindings under `plugins.<id>`. `retry` and
 `recover` use the same lease and exact command identities. Action atoms follow
 Effect Atom's cancellation behavior; `actions.<name>.concurrent` opts into
 concurrent writes. Application workflows can await them with `get.setResult`.
+
+`BrowserSource.bind` from `@yielded/sync-platform-browser` composes that binding
+with a browser WebSocket transport, crypto, and `CurrentActor`. Supply the client
+definition, typed `id`, `actorId`, and either a `ReplicaPersistence` Layer or
+`"volatile"`. A supplied Layer selects persistent mode; setup failures remain
+typed failures and never select volatile mode. Persistence may require the
+browser services, including `CurrentActor`; the adapter owns no storage driver.
+The origin defaults to the current page and may be overridden. Query parameters
+are explicit application credentials or routing data, never inferred from the
+actor. The source contract owns the path and ID encoding. Browser resources are
+acquired lazily, and `runtime` exposes the same browser services for application
+workflow atoms. Use `SourceAtom.bind` with an application runtime for custom
+platform services or transport.
 
 `presence(payloadAtom)` optionally publishes ephemeral heartbeats while observed
 and lists other actors' latest payloads by connection. Peers expire, leave on

@@ -31,23 +31,27 @@ recovers from its cursor after a lost Durable Object activation.
 
 ## Read the example
 
-| File                             | Responsibility                                               |
-| -------------------------------- | ------------------------------------------------------------ |
-| [contract.ts](src/contract.ts)   | The board's title, cards, actions, and presence messages     |
-| [worker.ts](src/worker.ts)       | Authorization, domain actions, routing, and Durable Object   |
-| [client.ts](src/client.ts)       | Pure event and optimistic reducers                           |
-| [atoms.ts](src/browser/atoms.ts) | Runtime services, bound board, draft workflows, and presence |
-| [App.tsx](src/browser/App.tsx)   | React rendering and dispatch                                 |
-| [main.tsx](src/browser/main.tsx) | The application's `RegistryProvider`                         |
+| File                             | Responsibility                                             |
+| -------------------------------- | ---------------------------------------------------------- |
+| [contract.ts](src/contract.ts)   | The board's title, cards, actions, and presence messages   |
+| [worker.ts](src/worker.ts)       | Authorization, domain actions, routing, and Durable Object |
+| [client.ts](src/client.ts)       | Pure event and optimistic reducers                         |
+| [atoms.ts](src/browser/atoms.ts) | Browser binding, draft workflows, and presence             |
+| [App.tsx](src/browser/App.tsx)   | React rendering and dispatch                               |
+| [main.tsx](src/browser/main.tsx) | The application's `RegistryProvider`                       |
 
 `Board` is the shared source contract; `BoardClient` supplies its reducers.
-`SourceAtom.bind` connects one board instance to the application's `Atom.runtime`.
+`BrowserSource.bind` connects one board instance and provides its browser services.
 React reads `board.replica` and dispatches `board.action.moveCard`, `board.retry`,
 or `board.recover` directly. Add and rename workflows also manage their draft
 inputs, awaiting the generated action atom before clearing them.
 
-`CurrentActor` is provided once around the transport and IndexedDB Layers.
-The binding acquires its client and lease lazily; registry disposal releases them.
+The app supplies its board ID, actor, demo authentication query, and IndexedDB
+Layer. The binding derives the route, defaults to the current origin, and supplies
+the actor to persistence. `board.runtime.fn` shares its crypto service with the
+add-card workflow. The client and lease are acquired lazily; registry disposal
+releases them.
+
 `board.presence(payloadAtom)` owns heartbeats, bounded peers, and expiry while
 observed. The app supplies the focused card ID; presence stays outside the
 durable replica. This source needs no plugins.

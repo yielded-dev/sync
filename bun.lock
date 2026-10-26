@@ -36,9 +36,9 @@
       "name": "sync-list-board-example",
       "dependencies": {
         "@effect/atom-react": "catalog:",
-        "@effect/platform-browser": "catalog:",
         "@yielded/sync": "workspace:*",
         "@yielded/sync-local-indexeddb": "workspace:*",
+        "@yielded/sync-platform-browser": "workspace:*",
         "@yielded/sync-platform-effect-cf": "workspace:*",
         "effect": "catalog:",
         "effect-cf": "catalog:",
@@ -111,6 +111,23 @@
       },
       "peerDependencies": {
         "alchemy": "^2.0.0-beta.80",
+        "effect": "catalog:",
+      },
+    },
+    "packages/platform-browser": {
+      "name": "@yielded/sync-platform-browser",
+      "version": "0.1.0-beta.2",
+      "dependencies": {
+        "@effect/platform-browser": "catalog:",
+        "@yielded/sync": "workspace:*",
+      },
+      "devDependencies": {
+        "effect": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:",
+        "vite-plus": "catalog:",
+      },
+      "peerDependencies": {
         "effect": "catalog:",
       },
     },
@@ -1150,6 +1167,8 @@
     "@yielded/sync-persistence": ["@yielded/sync-persistence@workspace:packages/persistence"],
 
     "@yielded/sync-platform-alchemy-cf": ["@yielded/sync-platform-alchemy-cf@workspace:packages/platform-alchemy-cf"],
+
+    "@yielded/sync-platform-browser": ["@yielded/sync-platform-browser@workspace:packages/platform-browser"],
 
     "@yielded/sync-platform-cloudflare": ["@yielded/sync-platform-cloudflare@workspace:packages/platform-cloudflare"],
 

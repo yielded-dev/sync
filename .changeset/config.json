@@ -6,6 +6,7 @@
   "fixed": [
     [
       "@yielded/sync",
+      "@yielded/sync-platform-browser",
       "@yielded/sync-platform-cloudflare",
       "@yielded/sync-platform-effect-cf",
       "@yielded/sync-platform-alchemy-cf",

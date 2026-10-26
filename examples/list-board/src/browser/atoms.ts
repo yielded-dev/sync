@@ -1,14 +1,12 @@
-import { BrowserCrypto } from "@effect/platform-browser";
 import type { ProtocolError } from "@yielded/sync";
 import { IndexedDb } from "@yielded/sync-local-indexeddb";
-import { SourceAtom } from "@yielded/sync/atom";
-import { Client, type ClientError, type PersistenceError } from "@yielded/sync/client";
-import { Crypto, Effect, Layer, Option, Schema } from "effect";
+import { BrowserSource } from "@yielded/sync-platform-browser";
+import type { ClientError, PersistenceError } from "@yielded/sync/client";
+import { Crypto, Effect, Option, Schema } from "effect";
 import { Atom } from "effect/reactivity";
-import { Socket } from "effect/socket";
 
 import { BoardClient } from "../client.ts";
-import { Board, BoardId, type CardRejected } from "../contract.ts";
+import { BoardId, type CardRejected } from "../contract.ts";
 import { DemoActor } from "../demo.ts";
 
 const page = new URL(window.location.href);
@@ -34,24 +32,11 @@ export const actorHref = (actor: typeof DemoActor.Type) => {
   return url.href;
 };
 
-const transport = Client.layerWebSocketTransport(Board, {
-  origin: page.origin,
+export const board = BrowserSource.bind(BoardClient, {
   id: boardId,
+  actorId,
   query: { actor: actorId },
-}).pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal));
-
-const runtime = Atom.runtime(
-  Layer.mergeAll(
-    transport,
-    IndexedDb.layer({ namespace: "list-board-demo-v1" }),
-    BrowserCrypto.layer,
-  ).pipe(Layer.provideMerge(Layer.succeed(Client.CurrentActor, { actorId }))),
-);
-
-export const board = SourceAtom.bind(BoardClient, {
-  runtime,
-  address: Board.address(boardId),
-  persistence: { mode: "persistent" },
+  persistence: IndexedDb.layer({ namespace: "list-board-demo-v1" }),
   actions: { moveCard: { concurrent: true } },
 });
 
@@ -59,7 +44,7 @@ export const cardDraftAtom = Atom.make("");
 export const titleDraftAtom = Atom.make<string | null>(null);
 export const focusedCardAtom = Atom.make<string | null>(null);
 
-export const addCardAtom = runtime.fn<void>()(
+export const addCardAtom = board.runtime.fn<void>()(
   Effect.fnUntraced(function* (_, get) {
     const title = get(cardDraftAtom).trim();
 
@@ -72,7 +57,7 @@ export const addCardAtom = runtime.fn<void>()(
   }),
 );
 
-export const renameBoardAtom = runtime.fn<void>()(
+export const renameBoardAtom = board.runtime.fn<void>()(
   Effect.fnUntraced(function* (_, get) {
     const title = get(titleDraftAtom)?.trim();
 

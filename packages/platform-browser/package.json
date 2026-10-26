@@ -1,0 +1,45 @@
+{
+  "name": "@yielded/sync-platform-browser",
+  "version": "0.1.0-beta.2",
+  "description": "Browser platform services and Atom bindings for Effect Sync.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yielded-dev/sync.git",
+    "directory": "packages/platform-browser"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict"
+  },
+  "dependencies": {
+    "@effect/platform-browser": "catalog:",
+    "@yielded/sync": "workspace:*"
+  },
+  "devDependencies": {
+    "effect": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "catalog:"
+  }
+}
