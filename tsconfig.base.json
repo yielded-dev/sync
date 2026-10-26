@@ -20,7 +20,9 @@
         "name": "@effect/language-service",
         "allowedUnstableApis": [
           "@effect/atom-react",
+          "@effect/platform-browser/BrowserCrypto#layer",
           "@effect/sql-sqlite-do",
+          "effect/Crypto#Crypto",
           "effect/Crypto#make",
           "effect/PlatformError#systemError",
           "effect/http",

@@ -1,41 +1,15 @@
+import { BrowserCrypto } from "@effect/platform-browser";
 import type { ProtocolError } from "@yielded/sync";
 import { IndexedDb } from "@yielded/sync-local-indexeddb";
 import { SourceAtom } from "@yielded/sync/atom";
 import { Client, type ClientError, type PersistenceError } from "@yielded/sync/client";
-import {
-  Clock,
-  Context,
-  Crypto,
-  Effect,
-  Layer,
-  Option,
-  PlatformError,
-  Schedule,
-  Schema,
-  Stream,
-} from "effect";
+import { Clock, Context, Crypto, Effect, Layer, Option, Schedule, Schema, Stream } from "effect";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { Socket } from "effect/socket";
 
 import { BoardClient } from "../client.ts";
 import { BoardId, type CardRejected, Cards, type Lane } from "../contract.ts";
 import { DemoActor } from "../demo.ts";
-
-const webCrypto = Crypto.make({
-  randomBytes: (size) => globalThis.crypto.getRandomValues(new Uint8Array(size)),
-  digest: (algorithm, data) =>
-    Effect.tryPromise({
-      try: async () =>
-        new Uint8Array(await globalThis.crypto.subtle.digest(algorithm, new Uint8Array(data))),
-      catch: (cause) =>
-        PlatformError.systemError({
-          _tag: "Unknown",
-          module: "Crypto",
-          method: "digest",
-          cause,
-        }),
-    }),
-});
 
 const page = new URL(window.location.href);
 
@@ -92,6 +66,7 @@ const runtime = Atom.runtime(
   BoardSession.layer.pipe(
     Layer.provide([IndexedDb.layer({ namespace: "list-board-demo-v1" }), transport]),
     Layer.provide(Layer.succeed(Client.CurrentActor, { actorId })),
+    Layer.merge(BrowserCrypto.layer),
   ),
 );
 
@@ -111,7 +86,8 @@ export const addCardAtom = runtime.fn<void>()(
 
     if (title.length === 0) return;
     const { atoms } = yield* BoardSession;
-    const id = yield* webCrypto.randomUUIDv4().pipe(Effect.orDie);
+    const crypto = yield* Crypto.Crypto;
+    const id = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
 
     yield* atoms.execute(address, Cards.actions.add, { id, title });
     get.set(cardDraftAtom, "");

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@effect/atom-react": "catalog:",
+    "@effect/platform-browser": "catalog:",
     "@yielded/sync": "workspace:*",
     "@yielded/sync-local-indexeddb": "workspace:*",
     "@yielded/sync-platform-effect-cf": "workspace:*",
