@@ -2,13 +2,12 @@ import { ProtocolError } from "@yielded/sync";
 import { Server } from "@yielded/sync/server";
 import { Effect, Schema } from "effect";
 
+import { ActorId, Principal } from "./auth.ts";
 import { Counter, InvalidValue, Label } from "./contract.ts";
-
-const Principal = Schema.Struct({ actorId: Schema.String });
 
 const LabelServer = Server.plugin(Label, {
   principal: Principal,
-  state: Schema.Struct({ text: Schema.String, changedBy: Schema.NullOr(Schema.String) }),
+  state: Schema.Struct({ text: Schema.String, changedBy: Schema.NullOr(ActorId) }),
   initialize: Effect.succeed({ text: "Untitled", changedBy: null }),
   snapshot: (state) => ({ text: state.text }),
   actions: {
@@ -23,9 +22,9 @@ const LabelServer = Server.plugin(Label, {
   },
 });
 
-export const CounterServer: Server.Definition<typeof Counter.spec> = Server.make(Counter, {
+export const CounterServer = Server.make(Counter, {
   principal: Principal,
-  state: Schema.Struct({ value: Schema.Int, lastActorId: Schema.NullOr(Schema.String) }),
+  state: Schema.Struct({ value: Schema.Int, lastActorId: Schema.NullOr(ActorId) }),
   initialize: Effect.succeed({ value: 0, lastActorId: null }),
   snapshot: (state) => ({ value: state.value }),
   authorize: ({ principal }) =>

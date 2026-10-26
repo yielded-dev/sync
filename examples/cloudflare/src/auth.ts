@@ -1,5 +1,11 @@
 import { ProtocolError } from "@yielded/sync";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
+
+export const ActorId = Schema.NonEmptyString.pipe(Schema.brand("ActorId"));
+export type ActorId = typeof ActorId.Type;
+
+export const Principal = Schema.Struct({ actorId: ActorId }).pipe(Schema.brand("Principal"));
+export type Principal = typeof Principal.Type;
 
 // Local demonstration credentials. Replace with the application's auth provider.
 export const authenticate = Effect.fn("authenticate")(function* (token: string | null | undefined) {
@@ -12,5 +18,13 @@ export const authenticate = Effect.fn("authenticate")(function* (token: string |
       message: "Use a local demo credential",
     });
 
-  return { actorId, principal: { actorId }, expiresAtMillis: 4_000_000_000_000 };
+  const principal = Principal.make({ actorId: ActorId.make(actorId) });
+
+  const encoded = yield* Schema.encodeEffect(Principal)(principal).pipe(
+    Effect.mapError(() =>
+      ProtocolError.make({ reason: "Unavailable", message: "Could not encode principal" }),
+    ),
+  );
+
+  return { actorId: principal.actorId, principal: encoded, expiresAtMillis: 4_000_000_000_000 };
 });

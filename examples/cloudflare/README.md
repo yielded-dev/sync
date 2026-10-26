@@ -23,6 +23,7 @@ with idempotent destination delivery before adding a projection.
 | File                           | Responsibility                                              |
 | ------------------------------ | ----------------------------------------------------------- |
 | [contract.ts](src/contract.ts) | Public counter, label, and action schemas                   |
+| [auth.ts](src/auth.ts)         | Branded actor/principal schemas and demo authentication     |
 | [server.ts](src/server.ts)     | Private state, authorization, handlers, and outbox plans    |
 | [worker.ts](src/worker.ts)     | Native effect-cf routing, bindings, and request preparation |
 
