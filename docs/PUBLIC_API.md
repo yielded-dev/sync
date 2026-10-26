@@ -140,8 +140,11 @@ Outbox delivery is at least once, with stable ids and durable claim fencing.
 Applications own destination idempotency and classification of delivery results.
 Only completed delivery removes an obligation; failures retain evidence. Outbox
 users supply `deliver` and a durable `schedule(atMillis | undefined)` callback,
-then run `host.drainOutbox` on wakeup. Hosts arm wakeups before accepting retryable
-work. A wakeup is not proof that the destination committed.
+then run `host.drainOutbox` on wakeup. `batchSize` defaults to 10 records per drain
+and per command; `retryMillis` defaults to 60,000 ms for claims and automatic
+retries. Delivery attempts time out after half that interval. Hosts arm wakeups
+before accepting retryable work. A wakeup is not proof that the destination
+committed.
 
 Cloudflare adapters bind one source to each object and adapt the core host's
 connection closure and wakeup requests to native sockets and alarms. See the

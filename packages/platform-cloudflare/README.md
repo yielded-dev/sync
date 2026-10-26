@@ -29,6 +29,8 @@ the optional `outbox` capability.
 | `sockets`                              | 100 connections / 256 queued frames         |
 | `maxQueuedTurns` / `turnTimeoutMillis` | 128 / 5,000 ms                              |
 | `outbox`                               | Disabled                                    |
+| `outbox.batchSize`                     | 10 records per drain and per command        |
+| `outbox.retryMillis`                   | 60,000 ms                                   |
 
 Use `SqliteStorage.layer(nativeStorage, options)` when only the storage service
 is needed. Its required namespace and replay window are explicit.
@@ -80,15 +82,17 @@ replay rows only; receipts are retained for exact retry.
 `allowUnboundCommands` defaults to false. Enabling it reserves those command
 identities across authority generations.
 
-Outbox delivery is optional. Supply `outbox: { batchSize, retryMillis, deliver }`;
+Outbox delivery is optional. Supply `outbox: { deliver }`;
 the default SQLite store enables bounded capacity automatically. Override it with
 `storage.maxPendingOutbox`. A custom store must supply its own outbox capability.
 Without a storage outbox capability,
 nonempty outbox plans fail before commit. Host acquisition requires delivery
 configuration and the storage capability to be enabled together.
 
-Delivery is at least once. Destinations must deduplicate by the stable obligation
-id. Only `Delivered` removes an obligation; permanent, retryable, and indeterminate
+`retryMillis` controls the claim lease and automatic retry delay. Delivery attempts
+time out after half that interval. Delivery is at least once. Destinations must
+deduplicate by the stable obligation id. Only `Delivered` removes an obligation;
+permanent, retryable, and indeterminate
 failures retain evidence. Drain pending delivery before disabling it. Disabling
 SQLite outbox support retains its records. Sync owns the object's alarm when
 delivery is enabled, so unrelated alarm jobs need an application scheduler.

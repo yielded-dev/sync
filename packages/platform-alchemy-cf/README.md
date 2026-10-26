@@ -49,7 +49,7 @@ will not be opened. `crypto` accepts a replacement `ServerCrypto` Layer.
 composition inside an Alchemy object's runtime Effect. Use `Server.provide` for
 services acquired and released within each source operation.
 
-Outbox delivery is optional. Supply `outbox: { batchSize, retryMillis, deliver }`
+Outbox delivery is optional. Supply `outbox: { deliver }`
 to enable it with bounded SQLite capacity and native alarm scheduling. Drain
 pending work before disabling delivery. Other alarm jobs need an application
 scheduler. See the shared [options and defaults](../platform-cloudflare/README.md).

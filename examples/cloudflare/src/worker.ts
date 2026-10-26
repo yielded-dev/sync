@@ -10,8 +10,6 @@ export const CounterObject = EffectCf.make(CounterServer, {
   replay: { maxEvents: 4, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 32, bufferSize: 16 },
   outbox: {
-    batchSize: 10,
-    retryMillis: 60_000,
     deliver: () => Effect.succeed({ _tag: "Delivered" as const }),
   },
 });

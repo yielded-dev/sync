@@ -97,10 +97,14 @@ Host options default to:
 | `maxQueuedTurns`                                        | 128                          |
 | `turnTimeoutMillis`                                     | 5,000 ms                     |
 | `outbox`                                                | Disabled                     |
+| `outbox.batchSize`                                      | 10 records                   |
+| `outbox.retryMillis`                                    | 60,000 ms                    |
 
 For durable delivery, supply a storage outbox capability and
-`outbox: { batchSize, retryMillis, deliver, schedule }`. `schedule(atMillis)` must
-persist the next wakeup; `schedule(undefined)` cancels it. Run `host.drainOutbox`
+`outbox: { deliver, schedule }`. The batch size also limits outbox records per
+command; delivery attempts time out after half the retry interval.
+`schedule(atMillis)` must persist the next wakeup; `schedule(undefined)` cancels it.
+Run `host.drainOutbox`
 on each wakeup. The destination must deduplicate stable obligation ids. Drain
 pending delivery before disabling it.
 

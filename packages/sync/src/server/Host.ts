@@ -30,8 +30,13 @@ export interface HostOptions<R = never> {
   readonly maxQueuedTurns?: number;
   readonly turnTimeoutMillis?: number;
   readonly outbox?: {
-    readonly batchSize: number;
-    readonly retryMillis: number;
+    /** Maximum records per drain and per command. Defaults to 10. */
+    readonly batchSize?: number;
+    /**
+     * Claim lease and automatic retry delay in milliseconds; defaults to 60,000.
+     * Delivery attempts time out after half this interval.
+     */
+    readonly retryMillis?: number;
     readonly deliver: (
       record: OutboxRecord,
     ) => Effect.Effect<DeliveryDisposition, ProtocolError, R>;
@@ -99,6 +104,16 @@ export const host = Effect.fn("Server.host")(function* <
   const services = yield* Effect.context<R | DeliveryR | SourceStorage | ServerCrypto>();
   const storage = yield* SourceStorage;
   const outbox = storage.outbox;
+
+  const delivery =
+    options.outbox === undefined
+      ? undefined
+      : {
+          ...options.outbox,
+          batchSize: options.outbox.batchSize ?? 10,
+          retryMillis: options.outbox.retryMillis ?? 60_000,
+        };
+
   const replay = options.replay ?? { maxEvents: 512, maxBatchBytes: 600_000 };
   const connections = options.connections ?? { maxConnections: 100, bufferSize: 256 };
   const maxQueuedTurns = options.maxQueuedTurns ?? 128;
@@ -106,7 +121,7 @@ export const host = Effect.fn("Server.host")(function* <
   const limits = {
     maxEvents: replay.maxEvents,
     maxBytes: replay.maxBatchBytes,
-    maxOutbox: options.outbox?.batchSize ?? 100,
+    maxOutbox: delivery?.batchSize ?? 100,
     turnTimeoutMillis: options.turnTimeoutMillis ?? 5_000,
   };
 
@@ -115,12 +130,12 @@ export const host = Effect.fn("Server.host")(function* <
     ...Object.values(connections),
     maxQueuedTurns,
     limits.turnTimeoutMillis,
-    ...(options.outbox === undefined ? [] : [options.outbox.batchSize, options.outbox.retryMillis]),
+    ...(delivery === undefined ? [] : [delivery.batchSize, delivery.retryMillis]),
   ]) {
     if (!Number.isSafeInteger(limit) || limit <= 0)
       return yield* Effect.die("Source limits must be positive safe integers");
   }
-  if ((options.outbox === undefined) !== (outbox === undefined))
+  if ((delivery === undefined) !== (outbox === undefined))
     return yield* StorageError.make({
       message: "Outbox delivery and storage capability must be configured together",
     });
@@ -393,8 +408,6 @@ export const host = Effect.fn("Server.host")(function* <
   const drainOutbox = finish(
     Effect.gen(function* () {
       if (!active) return yield* unavailable("Source host has closed");
-      const delivery = options.outbox;
-
       if (delivery === undefined || outbox === undefined) return;
       const now = DateTime.toEpochMillis(yield* DateTime.now);
 
