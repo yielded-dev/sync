@@ -42,6 +42,9 @@ export const counter = BrowserSource.bind(CounterClient, {
 Use your signed-in actor's ID. `BrowserSource.bind` supplies it to the Layer.
 Keep the namespace stable, and close the session before changing actors or storage.
 With `"volatile"` persistence, pending edits do not survive a reload.
+IndexedDB uses Web Locks to allow one active coordinator per namespace, actor,
+and source. A second tab with the same identity fails until the first closes its
+source. Web Locks require a secure browser context.
 
 | Stored data             | What it is for                                         |
 | ----------------------- | ------------------------------------------------------ |
@@ -55,8 +58,8 @@ volatile mode.
 
 ## Compose actions
 
-Use `counter.fn` to combine actions with other atoms. Here the draft clears only
-after the server accepts the change:
+Use `counter.fn` to combine actions with other atoms. Here the draft clears after
+the edit is saved locally, even while offline with a restored source:
 
 ```ts
 import { Atom } from "effect/reactivity";
@@ -66,14 +69,16 @@ import { counter } from "./counter-atoms";
 export const draft = Atom.make(0);
 export const save = counter.fn(function* () {
   const value = yield* Atom.get(draft);
-  yield* counter.action.set({ value });
+  yield* counter.enqueue.set({ value });
   yield* Atom.set(draft, 0);
 });
 ```
 
-Use `useAtom(save)` in React, just like `counter.action.set`. The optimistic
-reducer updates the view while the action is pending. The action's result and
-the confirmed replica can arrive independently.
+Use `useAtom(save)` in React. `enqueue.set` returns the admitted command's ID;
+use `counter.action.set` when the workflow needs the server's result instead.
+Keep `counter.replica` mounted to own background delivery. The optimistic reducer
+updates the view while the command is pending. Admission requires cached or live
+authority and retains the same storage and capacity checks as headless clients.
 
 ## Open a source
 
@@ -157,11 +162,19 @@ A lost response does not mean the edit failed:
 The returned ID means the edit was admitted locally; it does not mean the server
 accepted it. Watch `pending`, `failures`, and `error` on the replica. React
 bindings expose `retry` and `recover` atoms for the same recovery operations.
+Each pending command's `recovery` reports `attempts`, `lastError`, and
+`automaticRetryExhausted`. Exhaustion requires manual retry even if the connection
+is live. These diagnostics reset on explicit `recover` and are not persisted.
 
 An uncertain `ClientError` carries its `commandId`. Retry that ID rather than
 submitting a new edit. If a result expires or the server authority changes,
 keep the unresolved command so your application can reconcile it. Dismissing a
 terminal failure with `dismissFailure` does not resolve uncertain work.
+
+Cancelling an action stops its caller, not an admitted command. Replaceable edits
+need an application conflict policy: the board example carries the observed title
+revision, omits stale optimism, and rejects stale renames on the server. Additive
+commands such as increments should retain each independent intent.
 
 See the [client API](https://github.com/yielded-dev/sync/blob/main/packages/sync/src/client/Client.ts)
 for connection limits and retry defaults. The

@@ -1,8 +1,12 @@
 import { Action, ProtocolError, Source } from "@yielded/sync";
+import { SourceAtom } from "@yielded/sync/atom";
 import { Client, ReplicaPersistence, type PersistenceError } from "@yielded/sync/client";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Atom from "effect/reactivity/Atom";
+import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -138,6 +142,29 @@ const snapshot = {
 
 const unavailable = () => ProtocolError.make({ reason: "Unavailable", message: "offline" });
 
+// Requested shared-store seam: two runtimes must not own the same persisted source concurrently.
+export const ownedRuntime = (open: Open, namespace: string) =>
+  Effect.gen(function* () {
+    const storage = yield* open(options(namespace));
+
+    const client = yield* Client.make(definition, { persistence: { mode: "persistent" } }).pipe(
+      Effect.provideService(ReplicaPersistence, storage),
+      Effect.provideService(Client.Transport, {
+        snapshot: () => Effect.succeed(snapshot),
+        subscribe: () => Stream.concat(Stream.succeed(snapshot), Stream.never),
+        execute: () => Effect.never,
+        result: () => Effect.never,
+        publishMessage: () => Effect.void,
+      }),
+    );
+
+    const source = yield* client.open(address);
+
+    yield* source.ready;
+
+    return { source, storage, admit: source.enqueue(Counter.actions.set, 8) };
+  });
+
 export const runtimeSeed = (open: Open, namespace: string) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -230,5 +257,66 @@ export const runtimeRestore = (open: Open, namespace: string) =>
         resent,
         remaining: yield* storage.intentJournal.load(address, 10),
       };
+    }),
+  );
+
+// https://github.com/yielded-dev/sync/issues/60: Atom admission must work from an offline cache.
+export const atomOffline = (open: Open, namespace: string) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const storage = yield* open(options(namespace));
+
+      yield* storage.snapshotCache.put(address, snapshot);
+
+      const runtime = Atom.runtime(
+        Layer.mergeAll(
+          Layer.succeed(Client.CurrentActor, yield* Client.CurrentActor),
+          Layer.succeed(ReplicaPersistence, storage),
+          Layer.succeed(Client.Transport, {
+            snapshot: () => Effect.fail(unavailable()),
+            subscribe: () => Stream.fail(unavailable()),
+            execute: () => Effect.fail(unavailable()),
+            result: () => Effect.fail(unavailable()),
+            publishMessage: () => Effect.void,
+          }),
+        ),
+      );
+
+      const binding = SourceAtom.bind(definition, {
+        runtime,
+        address,
+        persistence: { mode: "persistent" },
+        retry: { maxAttempts: 1, initialDelay: 1, maxDelay: 1 },
+      });
+
+      const registry = yield* Effect.acquireRelease(
+        Effect.sync(() => AtomRegistry.make()),
+        (value) => Effect.sync(() => value.dispose()),
+      );
+
+      yield* AtomRegistry.mount(registry, binding.replica);
+      yield* AtomRegistry.toStreamResult(registry, binding.replica).pipe(
+        Stream.filter((state) => state.provisional !== undefined && state.connection === "parked"),
+        Stream.take(1),
+        Stream.runDrain,
+      );
+
+      const id = yield* binding.enqueue
+        .set(8)
+        .pipe(Effect.provideService(AtomRegistry.AtomRegistry, registry));
+
+      const state = yield* AtomRegistry.getResult(registry, binding.replica);
+
+      equal(state.value, { value: 8 }, "offline Atom admission did not apply optimism");
+      equal(
+        state.pending.map((pending) => pending.commandId),
+        [id],
+        "admitted command was not observable",
+      );
+      const rows = yield* storage.intentJournal.load(address, 10);
+
+      equal(rows.length, 1, "admitted command was not durable");
+
+      return { command: rows[0].value };
     }),
   );

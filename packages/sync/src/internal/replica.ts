@@ -1,4 +1,4 @@
-import type { ClientError, Connection, Intent, Replica } from "../client/Model.ts";
+import type { ClientError, CommandRecovery, Connection, Intent, Replica } from "../client/Model.ts";
 import { comparePositions, type SourcePosition } from "../Model.ts";
 import type { Definition as SourceDefinition } from "../Source.ts";
 import type { Slot } from "./client.ts";
@@ -170,6 +170,7 @@ export const frame = (
 export const view = (
   state: State,
   applyIntent: (snapshot: Snapshot, intent: Intent) => Snapshot,
+  recovery: (commandId: string) => CommandRecovery,
 ): Replica<Snapshot, unknown> => {
   let value = state.authoritative?.snapshot ?? state.provisional;
   const generation = state.authoritative?.position.sourceAuthorityGeneration;
@@ -184,11 +185,13 @@ export const view = (
     pending.push({
       commandId: intent.command.commandId,
       phase: superseded ? "AuthorityChanged" : intent.phase,
+      recovery: recovery(intent.command.commandId),
     });
     if (!superseded && intent.phase !== "ConfirmedAwaitingResult" && value !== undefined)
       value = applyIntent(value, intent);
   }
-  for (const commandId of state.quarantined) pending.push({ commandId, phase: "Quarantined" });
+  for (const commandId of state.quarantined)
+    pending.push({ commandId, phase: "Quarantined", recovery: recovery(commandId) });
 
   return {
     value,

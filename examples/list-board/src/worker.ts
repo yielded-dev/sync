@@ -6,7 +6,7 @@ import { Effect, Option, Schema } from "effect";
 import { Worker } from "effect-cf";
 import { HttpServerRequest } from "effect/http/HttpServerRequest";
 
-import { Board, CardRejected } from "./contract.ts";
+import { Board, CardRejected, RenameRejected } from "./contract.ts";
 import { DemoActor } from "./demo.ts";
 
 const Principal = Schema.Struct({ actorId: Schema.String }).pipe(Schema.brand("Principal"));
@@ -14,7 +14,7 @@ const Principal = Schema.Struct({ actorId: Schema.String }).pipe(Schema.brand("P
 const BoardServer = Server.make(Board, {
   principal: Principal,
   state: Board.spec.snapshot,
-  initialize: Effect.succeed({ title: "Board", cards: [] }),
+  initialize: Effect.succeed({ title: "Board", titleRevision: 0, cards: [] }),
   snapshot: (state) => state,
   authorize: () => Effect.void,
   actions: {
@@ -45,10 +45,17 @@ const BoardServer = Server.make(Board, {
       };
     }),
     rename: Effect.fn("Board.rename")(function* ({ state, payload }) {
+      const { title, expectedRevision } =
+        typeof payload === "string" ? { title: payload, expectedRevision: 0 } : payload;
+
+      if (expectedRevision !== state.titleRevision)
+        return yield* RenameRejected.make({ currentRevision: state.titleRevision });
+      const titleRevision = state.titleRevision + 1;
+
       return {
-        state: { ...state, title: payload },
-        events: [{ _tag: "Renamed", title: payload }],
-        result: payload,
+        state: { ...state, title, titleRevision },
+        events: [{ _tag: "Renamed", title, titleRevision }],
+        result: title,
       };
     }),
   },

@@ -207,6 +207,91 @@ const stateWhere = (
   predicate: (state: Client.State<typeof Counter.spec>) => boolean,
 ) => lease.changes.pipe(Stream.filter(predicate), Stream.take(1), Stream.runCollect);
 
+// https://github.com/yielded-dev/sync/issues/60: a live source hid exhausted command recovery.
+it.effect("exposes exhausted command recovery and permits a successful manual retry", () =>
+  Effect.gen(function* () {
+    const remote = yield* server;
+    let available = false;
+
+    const client = yield* Client.make(definition, {
+      persistence: { mode: "volatile" },
+      retry: { ...retry, maxAttempts: 1 },
+      limits: { maxSources: 1, maxPendingPerSource: 10, frameBuffer: 16, heartbeatInterval: 100 },
+    }).pipe(
+      Effect.provideService(Client.Transport, {
+        ...remote.transport,
+        execute: (command) =>
+          available ? remote.transport.execute(command) : Effect.fail(unavailable()),
+        result: (command) =>
+          available ? remote.transport.result(command) : Effect.fail(unavailable()),
+      }),
+    );
+
+    const lease = yield* client.open(address);
+
+    yield* lease.ready;
+    const id = yield* lease.enqueue(Counter.actions.add, { amount: 3 });
+
+    yield* TestClock.adjust(100);
+    expect((yield* lease.read).pending).toMatchObject([
+      {
+        commandId: id,
+        recovery: {
+          attempts: 1,
+          automaticRetryExhausted: true,
+          lastError: { reason: "OutcomeUnknown" },
+        },
+      },
+    ]);
+    expect((yield* lease.read).connection).toBe("live");
+    available = true;
+    expect(yield* lease.retry(id)).toEqual({ before: 0, after: 3 });
+    yield* stateWhere(lease, (state) => state.pending.length === 0);
+    expect((yield* lease.read).value?.source.value).toBe(3);
+    expect(remote.calls).toHaveLength(1);
+  }).pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
+);
+
+// Requested recovery-status seam: a lost connection must not erase an in-flight attempt's budget.
+it.effect("counts automatic recovery interrupted by a failed heartbeat", () =>
+  Effect.gen(function* () {
+    const remote = yield* server;
+    const started = yield* Deferred.make<void>();
+    let probeFails = false;
+
+    const client = yield* Client.make(definition, {
+      persistence: { mode: "volatile" },
+      retry: { ...retry, maxAttempts: 1 },
+      limits: { maxSources: 1, maxPendingPerSource: 10, frameBuffer: 16, heartbeatInterval: 100 },
+    }).pipe(
+      Effect.provideService(Client.Transport, {
+        ...remote.transport,
+        snapshot: (request) =>
+          probeFails ? Effect.fail(unavailable()) : remote.transport.snapshot(request),
+        execute: () => Effect.fail(unavailable()),
+        result: () => Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+      }),
+    );
+
+    const lease = yield* client.open(address);
+
+    yield* lease.ready;
+    const id = yield* lease.enqueue(Counter.actions.add, { amount: 3 });
+
+    yield* TestClock.adjust(100);
+    yield* Deferred.await(started);
+    probeFails = true;
+    yield* TestClock.adjust(100);
+    yield* stateWhere(lease, (state) => state.connection === "parked");
+    expect((yield* lease.read).pending).toMatchObject([
+      {
+        commandId: id,
+        recovery: { attempts: 1, automaticRetryExhausted: true },
+      },
+    ]);
+  }).pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
+);
+
 // Regression in 40d7ebd: cache restore discarded the authority needed to admit
 // offline edits, and an exhausted connection retry budget refused new work.
 it.effect(
@@ -626,7 +711,7 @@ it.effect("does not confirm another actor's command with the same identity", () 
     yield* remote.publish(event(1, 5, { actorId: "bob", commandId: id }));
     yield* stateWhere(lease, (state) => state.authoritative?.position.cursor === 1);
     expect((yield* lease.read).value?.source.value).toBe(7);
-    expect((yield* lease.read).pending).toEqual([{ commandId: id, phase: "Pending" }]);
+    expect((yield* lease.read).pending).toMatchObject([{ commandId: id, phase: "Pending" }]);
   }).pipe(Effect.provideService(Client.CurrentActor, { actorId: "alice" })),
 );
 
@@ -653,7 +738,7 @@ it.effect("keeps expired confirmed results unresolved without re-executing them"
       _tag: "Failure",
       failure: { reason: "OutcomeUnknown", commandId: id },
     });
-    expect((yield* lease.read).pending).toEqual([
+    expect((yield* lease.read).pending).toMatchObject([
       { commandId: id, phase: "ConfirmedAwaitingResult" },
     ]);
     expect(remote.calls).toHaveLength(1);
@@ -793,7 +878,7 @@ it.effect.each([
       const reopened = yield* client.open(address);
 
       yield* reopened.ready;
-      expect((yield* reopened.read).pending).toEqual([
+      expect((yield* reopened.read).pending).toMatchObject([
         {
           commandId: intent.command.commandId,
           phase: transition === "admission" ? "Pending" : "ConfirmedAwaitingResult",

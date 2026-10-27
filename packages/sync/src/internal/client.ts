@@ -24,7 +24,7 @@ import type {
   Lease,
 } from "../client/Client.ts";
 import { CurrentActor } from "../client/CurrentActor.ts";
-import { ClientError, type EncodedCommand, Intent } from "../client/Model.ts";
+import { ClientError, type CommandRecovery, type EncodedCommand, Intent } from "../client/Model.ts";
 import {
   ReplicaPersistence,
   type JournalRow,
@@ -79,7 +79,7 @@ interface Entry<S extends Source.Spec> {
   recoveryGeneration: string | undefined;
   dirty: boolean;
   readonly settled: Map<string, Outcome<S>>;
-  readonly recoveryAttempts: Map<string, number>;
+  readonly recoveryAttempts: Map<string, CommandRecovery>;
   messages: PubSub.PubSub<ReplicaState.Frame> | undefined;
 }
 
@@ -226,27 +226,36 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
   const signal = Effect.asVoid(PubSub.publish(changed, undefined));
 
   const present = (entry: Entry<S>): State<S> =>
-    ReplicaState.view(entry.state, (snapshot, intent) => {
-      const action = findAction(intent.command);
+    ReplicaState.view(
+      entry.state,
+      (snapshot, intent) => {
+        const action = findAction(intent.command);
 
-      if (action === undefined) throw error("InvalidValue", "Missing command action");
-      const command = Schema.decodeSync(Schema.toCodecJson(action.command))(intent.command);
-      const slot = entry.slots.find((candidate) => candidate.id === command.namespace);
+        if (action === undefined) throw error("InvalidValue", "Missing command action");
+        const command = Schema.decodeSync(Schema.toCodecJson(action.command))(intent.command);
+        const slot = entry.slots.find((candidate) => candidate.id === command.namespace);
 
-      if (slot === undefined) throw error("InvalidValue", "Missing optimistic reducer");
+        if (slot === undefined) throw error("InvalidValue", "Missing optimistic reducer");
 
-      const reduce = Object.hasOwn(slot.optimistic, command.action)
-        ? slot.optimistic[command.action]
-        : undefined;
+        const reduce = Object.hasOwn(slot.optimistic, command.action)
+          ? slot.optimistic[command.action]
+          : undefined;
 
-      return reduce === undefined
-        ? snapshot
-        : ReplicaState.replaceSlot(
-            snapshot,
-            slot.id,
-            reduce(ReplicaState.slotValue(snapshot, slot.id), command.payload),
-          );
-    }) as State<S>;
+        return reduce === undefined
+          ? snapshot
+          : ReplicaState.replaceSlot(
+              snapshot,
+              slot.id,
+              reduce(ReplicaState.slotValue(snapshot, slot.id), command.payload),
+            );
+      },
+      (id) =>
+        entry.recoveryAttempts.get(id) ?? {
+          attempts: 0,
+          lastError: undefined,
+          automaticRetryExhausted: false,
+        },
+    ) as State<S>;
 
   const commit = Effect.fn("Client.commit")(
     function* (
@@ -732,12 +741,37 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
           Stream.runDrain,
         );
       }
-      for (const id of entry.state.intents.keys()) {
-        const attempts = entry.recoveryAttempts.get(id) ?? 0;
+      for (const [id, intent] of entry.state.intents) {
+        if (intent.outcome !== null) continue;
+        const attempts = entry.recoveryAttempts.get(id)?.attempts ?? 0;
 
         if (attempts >= retry.maxAttempts) continue;
-        entry.recoveryAttempts.set(id, attempts + 1);
+
+        const recovery: CommandRecovery = {
+          attempts: attempts + 1,
+          lastError: entry.recoveryAttempts.get(id)?.lastError,
+          automaticRetryExhausted: false,
+        };
+
+        entry.recoveryAttempts.set(id, recovery);
+        yield* signal;
         yield* send(entry, sourceScope, id, true).pipe(
+          Effect.onExit((exit) =>
+            Effect.gen(function* () {
+              // Explicit recovery can clear diagnostics while this attempt is interrupted.
+              if (!entry.state.intents.has(id) || entry.recoveryAttempts.get(id) !== recovery)
+                return;
+              entry.recoveryAttempts.set(id, {
+                ...recovery,
+                lastError: Exit.isFailure(exit)
+                  ? exit.cause.reasons.find((reason) => reason._tag === "Fail")?.error
+                  : undefined,
+                automaticRetryExhausted:
+                  Exit.isFailure(exit) && recovery.attempts >= retry.maxAttempts,
+              });
+              yield* signal;
+            }),
+          ),
           Effect.catchIf(
             (failure) => failure.reason !== "Unauthorized",
             () => Effect.void,
@@ -877,6 +911,10 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
           const acquired = yield* Effect.result(
             Effect.gen(function* () {
+              if (storage?.intentJournal.acquire !== undefined)
+                yield* persistence(
+                  storage.intentJournal.acquire(address).pipe(Scope.provide(sourceScope)),
+                );
               active.slots = yield* definition.acquire.pipe(
                 Scope.provide(sourceScope),
                 Effect.provideContext(context),

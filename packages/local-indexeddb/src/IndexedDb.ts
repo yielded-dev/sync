@@ -139,11 +139,67 @@ const store = Effect.fn("IndexedDb.store")(function* (name: string, version: 1 |
   } satisfies Persistence.AtomicStore;
 });
 
+const acquire = (name: string) =>
+  Effect.acquireRelease(
+    Effect.callback<() => Promise<void>, PersistenceError>((resume) => {
+      if (globalThis.navigator?.locks === undefined) {
+        resume(
+          Effect.fail(
+            Persistence.failure(
+              "Unavailable",
+              "Source ownership requires Web Locks in a secure context",
+            ),
+          ),
+        );
+
+        return;
+      }
+      let cancelled = false;
+      let release = () => {};
+
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+
+      const request = navigator.locks.request(name, { ifAvailable: true }, (lock) => {
+        if (lock === null) {
+          resume(
+            Effect.fail(
+              Persistence.failure("Conflict", "Another runtime owns this actor's persisted source"),
+            ),
+          );
+
+          return;
+        }
+        if (cancelled) return;
+        resume(
+          Effect.succeed(() => {
+            release();
+
+            return request;
+          }),
+        );
+
+        return held;
+      });
+
+      request.catch((cause) => resume(Effect.fail(Persistence.storageError(cause))));
+
+      return Effect.sync(() => {
+        cancelled = true;
+        release();
+      });
+    }).pipe(Effect.catchDefect((cause) => Effect.fail(Persistence.storageError(cause)))),
+    (release) => Effect.promise(release),
+  ).pipe(Effect.asVoid);
+
 /**
  * Opens generation-fenced IndexedDB persistence for `CurrentActor`.
  *
  * The caller's scope owns the connections. Unreadable journals remain intact
- * for recovery; disposable cache recovery never removes retry evidence.
+ * for recovery; disposable cache recovery never removes retry evidence. Clients
+ * acquire a Web Lock per namespace, actor, and source. A second coordinator fails
+ * until the owning source closes; Web Locks require a secure browser context.
  *
  * @category constructors
  * @since 0.1.0-beta.0
@@ -160,10 +216,19 @@ export const open = Effect.fn("IndexedDb.open")(function* (
     catch: Persistence.storageError,
   });
 
-  return yield* Persistence.make(options, {
+  const handle = yield* Persistence.make(options, {
     journal: store(names.journal, 1),
     cache: store(names.cache, 2),
   });
+
+  return {
+    ...handle,
+    intentJournal: {
+      ...handle.intentJournal,
+      acquire: (address) =>
+        acquire(JSON.stringify([names.journal, handle.actorId, address.kind, address.id])),
+    },
+  };
 });
 
 /**

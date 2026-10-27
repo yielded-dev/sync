@@ -396,6 +396,62 @@ describe("EffectCfServices publication", () => {
 
   afterEach(() => reset());
 
+  // https://github.com/yielded-dev/sync/issues/60: live frames split one committed action.
+  it("publishes and replays a multi-event action as one complete batch", async () => {
+    const initial = await snapshot();
+    const client = await connect();
+
+    await client.first;
+
+    const next = new Promise<Schema.Json>((resolve) =>
+      client.socket.addEventListener(
+        "message",
+        (event) =>
+          resolve(Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Json))(event.data)),
+        { once: true },
+      ),
+    );
+
+    client.socket.send(JSON.stringify({ _tag: "Ack", requestId: "stream" }));
+
+    const outcome = await rpc("execute/$source/pair", {
+      ...header,
+      namespace: "$source",
+      action: "pair",
+      admittedGeneration: initial.position.sourceAuthorityGeneration,
+      commandId: "pair",
+      payload: 2,
+    });
+
+    const expected = {
+      _tag: "Chunk",
+      values: [
+        {
+          _tag: "Events",
+          position: { cursor: 2 },
+          events: [
+            { position: { cursor: 1 }, event: { payload: 1 } },
+            { position: { cursor: 2 }, event: { payload: 2 } },
+          ],
+        },
+      ],
+    };
+
+    try {
+      expect(outcome).toMatchObject({ _tag: "Succeeded", position: { cursor: 2 }, result: 2 });
+      expect(await next).toMatchObject(expected);
+    } finally {
+      client.socket.close();
+    }
+    const recovered = await connect("none", initial.position);
+
+    try {
+      expect(await recovered.first).toMatchObject(expected);
+    } finally {
+      recovered.socket.close();
+    }
+  });
+
   it("disconnects all subscribers after a committed command's publication is interrupted", async () => {
     const initial = await snapshot();
     const affected = await connect("interrupt");

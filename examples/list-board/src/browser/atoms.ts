@@ -6,7 +6,7 @@ import { Crypto, Effect, Option, Schema } from "effect";
 import { Atom } from "effect/reactivity";
 
 import { BoardClient } from "../client.ts";
-import { BoardId, type CardRejected } from "../contract.ts";
+import { BoardId, type CardRejected, type RenameRejected } from "../contract.ts";
 import { DemoActor } from "../demo.ts";
 
 const page = new URL(window.location.href);
@@ -59,7 +59,10 @@ export const renameBoardAtom = board.fn(function* () {
   const title = (yield* Atom.get(titleDraftAtom))?.trim();
 
   if (title === undefined || title.length === 0) return;
-  yield* board.action.rename(title);
+  const replica = yield* Atom.get(board.replica);
+
+  if (replica._tag !== "Success" || replica.value.value === undefined) return;
+  yield* board.action.rename({ title, expectedRevision: replica.value.value.titleRevision });
   yield* Atom.set(titleDraftAtom, null);
 });
 
@@ -68,9 +71,17 @@ export const presenceAtom = board.presence(
 );
 
 export type Peer = Atom.Success<typeof presenceAtom>[number];
-export type BoardError = ClientError | CardRejected | PersistenceError | ProtocolError;
+
+export type BoardError =
+  | ClientError
+  | CardRejected
+  | RenameRejected
+  | PersistenceError
+  | ProtocolError;
 
 export const errorMessage = (error: BoardError) => {
+  if (error._tag === "RenameRejected")
+    return "The title changed before this rename arrived. Review the current title and try again.";
   if (error._tag === "CardRejected")
     return error.reason === "Duplicate"
       ? "That card already exists."

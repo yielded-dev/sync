@@ -107,7 +107,7 @@ it("runs two public clients against a durable board with exact retry, rollback, 
           { concurrency: 2, discard: true },
         );
         expect(yield* aliceLease.retry(first.failure.commandId)).toEqual({ id: "one", count: 1 });
-        yield* bobLease.execute(Board.actions.rename, "Planning");
+        yield* bobLease.execute(Board.actions.rename, { title: "Planning", expectedRevision: 0 });
         yield* aliceLease.changes.pipe(
           Stream.filter((state) => state.value?.source.title === "Planning"),
           Stream.take(1),

@@ -46,6 +46,9 @@ React reads `board.replica` and dispatches `board.action.moveCard`, `board.retry
 or `board.recover` directly. Add and rename use `board.fn` generators to await
 callable actions before clearing their draft inputs. Optimistic reducers update
 the board while the action awaits its server result.
+Renames carry the observed title revision. An older pending rename cannot replace
+a newer confirmed title; retry settles it as `RenameRejected`. Cancelling a caller
+still retains its admitted command for recovery.
 
 The app supplies its board ID, actor, demo authentication query, and IndexedDB
 Layer. The binding derives the route, defaults to the current origin, and supplies

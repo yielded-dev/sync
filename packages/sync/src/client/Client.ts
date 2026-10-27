@@ -465,5 +465,13 @@ export {
 
 /** @since 0.1.0-beta.0 */
 export { view, type View } from "./View.ts";
+
 /** @since 0.1.0-beta.0 */
-export { ClientError, EncodedCommand, Intent, type Replica, type Connection } from "./Model.ts";
+export {
+  ClientError,
+  EncodedCommand,
+  Intent,
+  type Replica,
+  type Connection,
+  type CommandRecovery,
+} from "./Model.ts";

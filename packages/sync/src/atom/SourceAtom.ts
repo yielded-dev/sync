@@ -113,6 +113,10 @@ export const make = <S extends Source.Spec>(runtime: Runtime<S>): Bindings<S> =>
     replica: (address: Address) => active(key(address)),
     passiveReplica: (address: Address) => passive(key(address)),
     status: (address: Address) => statuses(key(address)),
+    enqueue: (address, action, payload) =>
+      Effect.scoped(
+        Effect.flatMap(runtime.open(address), (lease) => lease.enqueue(action, payload)),
+      ),
     execute: <A extends Actions<S>>(
       address: Address,
       action: A,
@@ -195,6 +199,19 @@ interface SlotBinding<S extends Plugin.Spec, E, Rejection> {
       Action.Payload<A>,
       Action.Success<A>,
       Action.Error<A> | ClientError | E
+    >;
+  };
+  /**
+   * Admit independently of live readiness and return the command id. Persistent
+   * mode journals before returning; volatile mode admits only in memory. Cached
+   * authority (or explicit unbound admission) is required. Keep a replica mounted
+   * to own background delivery; admission does not wait for the server result.
+   */
+  readonly enqueue: {
+    readonly [A in S["actions"][number] as A["name"]]: ActionAtom<
+      Action.Payload<A>,
+      string,
+      ClientError | E
     >;
   };
   /** Announce this payload and observe other actors while the returned atom is mounted. */
@@ -411,6 +428,25 @@ export function bind<S extends Source.Spec, R, E, Services>(
     return Object.fromEntries(entries) as SlotBinding<P, E, Action.Error<Actions<S>>>["action"];
   };
 
+  const enqueueAtoms = <P extends Plugin.Spec>(
+    registered: Readonly<Record<string, Action.Definition>>,
+  ): SlotBinding<P, E, Action.Error<Actions<S>>>["enqueue"] =>
+    Object.fromEntries(
+      Object.entries(registered).map(([name, registeredAction]) => {
+        const action = registeredAction as Actions<S>;
+
+        return [
+          name,
+          callable(
+            withLease((lease, payload: Action.Payload<typeof action>) =>
+              lease.enqueue(action, payload),
+            ),
+            { concurrent: true },
+          ),
+        ];
+      }),
+    ) as SlotBinding<P, E, Action.Error<Actions<S>>>["enqueue"];
+
   const registeredPlugins: Readonly<Record<string, Pick<Plugin.Definition, "actions">>> =
     definition.contract.plugins;
 
@@ -432,6 +468,7 @@ export function bind<S extends Source.Spec, R, E, Services>(
             { initialValue: initial<unknown, Action.Error<Actions<S>>>() },
           ).pipe(Atom.setIdleTTL(0)),
           action: actionAtoms(registeredPlugins[id].actions, pluginSettings?.[id]?.actions),
+          enqueue: enqueueAtoms(registeredPlugins[id].actions),
           presence: (payload: Atom.Atom<unknown>, settings?: PresenceOptions) =>
             Presence.make(
               options.runtime,
@@ -452,6 +489,7 @@ export function bind<S extends Source.Spec, R, E, Services>(
     replica,
     status,
     action: actionAtoms<S>(definition.contract.actions, options.actions),
+    enqueue: enqueueAtoms<S>(definition.contract.actions),
     plugins,
     retry: Atom.fn(
       withLease((lease, commandId: string) =>
@@ -495,6 +533,12 @@ export interface Bindings<S extends Source.Spec> {
   readonly replica: (address: Address<S>) => ReplicaAtom<S>;
   readonly passiveReplica: (address: Address<S>) => ReplicaAtom<S>;
   readonly status: (address: Address<S>) => Atom.Atom<Connection>;
+  /** Local admission without live readiness. Active replica atoms own background delivery. */
+  readonly enqueue: <A extends Actions<S>>(
+    address: Address<S>,
+    action: A,
+    payload: Action.Payload<NoInfer<A>>,
+  ) => Effect.Effect<string, ClientError>;
   readonly execute: <A extends Actions<S>>(
     address: Address<S>,
     action: A,

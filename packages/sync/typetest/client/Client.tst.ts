@@ -59,3 +59,14 @@ const atoms = SourceAtom.make(runtime);
 const mutation = atoms.execute(Counter.address("demo"), Counter.actions.set, { value: 1 });
 
 expectTypeOf<Effect.Success<typeof mutation>>().toEqualTypeOf<Effect.Success<typeof result>>();
+
+// Requested offline admission seam preserves payload typing without exposing domain rejection.
+const admission = atoms.enqueue(Counter.address("demo"), Counter.actions.set, { value: 1 });
+
+expectTypeOf<Effect.Success<typeof admission>>().toEqualTypeOf<string>();
+expectTypeOf<Effect.Error<typeof admission>>().toEqualTypeOf<ClientError>();
+
+export const invalidAdmission = atoms.enqueue(Counter.address("demo"), Counter.actions.set, {
+  // @ts-expect-error Admission retains the action's payload contract.
+  text: "wrong",
+});

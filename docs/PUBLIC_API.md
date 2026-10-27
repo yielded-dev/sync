@@ -232,6 +232,11 @@ Unsupported intents remain quarantined, reserving their exact identities and cap
 
 Journal batches apply atomically with generation checks. Inserts reserve new
 identities and replacements require existing rows. Conflicts are explicit.
+Only one runtime may coordinate an actor's persisted source at a time. The optional
+journal `acquire(address)` hook holds that ownership for the source scope, before
+restoration and until its operations stop. Without it, the application must enforce
+single ownership. IndexedDB supplies this hook through Web Locks and rejects a
+second coordinator for the same namespace, actor, and source.
 Unreadable journals and unknown physical formats remain intact for recovery.
 Cache recovery never resets journal data or permits stale-generation writes.
 
@@ -256,7 +261,10 @@ their own persistence strategy.
 to the application's Atom runtime. It lazily acquires one client and lease per
 registry, using the runtime's actor, transport, persistence, and definition
 services. `replica` projects root data; `action.<name>` exposes typed callable
-atoms. Calling an action returns an Effect requiring the current `AtomRegistry`
+atoms. `enqueue.<name>` admits work without waiting for a live connection and
+returns its command id after local journal admission. It retains the core's
+authority, storage, and capacity checks; persistent mode is required for durability.
+Calling an action returns an Effect requiring the current `AtomRegistry`
 and completes with that invocation's result or error. It shares the writable
 atom's execution and observable mutation state. Declared plugins have the same
 bindings under `plugins.<id>`. `retry` and

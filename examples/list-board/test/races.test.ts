@@ -105,7 +105,7 @@ it.each(["event", "reply"] as const)(
       ]);
 
       const renamed = yield* bob
-        .run(bob.board.action.rename("Bob's board"))
+        .run(bob.board.action.rename({ title: "Bob's board", expectedRevision: 0 }))
         .pipe(Effect.forkScoped);
 
       const remote = yield* bob.request;
@@ -127,6 +127,7 @@ it.each(["event", "reply"] as const)(
 
       const expected = {
         title: "Bob's board",
+        titleRevision: 1,
         cards: [card("one", "Original"), card("two", "Survivor")],
       };
 
@@ -297,12 +298,13 @@ it("cancels only its own concurrent caller and retains the exact command for ret
     ]);
   }).pipe(Effect.scoped, Effect.provide(TestClock.layer()), Effect.runPromise));
 
-it("replaces a nonconcurrent caller while a generator waits to clear its draft", () =>
+// https://github.com/yielded-dev/sync/issues/60: recover the interrupted older rename to settlement.
+it("replaces a nonconcurrent caller without allowing its older rename to overwrite the newer title", () =>
   Effect.gen(function* () {
     const alice = yield* participant("alice");
 
     const replaced = yield* alice
-      .run(alice.board.action.rename("Old draft"))
+      .run(alice.board.action.rename({ title: "Old draft", expectedRevision: 0 }))
       .pipe(Effect.forkScoped);
 
     const original = yield* alice.request;
@@ -312,7 +314,7 @@ it("replaces a nonconcurrent caller while a generator waits to clear its draft",
 
     const save = alice.board.fn(function* () {
       const title = yield* Atom.get(draft);
-      const result = yield* alice.board.action.rename(title);
+      const result = yield* alice.board.action.rename({ title, expectedRevision: 0 });
 
       yield* Atom.set(draft, "");
 
@@ -345,7 +347,44 @@ it("replaces a nonconcurrent caller while a generator waits to clear its draft",
     yield* alice.deliver;
     expect(yield* Fiber.join(saved)).toBe("New draft");
     expect(alice.registry.get(draft)).toBe("");
-    expect((yield* alice.state((value) => value.pending.length === 1)).pending[0]?.commandId).toBe(
-      original.command.commandId,
-    );
+    const remaining = yield* alice.state((value) => value.pending.length === 1);
+
+    expect(remaining.pending[0]?.commandId).toBe(original.command.commandId);
+    expect(remaining.value?.title).toBe("New draft");
+
+    const recovery = yield* alice
+      .run(
+        Effect.result(
+          Effect.gen(function* () {
+            yield* Atom.set(alice.board.retry, original.command.commandId);
+
+            return yield* AtomRegistry.getResult(alice.registry, alice.board.retry, {
+              suspendOnWaiting: true,
+            });
+          }),
+        ),
+      )
+      .pipe(Effect.forkScoped);
+
+    const lookup = yield* alice.lookup;
+
+    yield* lookup.reply(yield* lookup.send);
+    const retried = yield* alice.request;
+
+    expect(retried.command).toEqual(original.command);
+    yield* retried.reply(yield* retried.send);
+    expect(yield* Fiber.join(recovery)).toMatchObject({
+      _tag: "Failure",
+      failure: { _tag: "RenameRejected" },
+    });
+    const settled = yield* alice.state((value) => value.pending.length === 0);
+
+    expect(settled.value?.title).toBe("New draft");
+    expect(settled.authoritative?.snapshot.title).toBe("New draft");
+    expect(settled.failures).toMatchObject([
+      {
+        commandId: original.command.commandId,
+        error: { _tag: "RenameRejected" },
+      },
+    ]);
   }).pipe(Effect.scoped, Effect.provide(TestClock.layer()), Effect.runPromise));

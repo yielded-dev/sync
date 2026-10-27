@@ -24,6 +24,11 @@ capacity options and recovery. `databaseNames(namespace)` returns the stable
 journal and cache database names. Browser storage remains subject to quota and
 eviction; persistent-storage requests belong to the application.
 
+Web Locks enforce one active client coordinator per namespace, actor, and source.
+A second tab using that same identity fails until the first releases its source
+or closes. Use a secure browser context; sharing a journal without Web Locks is
+unsupported. Different actors and source addresses can remain active together.
+
 Keep handles alive until the session finishes and close it before switching
 actors. Disposal closes database connections and retains stored data. An
 IndexedDB version change closes affected connections; reopen the session to
