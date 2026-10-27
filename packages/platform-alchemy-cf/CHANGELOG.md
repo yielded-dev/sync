@@ -1,5 +1,26 @@
 # @yielded/sync-platform-alchemy-cf
 
+## 0.1.0-beta.3
+
+### Minor Changes
+
+- dae2bab: Expose direct module imports with documented public contracts, defaults, and resource lifetimes. Keep runtime helpers private, including the previously exposed `Server.Slot` and `Server.canonicalJson` internals.
+- cfae88b: Use Alchemy's separate `@alchemy.run/cloudflare` provider package by installing it
+  alongside the matching Alchemy release, starting with `2.0.0-beta.84`.
+
+  Support `effect-cf` 0.58 alongside the existing supported releases.
+
+- 6d4a1ae: Host sources with caller-provided storage, or use `DurableObject.make(...).provide(...)` with `EffectCfServices` or `AlchemyServices` for Cloudflare defaults, typed routes, and `.Type` instance inference; optional outbox delivery defaults to batches of 10 and a 60-second retry interval.
+
+  Bind replicas, callable action atoms, generator functions, and optional presence to an application's Atom runtime; keep plugins optional and IndexedDB or custom persistence separate from core, and replace the Expo adapter with one runnable browser example.
+
+### Patch Changes
+
+- Updated dependencies [dae2bab]
+- Updated dependencies [6d4a1ae]
+  - @yielded/sync@0.1.0-beta.3
+  - @yielded/sync-platform-cloudflare@0.1.0-beta.3
+
 ## 0.1.0-beta.2
 
 ### Patch Changes
