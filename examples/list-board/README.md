@@ -73,6 +73,7 @@ with real authentication before deployment.
 The example has no projection destination. Applications needing one own the
 projection records, idempotent destination, and outbox delivery Effect.
 
-Run `vp run sync-list-board-example#test` for the Worker consumer check and
+Run `vp run sync-list-board-example#test` for deterministic multi-client race and
+recovery tests against the Worker and SQLite. Run
 `vp run sync-list-board-example#build` to build the UI and Worker followed by a
 deployment dry run. The browser steps above exercise the React UI.

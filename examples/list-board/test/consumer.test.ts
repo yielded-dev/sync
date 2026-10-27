@@ -1,14 +1,13 @@
 import { ProtocolError } from "@yielded/sync";
 import { Client, ClientError } from "@yielded/sync/client";
-import { SELF, env, evictDurableObject, reset } from "cloudflare:test";
+import { env, evictDurableObject, reset } from "cloudflare:test";
 import { Context, Effect, Fiber, Layer, Schema, Stream } from "effect";
-import { RpcClient, RpcSerialization } from "effect/rpc";
-import { Socket } from "effect/socket";
 import { afterEach, expect, it } from "vite-plus/test";
 
 import { BoardClient } from "../src/client.ts";
 import { BoardId, CardRejected, Board } from "../src/contract.ts";
 import type { BoardObject } from "../src/worker.ts";
+import { socketProtocol } from "./transport.ts";
 
 const bindings = env as { BOARDS: DurableObjectNamespace<BoardObject> };
 const address = Board.address(BoardId.make("shared"));
@@ -16,41 +15,6 @@ const stub = () => bindings.BOARDS.getByName("boards:shared");
 
 const unavailable = () =>
   ProtocolError.make({ reason: "Unavailable", message: "Response lost after commit" });
-
-const socketProtocol = (onConnect?: (socket: WebSocket) => void) =>
-  RpcClient.layerProtocolSocket({ retryTransientErrors: false }).pipe(
-    Layer.provide(
-      Layer.effect(
-        Socket.Socket,
-        Socket.fromWebSocket(
-          Effect.acquireRelease(
-            Effect.gen(function* () {
-              const { actorId } = yield* Client.CurrentActor;
-
-              const response = yield* Effect.promise(() =>
-                SELF.fetch("https://example.test/sync/boards/shared", {
-                  headers: {
-                    upgrade: "websocket",
-                    authorization: `Bearer ${actorId}-local`,
-                  },
-                }),
-              );
-
-              const socket = response.webSocket;
-
-              if (socket === null) return yield* Effect.die("Upgrade failed");
-              socket.accept();
-              onConnect?.(socket);
-
-              return socket;
-            }),
-            (socket) => Effect.sync(() => socket.close(1000)),
-          ),
-        ),
-      ),
-    ),
-    Layer.provide(RpcSerialization.layerJson),
-  );
 
 afterEach(() => reset());
 
