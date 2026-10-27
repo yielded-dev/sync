@@ -2,8 +2,8 @@
 title: Packages and hosts
 ---
 
-Install only the integrations your app needs. Their manifests list compatible
-Effect and framework peers.
+Install the integrations your app needs. Each package's manifest lists its
+compatible Effect and framework peer dependencies.
 
 ## Cloudflare
 
@@ -27,10 +27,11 @@ bun add @yielded/sync-platform-cloudflare \
 | effect-cf | `EffectCfServices` | [Counter Worker](../guide/getting-started.md#connect-a-server)                                        |
 | Alchemy   | `AlchemyServices`  | [Alchemy setup](https://github.com/yielded-dev/sync/blob/main/packages/platform-alchemy-cf/README.md) |
 
-Each adapter supplies SQLite, crypto, transport, and lifecycle hooks. Your app
-supplies authentication. Replace SQLite by passing a `SourceStorage` Layer as
-`storage` to `DurableObject.make`.
-Keep object identities and storage namespaces stable when retaining data.
+Each adapter supplies SQLite, crypto, transport, and lifecycle hooks; your app
+supplies authentication. To use another store, pass a `SourceStorage` Layer as
+`storage` to `DurableObject.make`. Keep object identities and storage namespaces
+stable if you want to retain the existing data. A new namespace starts a separate
+store; reconcile pending commands and delivery work before switching.
 
 ## Other hosts
 
@@ -51,8 +52,8 @@ bun add @yielded/sync-platform-browser \
   @yielded/sync-local-indexeddb @effect/atom-react react
 ```
 
-`BrowserSource.bind` supplies browser services and Atom bindings. Add an
-`IndexedDb` Layer to retain pending edits across reloads, or choose `"volatile"`.
+`BrowserSource.bind` supplies browser services and Atom bindings. To keep pending
+edits across reloads, add an `IndexedDb` Layer. Otherwise, choose `"volatile"`.
 See [client setup](../client.mdx).
 
 For custom persistence, implement `ReplicaPersistence` directly or use

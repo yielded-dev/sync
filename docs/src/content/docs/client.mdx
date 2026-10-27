@@ -4,35 +4,54 @@ title: Clients and React
 
 import { Trace } from "@yielded/starlight-theme/components";
 
-Continue from the [counter client](./guide/getting-started.md#connect-a-client).
+The [getting started counter](./guide/getting-started.md#connect-a-client) uses a
+browser binding with volatile storage. This guide adds persistence and recovery,
+and shows how to open a client without React.
 
 ## Atom bindings
 
-Define bindings once. The registry owns their connections; dispose it before
-switching actors. `actorId` selects local ownership and must match your session,
-but it does not authenticate requests. The server still verifies the connection.
+Define your bindings once. Their connections live in the Atom registry, so dispose
+the registry before switching actors. `actorId` selects the local session and must
+match the signed-in actor; it does not authenticate requests. The server still
+verifies the connection.
 
 ## Persistence
 
-To retain pending edits across reloads, replace `"volatile"` with an IndexedDB
-Layer in `counter-atoms.ts`:
+To retain pending edits across reloads, install the IndexedDB adapter:
 
-```ts
-import { IndexedDb } from "@yielded/sync-local-indexeddb";
-
-const persistence = IndexedDb.layer({ namespace: "counter" });
+```sh
+bun add @yielded/sync-local-indexeddb
 ```
 
-`BrowserSource.bind` supplies the Layer's actor. Keep the namespace stable and
-close the session before changing actors or storage.
+Then use its Layer in `counter-atoms.ts`:
+
+```ts title="counter-atoms.ts"
+import { IndexedDb } from "@yielded/sync-local-indexeddb";
+import { BrowserSource } from "@yielded/sync-platform-browser";
+
+import { CounterId } from "./counter";
+import { CounterClient } from "./counter-client";
+
+export const counter = BrowserSource.bind(CounterClient, {
+  id: CounterId.make("demo"),
+  actorId: "alice",
+  persistence: IndexedDb.layer({ namespace: "counter" }),
+});
+```
+
+Use your signed-in actor's ID. `BrowserSource.bind` supplies it to the Layer.
+Keep the namespace stable, and close the session before changing actors or storage.
+With `"volatile"` persistence, pending edits do not survive a reload.
 
 | Stored data             | What it is for                                         |
 | ----------------------- | ------------------------------------------------------ |
 | Pending-command journal | Retrying unresolved edits with their original identity |
 | Snapshot cache          | Showing the last known state while reconnecting        |
 
-Never delete the journal to repair a cache. Browser quota or permission failures
-can refuse new edits; persistent mode does not silently switch to volatile mode.
+Never delete the journal to repair a cache: it holds the information needed to
+retry unresolved edits. Storage errors, such as a browser quota or permission
+failure, can prevent new edits. Persistent mode does not silently switch to
+volatile mode.
 
 ## Compose actions
 
@@ -52,8 +71,8 @@ export const save = counter.fn(function* () {
 });
 ```
 
-Use `useAtom(save)` in React, just like `counter.action.set`. The configured
-optimistic reducer updates the view while the action is pending. Its result and
+Use `useAtom(save)` in React, just like `counter.action.set`. The optimistic
+reducer updates the view while the action is pending. The action's result and
 the confirmed replica can arrive independently.
 
 ## Open a source
@@ -96,9 +115,9 @@ scope. Persistent headless sessions use `{ mode: "persistent" }` and require a
 ### Transport
 
 The WebSocket transport derives the path from `Counter` and encodes the ID.
-Browser bindings default to the page origin; `origin` and `query` override the
-connection settings. The app owns credentials. This transport serves one source
-address; multi-address apps need a routing transport. See the
+Browser bindings use the page origin by default; use `origin` and `query` to
+change the connection settings. Your app supplies any credentials. This transport
+serves one source address; apps with multiple addresses need a routing transport. See the
 [transport API](https://github.com/yielded-dev/sync/blob/main/packages/sync/src/client/Transport.ts)
 for custom URLs and RPC composition.
 
@@ -135,13 +154,13 @@ A lost response does not mean the edit failed:
 | `lease.recover`                  | Restart a parked connection                                    |
 
 `enqueue` needs a known server authority, which can come from a restored cache.
-Its returned ID confirms local admission, not server acceptance. Observe
-`pending`, `failures`, and `error` on the replica; React bindings expose `retry`
-and `recover` atoms for the same recovery operations.
+The returned ID means the edit was admitted locally; it does not mean the server
+accepted it. Watch `pending`, `failures`, and `error` on the replica. React
+bindings expose `retry` and `recover` atoms for the same recovery operations.
 
 An uncertain `ClientError` carries its `commandId`. Retry that ID rather than
 submitting a new edit. If a result expires or the server authority changes,
-retain the unresolved command for application reconciliation. Dismissing a
+keep the unresolved command so your application can reconcile it. Dismissing a
 terminal failure with `dismissFailure` does not resolve uncertain work.
 
 See the [client API](https://github.com/yielded-dev/sync/blob/main/packages/sync/src/client/Client.ts)

@@ -4,7 +4,7 @@ description: Shared state, optimistic updates, and typed actions for Effect appl
 template: splash
 hero:
   title: Shared state for Effect apps.
-  tagline: Define typed actions, update clients optimistically, and keep them in sync with an authoritative server.
+  tagline: Keep clients in step with server state through live updates and typed actions.
   actions:
     - text: Get started
       link: /sync/guide/getting-started/
@@ -22,15 +22,14 @@ import SyncTour from "../../components/SyncTour.astro";
 <SyncTour />
 
 <CardGrid>
+  <Card title="Live shared state">
+    Clients receive the current state, follow changes, and catch up after a disconnect.
+  </Card>
   <Card title="Typed actions">
-    Define schemas once for state, events, actions, results, and errors.
+    Define schemas for state, actions, and events. Your server decides which changes to accept.
   </Card>
-  <Card title="Optimistic clients">
-    Show edits immediately, reconcile with the server, and retry interrupted commands safely.
-  </Card>
-  <Card title="Your application, your storage">
-    Bring your own domain and authentication. Use Cloudflare and IndexedDB adapters or supply your
-    own storage.
+  <Card title="Responsive edits">
+    Show changes immediately while the server confirms them, and retry interrupted commands safely.
   </Card>
 </CardGrid>
 

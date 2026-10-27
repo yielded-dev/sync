@@ -2,13 +2,19 @@
 title: Getting started
 ---
 
+Build a counter shared by a Cloudflare Worker and a React client. The server
+keeps the current value; connected clients receive changes and can send a `set`
+action. For a complete, runnable application, see the
+[React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board).
+
 ```sh
-bun add @yielded/sync
+bun add @yielded/sync effect
 ```
 
 ## Define a source
 
-Share this counter's data and actions between the server and client:
+First, define the counter's data and actions in a contract shared by the server
+and client:
 
 ```ts title="counter.ts"
 import { Action, Source } from "@yielded/sync";
@@ -32,9 +38,12 @@ export const Counter = Source.make({
 });
 ```
 
+The snapshot is what clients read, the event updates that view, and `set` is a
+request to change it. The action's result is returned to the caller.
+
 ## Connect a server
 
-Define what the `set` action does:
+On the server, define what happens when someone calls `set`:
 
 ```ts title="counter-server.ts"
 import { Server } from "@yielded/sync/server";
@@ -60,8 +69,15 @@ export const CounterServer = Server.make(Counter, {
 });
 ```
 
+The handler returns the next server state, an event for clients, and a result
+for the caller. Sync commits them together before publishing the event.
+
 Host it in a Cloudflare Durable Object using the
 [effect-cf adapter](../reference/packages.mdx#cloudflare):
+
+```sh
+bun add @yielded/sync-platform-cloudflare @yielded/sync-platform-effect-cf effect-cf
+```
 
 ```ts title="worker.ts"
 import { DurableObject } from "@yielded/sync-platform-cloudflare";
@@ -82,13 +98,15 @@ export default Worker.makeFetchHandler(Counters.layer, {
 });
 ```
 
-Your app supplies `authenticate`, `authorize`, and `Principal` in `auth.ts`.
-Add the `COUNTERS` binding and SQLite migration to your Worker config, as in the
+Provide `authenticate`, `authorize`, and `Principal` in your app's `auth.ts`.
+Then add the `COUNTERS` binding and SQLite migration to your Worker config, as in the
 [runnable board](https://github.com/yielded-dev/sync/blob/main/examples/list-board/wrangler.jsonc).
 
 ## Connect a client
 
-Tell the client how to apply confirmed changes and show edits while they are pending:
+Tell the client how to apply confirmed changes and what to show while an edit is
+pending. The optimistic reducer is optional; the event reducer keeps the local
+view in step with the server:
 
 ```ts title="counter-client.ts"
 import { Client } from "@yielded/sync/client";
@@ -106,6 +124,10 @@ export const CounterClient = Client.definition(Counter, {
 Use the [browser adapter](../reference/packages.mdx#browser-clients) to connect
 to the `demo` counter on the same origin:
 
+```sh
+bun add @yielded/sync-platform-browser @effect/atom-react react react-dom
+```
+
 ```ts title="counter-atoms.ts"
 import { BrowserSource } from "@yielded/sync-platform-browser";
 
@@ -119,7 +141,8 @@ export const counter = BrowserSource.bind(CounterClient, {
 });
 ```
 
-Use your signed-in actor's ID. The server still authenticates the request.
+Replace `"alice"` with your signed-in actor's ID. The server still authenticates
+the request.
 
 ```tsx title="App.tsx"
 import { RegistryProvider, useAtom, useAtomValue } from "@effect/atom-react";
@@ -153,7 +176,7 @@ export function App() {
 }
 ```
 
-For persistence, retry controls, or a client without React, continue with the
+For persistence, retry controls, or a client without React, see the
 [client guide](../client.mdx). The
 [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
 has the complete app setup.

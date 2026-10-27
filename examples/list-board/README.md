@@ -55,7 +55,7 @@ releases them.
 
 `board.presence(payloadAtom)` owns heartbeats, bounded peers, and expiry while
 observed. The app supplies the focused card ID; presence stays outside the
-durable replica. This source needs no plugins.
+durable replica.
 
 Server action handlers use `Effect.fn` and return `{ state, events, result }`.
 `events` update every replica; `result` is the reply to the caller. Yield a

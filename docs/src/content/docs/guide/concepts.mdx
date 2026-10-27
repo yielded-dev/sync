@@ -6,8 +6,14 @@ import { FlowMap } from "@yielded/starlight-theme/components";
 
 import SyncScenarios from "../../../components/SyncScenarios.astro";
 
-A **source** is a shared entity, such as a board or counter. Your contract defines
-its state and actions; one server authority decides which changes are accepted.
+A **source** is a piece of shared state, such as a board or counter.
+`Source.make` defines the kind of data and the actions clients can request. An
+ID selects one instance: authorized clients connected to the same board ID see
+the same board, while another ID identifies a different board.
+
+The server holds the authoritative state for each source. A client keeps a
+local copy, or **replica**. A client starts from a **snapshot** of the shared
+view, then applies **events** from the server to keep the view current.
 
 <FlowMap
   title="One source, one server authority"
@@ -56,20 +62,30 @@ its state and actions; one server authority decides which changes are accepted.
 
 ## Define, handle, reduce
 
-| You write                                         | Sync handles                                 |
-| ------------------------------------------------- | -------------------------------------------- |
-| `Source.make` schemas and actions                 | Encoding, validation, and typed calls        |
-| `Server.make` authorization and handlers          | Atomic commits, receipts, and ordered replay |
-| `Client.definition` event and optimistic reducers | Connections, local views, and recovery       |
+| Piece           | Your code                                                          | Sync handles                                 |
+| --------------- | ------------------------------------------------------------------ | -------------------------------------------- |
+| Shared contract | `Source.make` defines snapshots, events, and actions               | Encoding, validation, and typed calls        |
+| Server          | `Server.make` defines state, authorization, and action handlers    | Atomic commits, receipts, and ordered replay |
+| Client          | `Client.definition` applies events and optionally predicts actions | Connections, replicas, and recovery          |
 
-The [getting started example](./getting-started.md) connects these three pieces.
-Applications also own authentication, UI, and external side effects.
+The [getting started guide](./getting-started.md) connects these pieces for a
+counter. Your application also supplies authentication, the UI, and any external
+side effects. All authorized viewers of one source receive the same public
+snapshot; keep viewer-private data behind a separate source boundary.
 
 ## Optimism and retries
 
-Each client shows its pending edits over the last confirmed state, and the
-server decides their order. In these scenarios, three clients share a source
-with three seats; `reserve` takes the next free seat or fails with `SoldOut`.
+When a client sends an action, the server authorizes it and runs your handler.
+The handler returns the new state, events for clients, and a result for the
+caller. Sync commits the state, events, and a receipt together before publishing.
+The result and the event can arrive at the calling client independently.
+
+An optimistic reducer can show a prediction before the server replies. Handlers
+run one at a time per source, and your app decides how to handle conflicting
+edits. To share a change from elsewhere in your app, submit an action to the source.
+
+The scenarios below follow three clients reserving from a source with three seats.
+`reserve` takes the next free seat or fails with `SoldOut`.
 
 <SyncScenarios />
 
@@ -80,10 +96,12 @@ for the client operations.
 
 ## Two kinds of storage
 
-**Server storage** holds authoritative state and command receipts. Use an adapter
-or provide `SourceStorage` for a portable `Server.host`.
+| Storage               | What it keeps                                        |
+| --------------------- | ---------------------------------------------------- |
+| Server storage        | Authoritative state, retained events, and receipts   |
+| Client journal        | Pending commands and their identities across reloads |
+| Client snapshot cache | A starting view while the client reconnects          |
 
-**Client persistence** retains pending edits across reloads. A cached snapshot is
-only a starting view; the server confirms current state. Keep the pending-command
-journal when repairing a cache or changing storage, so unresolved edits can be
+Client persistence is optional. The cache can be discarded, but keep the journal
+when repairing a cache or changing storage so unresolved commands can be
 reconciled. See [persistence](../client.mdx#persistence) for browser setup.

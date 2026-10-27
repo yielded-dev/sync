@@ -43,9 +43,10 @@ is needed. Its required namespace and replay window are explicit.
 
 ## Authentication and transport
 
-`Cloudflare.handler(source, { authenticate, fetch, objectName? })` returns a native
-Request handler Effect. It matches the source's shared path and ID schema, calls
-`authenticate(request, address)`, then forwards through `fetch(objectName, request)`.
+`Cloudflare.handler(source, { authenticate, fetch, objectName? })` returns a function
+that handles a native request as an Effect. It matches the source's shared path and
+ID schema, calls `authenticate(request, address)`, then forwards through
+`fetch(objectName, request)`.
 The default path is `/sync/<kind>/<id>` and the default object name is `<kind>:<id>`.
 The source's `path` overrides the base path; `objectName` overrides storage identity
 independently. Unmatched paths return 404; protocol failures become HTTP responses.

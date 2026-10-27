@@ -1,8 +1,8 @@
 # Example
 
-The [React board](list-board/README.md) is the runnable integration: shared
-contracts, a Cloudflare SQLite host, optimistic UI, an optional plugin, presence,
-and IndexedDB persistence.
+The [React board](list-board/README.md) brings the pieces together: shared
+contracts, a Cloudflare SQLite host, optimistic UI, presence, and IndexedDB
+persistence.
 
 From the repository root, after `vp install` and `vp run build`:
 
