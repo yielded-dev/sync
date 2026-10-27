@@ -216,6 +216,14 @@ lease's lifetime and source-wide status, pending commands, and failures. The roo
 view's shape is independent of plugin count; composite snapshots retain their
 `{ source, plugins }` shape.
 
+`lease.transitions({ capacity })` observes captured local transitions, starting
+with an atomic replica baseline. Each subscriber has a bounded queue, independent
+of replication and other subscribers. Overflow, snapshots, and replay establish
+an explicit reset baseline. Live commit observations contain a complete command's
+events; command settlement may arrive before those events. Local observation
+sequences do not advance source cursors or provide durable replay. Replica
+`changes` streams may coalesce intermediate views.
+
 Reducers are pure; omitted optimistic reducers leave the snapshot unchanged.
 Apply complete valid event batches atomically, ignore duplicates, and recover on
 gaps or overflow. Cache restores remain provisional. A successful

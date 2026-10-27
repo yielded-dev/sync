@@ -23,7 +23,7 @@ import type * as Plugin from "../Plugin.ts";
 import { RegistrationError } from "../RegistrationError.ts";
 import type * as Source from "../Source.ts";
 import { type CurrentActor } from "./CurrentActor.ts";
-import type { ClientError, Replica } from "./Model.ts";
+import type { ClientError, EncodedCommand, Replica } from "./Model.ts";
 import { type ReplicaPersistence } from "./ReplicaPersistence.ts";
 import { type Transport } from "./Transport.ts";
 
@@ -235,6 +235,45 @@ export type Snapshot<S extends Source.Spec> = Source.Definition<S>["snapshot"]["
 export type State<S extends Source.Spec> = Replica<Snapshot<S>, Action.Error<Actions<S>>>;
 
 /**
+ * A captured local replica transition. Treat its values as immutable, as with
+ * replica views. `sequence` orders observations within this source coordinator;
+ * it is not a durable cursor and cannot resume a subscription after reopening.
+ * Every item includes the resulting replica, including remaining optimism.
+ *
+ * `Admitted` follows local admission (durable only in persistent mode); command
+ * payloads retain their encoded representation. `Committed` contains one complete
+ * live event batch from one authenticated command. `Settled` carries a known
+ * success or rejection and can precede `Committed`; actions without events and
+ * rejected actions need not produce a commit observation. Outcomes are local to
+ * this actor; commits can originate from any actor.
+ *
+ * `StatusChanged` covers connection, pending-command recovery, and error changes.
+ * `Reset` replaces the observer's baseline: initially, on overflow, or when
+ * snapshots, replay, or frames without a complete command boundary replace it.
+ * A reset recovers current state, not lost command history or outcomes.
+ *
+ * @category models
+ * @since 0.1.0-beta.4
+ */
+export type Transition<S extends Source.Spec> = {
+  readonly sequence: number;
+  readonly replica: State<S>;
+} & (
+  | { readonly _tag: "Reset"; readonly reason: "Initial" | "Overflow" | "Resync" }
+  | { readonly _tag: "Admitted"; readonly command: EncodedCommand }
+  | {
+      readonly _tag: "Committed";
+      readonly events: ReadonlyArray<Source.Definition<S>["envelope"]["sequenced"]["Type"]>;
+    }
+  | {
+      readonly _tag: "Settled";
+      readonly command: EncodedCommand;
+      readonly outcome: ActionOutcome<Action.Success<Actions<S>>, Action.Error<Actions<S>>>;
+    }
+  | { readonly _tag: "StatusChanged" }
+);
+
+/**
  * Bounds for source coordinators, pending commands, and transport processing.
  *
  * Counts and durations must be finite and positive. Capacity failure refuses
@@ -346,6 +385,20 @@ export interface Lease<S extends Source.Spec> {
    * Observes replica views while this lease remains open.
    */
   readonly changes: Stream.Stream<State<S>, ClientError>;
+  /**
+   * Observes captured transitions, starting with an atomic `Reset` baseline.
+   * Each subscription has its own queue; `capacity` defaults to 256 complete
+   * transitions and must be a positive safe integer (`InvalidValue` otherwise).
+   * Slow consumers never block replication or admission. Overflow discards queued
+   * history and emits `Reset` before continuing from that replica. Snapshots and
+   * replay also reset the baseline rather than invent missing commit boundaries.
+   * No history is retained before subscribing or across restarts. Ephemeral
+   * messages remain on `messages`. Stream disposal releases its queue; closing
+   * this lease releases every subscription and fails further pulls with `Closed`.
+   */
+  readonly transitions: (options?: {
+    readonly capacity?: number;
+  }) => Stream.Stream<Transition<S>, ClientError>;
   /**
    * Waits for an authoritative snapshot in the current source generation.
    */
