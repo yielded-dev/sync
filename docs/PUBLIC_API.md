@@ -157,6 +157,15 @@ retries. Delivery attempts time out after half that interval. Hosts arm wakeups
 before accepting retryable work. A wakeup is not proof that the destination
 committed.
 
+`Outbox.make(name, payload)` declares a server-only obligation with a service-free
+Schema. `Outbox.encode` validates and encodes `{ type, payload }` JSON for an
+existing commit. `Outbox.handlers` validates stored payloads and dispatches to an
+exact handler map, preserving record metadata and each handler's services.
+Unknown names or invalid payloads fail with `ProtocolError` and follow the host's
+retry policy unless the application explicitly classifies them otherwise. Names
+and codecs must remain compatible with queued obligations. Raw JSON commits
+remain supported and are not checked against the handler registry before commit.
+
 Cloudflare adapters bind one source to each object and adapt the core host's
 connection closure and wakeup requests to native sockets and alarms. See the
 [Cloudflare host API](../packages/platform-cloudflare/README.md) for shared
