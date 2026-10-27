@@ -226,6 +226,16 @@ lease's lifetime and source-wide status, pending commands, and failures. The roo
 view's shape is independent of plugin count; composite snapshots retain their
 `{ source, plugins }` shape.
 
+`lease.select(selector, options?)` projects root data; `lease.selectPlugin(id,
+selector, options?)` projects a declared plugin. Both return a `Selection` with
+`read` and `changes` of `Option<A>`, distinguishing unavailable data from a
+selected `undefined`. `from` defaults to `"visible"` (including provisional and
+optimistic state); `"authoritative"` uses the last known server snapshot, even
+offline. Each subscription emits its current selection and distinct observed
+values using `equals`, defaulting to `Object.is`. Availability changes also emit.
+Selections share the lease lifetime and coalescing behavior; they add no
+connection or background task. Status and command failures remain on the lease.
+
 `lease.transitions({ capacity })` observes captured local transitions, starting
 with an atomic replica baseline. Each subscriber has a bounded queue, independent
 of replication and other subscribers. Overflow, snapshots, and replay establish

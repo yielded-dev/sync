@@ -47,6 +47,7 @@ import {
 import type * as Source from "../Source.ts";
 import { copyJson, decode, encode, error, initial } from "./clientModel.ts";
 import * as ReplicaState from "./replica.ts";
+import { select as selectValue } from "./selection.ts";
 
 /** @internal The registration boundary retains the schema for every erased slot. */
 export interface Slot {
@@ -1374,9 +1375,27 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         }),
       );
 
-    return {
+    const observation = {
       read: active.pipe(Effect.andThen(read(address))),
       changes: changes(address).pipe(Stream.mapEffect((state) => active.pipe(Effect.as(state)))),
+    };
+
+    const selectPlugin: Lease<S>["selectPlugin"] = (id, selector, options) => {
+      if (!contract.spec.plugins.some((plugin) => plugin.id === id)) {
+        const failed = active.pipe(
+          Effect.andThen(Effect.fail(error("InvalidValue", "Unknown selection plugin"))),
+        );
+
+        return { read: failed, changes: Stream.fromEffect(failed) };
+      }
+
+      return selectValue(observation, id, selector, options);
+    };
+
+    return {
+      ...observation,
+      select: (selector, options) => selectValue(observation, "$source", selector, options),
+      selectPlugin,
       transitions,
       ready: changes(address).pipe(
         Stream.mapEffect((state) =>
