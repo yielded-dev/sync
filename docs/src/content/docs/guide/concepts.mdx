@@ -4,6 +4,8 @@ title: How Sync works
 
 import { FlowMap } from "@yielded/starlight-theme/components";
 
+import SyncScenarios from "../../../components/SyncScenarios.astro";
+
 A **source** is a shared entity, such as a board or counter. Your contract defines
 its state and actions; one server authority decides which changes are accepted.
 
@@ -65,16 +67,16 @@ Applications also own authentication, UI, and external side effects.
 
 ## Optimism and retries
 
-An optimistic reducer shows an edit immediately. The server's events replace
-that prediction; a declared rejection removes it.
+Each client shows its pending edits over the last confirmed state, and the
+server decides their order. In these scenarios, three clients share a source
+with three seats; `reserve` takes the next free seat or fails with `SoldOut`.
 
-Each command keeps its identity through retries. If `set(7)` commits but its
-response is lost, retrying returns the recorded result instead of applying a new
-edit. The [client guide](../client.mdx#retry-and-recovery) shows this exchange.
+<SyncScenarios />
 
-After reconnecting, clients catch up from ordered events or a fresh snapshot.
-Presence and other ephemeral messages are separate: they can be missed and never
-enter the durable history.
+A client that falls behind retained history loads a fresh snapshot instead of
+replaying events. Presence and other ephemeral messages can be missed and never
+enter the durable history. See [retry and recovery](../client.mdx#retry-and-recovery)
+for the client operations.
 
 ## Two kinds of storage
 

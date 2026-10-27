@@ -1,0 +1,13 @@
+---
+/** Play, pause, and replay for `sync-player.ts`. It stays hidden until the player mounts. */
+---
+
+<button class="sync-play" type="button" data-play data-state="play" hidden>
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path class="play-icon" d="M4.5 2.75v10.5L13 8z"></path>
+    <path class="pause-icon" d="M4 2.75h3v10.5H4zM9 2.75h3v10.5H9z"></path>
+    <path class="replay-icon" d="M8 2.5a5.5 5.5 0 1 1-5.2 3.7l1.4.5A4 4 0 1 0 8 4v2L4.75 3.25 8 .5z"
+    ></path>
+  </svg>
+  <span data-play-text>Play</span>
+</button>

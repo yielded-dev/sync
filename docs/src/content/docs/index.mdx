@@ -15,19 +15,114 @@ hero:
       variant: secondary
 ---
 
-import { Card, CardGrid } from "@astrojs/starlight/components";
+import { Card, CardGrid, TabItem, Tabs } from "@astrojs/starlight/components";
+
+import SyncTour from "../../components/SyncTour.astro";
+
+<SyncTour />
 
 <CardGrid>
   <Card title="Typed actions">
-    Share schemas for state, events, action payloads, results, and errors.
+    Define schemas once for state, events, actions, results, and errors.
   </Card>
   <Card title="Optimistic clients">
     Show edits immediately, reconcile with the server, and retry interrupted commands safely.
   </Card>
   <Card title="Your application, your storage">
-    Keep your domain and authentication. Use Cloudflare and IndexedDB adapters or supply your own.
+    Bring your own domain and authentication. Use Cloudflare and IndexedDB adapters or supply your
+    own storage.
   </Card>
 </CardGrid>
+
+## The code behind the demo
+
+Define the source once. The server decides each reservation; clients predict it.
+
+<Tabs>
+  <TabItem label="seats.ts">
+
+```ts
+import { Action, Source } from "@yielded/sync";
+import { Schema } from "effect";
+
+export class SoldOut extends Schema.TaggedError<SoldOut>()("SoldOut", {}) {}
+
+export const Seats = Source.make({
+  kind: "seats",
+  id: Schema.NonEmptyString.pipe(Schema.brand("ShowId")),
+  schemaVersion: 1,
+  snapshot: Schema.Struct({ seats: Schema.Array(Schema.NullOr(Schema.String)) }),
+  event: Schema.Struct({ seat: Schema.Int, guest: Schema.String }),
+  actions: [
+    Action.make("reserve", {
+      payload: Schema.Struct({ guest: Schema.String }),
+      success: Schema.Struct({ seat: Schema.Int }),
+      error: SoldOut,
+    }),
+  ],
+});
+```
+
+  </TabItem>
+  <TabItem label="seats-server.ts">
+
+```ts
+import { Server } from "@yielded/sync/server";
+import { Effect } from "effect";
+
+import { authorize, Principal } from "./auth";
+import { Seats, SoldOut } from "./seats";
+
+export const SeatsServer = Server.make(Seats, {
+  principal: Principal,
+  state: Seats.spec.snapshot,
+  initialize: Effect.succeed({ seats: [null, null, null] }),
+  snapshot: (state) => state,
+  authorize,
+  actions: {
+    reserve: Effect.fn(function* ({ state, payload }) {
+      const seat = state.seats.indexOf(null);
+
+      if (seat === -1) return yield* SoldOut.make({});
+      const seats = state.seats.map((guest, index) => (index === seat ? payload.guest : guest));
+
+      return { state: { seats }, events: [{ seat, guest: payload.guest }], result: { seat } };
+    }),
+  },
+});
+```
+
+  </TabItem>
+  <TabItem label="seats-client.ts">
+
+```ts
+import { Client } from "@yielded/sync/client";
+
+import { Seats } from "./seats";
+
+export const SeatsClient = Client.definition(Seats, {
+  applyEvent: ({ seats }, event) => ({
+    seats: seats.map((guest, index) => (index === event.seat ? event.guest : guest)),
+  }),
+  optimistic: {
+    // Predict the next free seat. The server's event confirms or replaces it.
+    reserve: ({ seats }, payload) => {
+      const seat = seats.indexOf(null);
+
+      return {
+        seats: seats.map((guest, index) => (index === seat ? payload.guest : guest)),
+      };
+    },
+  },
+});
+```
+
+  </TabItem>
+</Tabs>
+
+Your app supplies `Principal` and `authorize` in `auth.ts`. Step through
+[each scenario](./guide/concepts.mdx#optimism-and-retries) to see how Sync
+handles conflicts, lost responses, and offline edits.
 
 ## Build a counter
 

@@ -1,0 +1,48 @@
+---
+/**
+ * A scenario's first frame: three clients wired to the server. `sync-player.ts` animates it
+ * inside a `sync-demo` root. Screen readers get the scenario from its captions instead.
+ */
+import {
+  actors,
+  clientHtml,
+  clientView,
+  initial,
+  serverHtml,
+  serverView,
+  type Scenario,
+} from "./sync-scenarios.ts";
+
+import "./sync-stage.css";
+
+interface Props {
+  readonly scenario: Scenario;
+}
+
+const state = initial(Astro.props.scenario);
+---
+
+<div class="sync-stage" data-stage aria-hidden="true">
+  <div class="lanes">
+    {
+      actors.map(({ id }) => {
+        const view = clientView(state, id);
+
+        return (
+          <div
+            class="node client"
+            data-node={id}
+            data-connection={view.connection}
+            set:html={clientHtml(id, view)}
+          />
+        );
+      })
+    }
+    {
+      actors.map(({ id }) => (
+        <div class="wire" data-wire={id} data-connection={state.clients[id].connection} />
+      ))
+    }
+  </div>
+  <div class="node server" data-node="server" set:html={serverHtml(serverView(state))} />
+</div>
