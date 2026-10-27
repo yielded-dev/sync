@@ -6,6 +6,7 @@ import {
   StoredEvent,
   StoredHead,
   StoredReceipt,
+  type OutboxStorage,
   type ReceiptIdentity,
   type SourceTransaction,
   type StorageCommit,
@@ -16,7 +17,8 @@ import { SqlClient } from "effect/sql";
 export interface Options {
   readonly namespace: string;
   readonly replayWindow: number;
-  readonly maxPendingOutbox: number;
+  /** Omit or set to zero to disable new outbox work without deleting retained records. */
+  readonly maxPendingOutbox?: number;
 }
 
 const failure = (cause: unknown) =>
@@ -37,12 +39,14 @@ export const layer = (native: DurableObjectStorage, options: Options) =>
   Layer.effect(
     SourceStorage,
     Effect.gen(function* () {
+      const maxPendingOutbox = options.maxPendingOutbox ?? 0;
+
       if (
         options.namespace.length === 0 ||
         !Number.isSafeInteger(options.replayWindow) ||
         options.replayWindow <= 0 ||
-        !Number.isSafeInteger(options.maxPendingOutbox) ||
-        options.maxPendingOutbox < 0
+        !Number.isSafeInteger(maxPendingOutbox) ||
+        maxPendingOutbox < 0
       )
         return yield* Effect.die("Invalid SQLite storage limits or namespace");
       const sql = (yield* SqlClient.SqlClient).withoutTransforms();
@@ -141,7 +145,7 @@ export const layer = (native: DurableObjectStorage, options: Options) =>
             count: number;
           }>`SELECT COUNT(*) AS count FROM sync_outbox WHERE status = 'pending'`;
 
-          if (count[0].count + plan.outbox.length > options.maxPendingOutbox)
+          if (count[0].count + plan.outbox.length > maxPendingOutbox)
             return yield* StorageError.make({ message: "Outbox is at capacity" });
           for (const record of plan.outbox) {
             const encoded = yield* toJson(OutboxRecord, record);
@@ -160,9 +164,11 @@ export const layer = (native: DurableObjectStorage, options: Options) =>
           Effect.catchTag("SqlError", (cause) => Effect.fail(failure(cause))),
         );
 
-      const claimOutbox: SourceStorage["Service"]["claimOutbox"] = Effect.fn(
-        "SqliteStorage.claimOutbox",
-      )(function* (now, leaseMillis, limit) {
+      const claimOutbox: OutboxStorage["claim"] = Effect.fn("SqliteStorage.claimOutbox")(function* (
+        now,
+        leaseMillis,
+        limit,
+      ) {
         return yield* transact(
           Effect.gen(function* () {
             const rows =
@@ -191,27 +197,28 @@ export const layer = (native: DurableObjectStorage, options: Options) =>
         );
       }, Effect.mapError(failure));
 
-      const settleOutbox: SourceStorage["Service"]["settleOutbox"] = Effect.fn(
-        "SqliteStorage.settleOutbox",
-      )(function* (record, disposition) {
-        yield* transact(
-          Effect.gen(function* () {
-            if (disposition._tag === "Delivered") {
-              yield* sql`DELETE FROM sync_outbox WHERE id = ${record.id} AND attempts = ${record.attempts} AND status = 'pending'`;
-            } else if (disposition._tag === "PermanentFailure") {
-              yield* sql`UPDATE sync_outbox SET status = 'failed', failure = ${disposition.reason} WHERE id = ${record.id} AND attempts = ${record.attempts} AND status = 'pending'`;
-            } else {
-              const value = yield* toJson(OutboxRecord, {
-                ...record,
-                availableAtMillis: disposition.atMillis,
-              });
+      const settleOutbox: OutboxStorage["settle"] = Effect.fn("SqliteStorage.settleOutbox")(
+        function* (record, disposition) {
+          yield* transact(
+            Effect.gen(function* () {
+              if (disposition._tag === "Delivered") {
+                yield* sql`DELETE FROM sync_outbox WHERE id = ${record.id} AND attempts = ${record.attempts} AND status = 'pending'`;
+              } else if (disposition._tag === "PermanentFailure") {
+                yield* sql`UPDATE sync_outbox SET status = 'failed', failure = ${disposition.reason} WHERE id = ${record.id} AND attempts = ${record.attempts} AND status = 'pending'`;
+              } else {
+                const value = yield* toJson(OutboxRecord, {
+                  ...record,
+                  availableAtMillis: disposition.atMillis,
+                });
 
-              yield* sql`UPDATE sync_outbox SET available = ${disposition.atMillis}, value = ${value} WHERE id = ${record.id} AND attempts = ${record.attempts} AND status = 'pending'`;
-              yield* arm(disposition.atMillis);
-            }
-          }),
-        );
-      }, Effect.mapError(failure));
+                yield* sql`UPDATE sync_outbox SET available = ${disposition.atMillis}, value = ${value} WHERE id = ${record.id} AND attempts = ${record.attempts} AND status = 'pending'`;
+                yield* arm(disposition.atMillis);
+              }
+            }),
+          );
+        },
+        Effect.mapError(failure),
+      );
 
       const nextOutboxTime = sql<{
         at: number | null;
@@ -220,6 +227,11 @@ export const layer = (native: DurableObjectStorage, options: Options) =>
         Effect.mapError(failure),
       );
 
-      return SourceStorage.of({ transaction, claimOutbox, settleOutbox, nextOutboxTime });
+      return SourceStorage.of({
+        transaction,
+        ...(maxPendingOutbox > 0
+          ? { outbox: { claim: claimOutbox, settle: settleOutbox, nextTime: nextOutboxTime } }
+          : {}),
+      });
     }),
   ).pipe(Layer.provide(SqliteClient.layer({ storage: native })));

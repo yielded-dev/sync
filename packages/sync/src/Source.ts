@@ -1,4 +1,5 @@
-import { Schema } from "effect";
+import { Effect, Option, Result, Schema } from "effect";
+import { Url } from "effect/http";
 import { Rpc, RpcGroup } from "effect/rpc";
 
 import type * as Action from "./Action.ts";
@@ -23,9 +24,63 @@ import type * as Plugin from "./Plugin.ts";
 
 export interface Spec extends Plugin.Spec {
   readonly kind: string;
+  readonly id: Schema.Schema<string>;
+  readonly path?: string;
   readonly schemaVersion: number;
   readonly plugins: ReadonlyArray<Plugin.Definition>;
 }
+
+interface Input extends Omit<Spec, "id" | "message" | "plugins"> {
+  readonly id?: Spec["id"];
+  readonly message?: Spec["message"];
+  readonly plugins?: Spec["plugins"];
+}
+
+type Normalized<S extends Input> = S extends Spec
+  ? S
+  : Omit<S, "id" | "message" | "plugins"> & {
+      readonly id: "id" extends keyof S
+        ?
+            | Exclude<S["id"], undefined>
+            | (undefined extends S["id"] ? typeof Schema.NonEmptyString : never)
+        : typeof Schema.NonEmptyString;
+      readonly message: "message" extends keyof S
+        ?
+            | Exclude<S["message"], undefined>
+            | (undefined extends S["message"] ? typeof Schema.Never : never)
+        : typeof Schema.Never;
+      readonly plugins: "plugins" extends keyof S
+        ? Exclude<S["plugins"], undefined> | (undefined extends S["plugins"] ? readonly [] : never)
+        : readonly [];
+    };
+
+export type Id<S extends Spec> = S["id"]["Type"];
+
+export type Address<S extends Spec = Spec> = {
+  readonly kind: S["kind"];
+  readonly id: Id<S>;
+};
+
+const Path = Schema.String.check(
+  Schema.makeFilter(
+    (path) => {
+      const parsed = Url.fromString(path, "https://sync.invalid");
+
+      return (
+        Result.isSuccess(parsed) &&
+        parsed.success.origin === "https://sync.invalid" &&
+        parsed.success.pathname === path &&
+        parsed.success.search === "" &&
+        parsed.success.hash === "" &&
+        !path.endsWith("/")
+      );
+    },
+    { expected: "a canonical absolute base path without a query, fragment, or trailing slash" },
+  ),
+);
+
+const invalidId = () =>
+  ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source id" });
 
 type BoundActions<
   S extends Spec,
@@ -107,14 +162,7 @@ type ActionRpcs<S extends Spec> =
   | BoundActions<S, "$source", S["actions"]>[number]["execute" | "result"]
   | PluginRpcs<S, S["plugins"]>;
 
-export const make = <const S extends Spec>(
-  input: S & {
-    readonly actions: S["actions"] & Unique<Names<S["actions"]>>;
-    readonly plugins: S["plugins"] & Unique<Ids<S["plugins"]>>;
-  },
-) => {
-  const spec: S = input;
-
+const define = <const S extends Spec>(spec: S) => {
   validate(Schema.NonEmptyString, spec.kind, "source kind");
   validate(SchemaVersion, spec.schemaVersion, "schema version");
   assertUnique(
@@ -146,9 +194,18 @@ export const make = <const S extends Spec>(
   const message = frames(spec, "message");
   const kind = spec.kind as S["kind"];
 
+  // Identity values stay strings on the wire; brands and checks validate their type side.
+  const id: Schema.Codec<Id<S>, string> = Schema.NonEmptyString.pipe(
+    Schema.decodeTo(Schema.toType<S["id"]>(spec.id)),
+  );
+
+  const path = spec.path ?? `/sync/${Schema.encodeSync(Schema.StringFromUriComponent)(kind)}`;
+
+  validate(Path, path, "source path");
+
   const addressSchema = Schema.Struct({
     kind: Schema.Literal(kind),
-    id: Schema.NonEmptyString,
+    id,
   });
 
   const version = Schema.Literal(spec.schemaVersion as S["schemaVersion"]);
@@ -254,9 +311,11 @@ export const make = <const S extends Spec>(
 
   return Object.freeze({
     kind,
+    id,
+    path,
     schemaVersion: spec.schemaVersion as S["schemaVersion"],
     spec: frozenSpec as S,
-    address: (id: string) => Schema.decodeSync(addressSchema)({ kind, id }),
+    address: (id: Id<S>): Address<S> => Schema.decodeSync(addressSchema)({ kind, id }),
     addressSchema,
     snapshot,
     event,
@@ -278,4 +337,63 @@ export const make = <const S extends Spec>(
   });
 };
 
-export type Definition<S extends Spec = Spec> = ReturnType<typeof make<S>>;
+export type Definition<S extends Spec = Spec> = ReturnType<typeof define<S>>;
+
+export function make<const S extends Input>(
+  input: S & {
+    readonly actions: S["actions"] & Unique<Names<S["actions"]>>;
+    readonly plugins?: S["plugins"] & Unique<Ids<NonNullable<S["plugins"]>>>;
+  } & ([S] extends [Spec] ? never : unknown),
+): Definition<Normalized<S>>;
+
+export function make<const S extends Spec>(
+  input: S & {
+    readonly actions: S["actions"] & Unique<Names<S["actions"]>>;
+    readonly plugins: S["plugins"] & Unique<Ids<S["plugins"]>>;
+  },
+): Definition<S>;
+
+export function make(input: Input): unknown {
+  return define({
+    ...input,
+    id: input.id ?? Schema.NonEmptyString,
+    message: input.message ?? Schema.Never,
+    plugins: input.plugins ?? [],
+  });
+}
+
+/** Encode one source ID using its shared path and identity schema. */
+export const pathFor = <S extends Spec>(
+  source: Definition<S>,
+  id: NoInfer<Id<S>>,
+): Effect.Effect<string, ProtocolError> =>
+  Schema.encodeEffect(source.id)(id).pipe(
+    // URI encoding requires valid Unicode; URL parsers also normalize dot-only segments.
+    Effect.filterOrFail(
+      (id) => !/[\uD800-\uDFFF]/u.test(id) && id !== "." && id !== "..",
+      invalidId,
+    ),
+    Effect.flatMap(Schema.encodeEffect(Schema.StringFromUriComponent)),
+    Effect.map((segment) => `${source.path}/${segment}`),
+    Effect.mapError(invalidId),
+  );
+
+/** Unmatched paths are absent; malformed IDs on a matched route are typed failures. */
+export const matchPath = <S extends Spec>(
+  source: Definition<S>,
+  pathname: string,
+): Effect.Effect<Option.Option<Address<S>>, ProtocolError> => {
+  const prefix = `${source.path}/`;
+
+  if (!pathname.startsWith(prefix)) return Effect.succeedNone;
+  const suffix = pathname.slice(prefix.length);
+  const segment = suffix.endsWith("/") ? suffix.slice(0, -1) : suffix;
+
+  if (segment.length === 0 || segment.includes("/")) return Effect.succeedNone;
+
+  return Schema.decodeEffect(Schema.StringFromUriComponent)(segment).pipe(
+    Effect.flatMap(Schema.decodeEffect(source.id)),
+    Effect.map((id) => Option.some({ kind: source.kind, id })),
+    Effect.mapError(invalidId),
+  );
+};

@@ -1,5 +1,5 @@
 import { Action, Plugin, ProtocolError, Source } from "@yielded/sync";
-import { Client, memory, ReplicaPersistence, type JournalRow } from "@yielded/sync/client";
+import { Client, ReplicaPersistence, type JournalRow } from "@yielded/sync/client";
 import {
   Context,
   DateTime,
@@ -14,6 +14,8 @@ import {
 } from "effect";
 import { TestClock } from "effect/testing";
 import { expect, it } from "vite-plus/test";
+
+import { memory } from "./persistence.ts";
 
 const Label = Plugin.make("label", {
   snapshot: Schema.Struct({ text: Schema.String }),
@@ -240,7 +242,7 @@ it("queues edits from a restored cache while parked and retries them against the
 
       expect((yield* lease.read).pending[0]?.commandId).toBe(commandId);
       expect((yield* lease.read).value?.source.value).toBe(3);
-      const [row] = yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10));
+      const [row] = yield* storage.intentJournal.load(address, 10);
 
       expect(row.value).toMatchObject({ command: { admittedGeneration: generation } });
       online = true;
@@ -335,7 +337,9 @@ it("cancels a disposed lease's queued command while another lease keeps the sour
       expect(yield* Fiber.join(first)).toEqual({ before: 0, after: 1 });
       expect((yield* Fiber.await(queued))._tag).toBe("Failure");
       expect(remote.calls).toHaveLength(1);
-      expect(yield* storage.intentJournal.transaction((tx) => tx.get(address, id))).toBeDefined();
+      expect(
+        (yield* storage.intentJournal.load(address, 10)).find((row) => row.commandId === id),
+      ).toBeDefined();
       expect(yield* survivor.retry(id)).toEqual({ before: 1, after: 6 });
       expect(remote.calls[1]?.commandId).toBe(id);
     }),
@@ -398,7 +402,9 @@ it("fences an in-flight execute when its lease closes but the shared source rema
       expect(pending).toHaveLength(1);
       expect(pending[0]?.phase).toBe("Pending");
       expect(
-        yield* storage.intentJournal.transaction((tx) => tx.get(address, pending[0].commandId)),
+        (yield* storage.intentJournal.load(address, 10)).find(
+          (row) => row.commandId === pending[0].commandId,
+        ),
       ).toMatchObject({ value: { phase: "Pending", outcome: null } });
     }),
   ).pipe(
@@ -432,24 +438,15 @@ it("cancels settlement waiting on another lease's journal transaction", () =>
         Effect.provideService(ReplicaPersistence, {
           ...storage,
           intentJournal: {
-            transaction: (f) =>
-              storage.intentJournal.transaction((tx) =>
-                f({
-                  ...tx,
-                  put: (row) =>
-                    tx
-                      .put(row)
-                      .pipe(
-                        Effect.andThen(() =>
-                          delayAdmission
-                            ? Deferred.succeed(writing, undefined).pipe(
-                                Effect.andThen(Deferred.await(finishWrite)),
-                              )
-                            : Effect.void,
-                        ),
-                      ),
-                }),
-              ),
+            ...storage.intentJournal,
+            commit: (target, changes) =>
+              Effect.gen(function* () {
+                if (delayAdmission && changes.insert.length > 0) {
+                  yield* Deferred.succeed(writing, undefined);
+                  yield* Deferred.await(finishWrite);
+                }
+                yield* storage.intentJournal.commit(target, changes);
+              }),
           },
         }),
       );
@@ -495,7 +492,7 @@ it("refuses journal failures before I/O and never silently falls back to volatil
   Effect.scoped(
     Effect.gen(function* () {
       const remote = yield* server;
-      const storage = yield* memory({ maxJournalRows: 0 }).open;
+      const storage = yield* memory({ maxBytes: 1 }).open;
 
       const client = yield* Client.make(definition, {
         persistence: { mode: "persistent" },
@@ -602,7 +599,9 @@ it("preserves rich command and result codecs through lookup, journaling, and rem
 
           expect(DateTime.formatIso(yield* lease.retry(id))).toBe(at);
           expect(
-            yield* storage.intentJournal.transaction((tx) => tx.get(Reminder.address("demo"), id)),
+            (yield* storage.intentJournal.load(Reminder.address("demo"), 10)).find(
+              (row) => row.commandId === id,
+            ),
           ).toMatchObject({
             value: {
               phase: "Accepted",
@@ -703,6 +702,7 @@ it("never rebinds an ambiguous unbound command to a newly observed authority", (
     Effect.gen(function* () {
       const remote = yield* server;
       let calls = 0;
+      const authority = yield* Deferred.make<void>();
 
       const client = yield* Client.make(
         Client.definition(Counter, {
@@ -716,7 +716,13 @@ it("never rebinds an ambiguous unbound command to a newly observed authority", (
         Effect.provideService(Client.Transport, {
           ...remote.transport,
           snapshot: () => Effect.never,
-          subscribe: () => Stream.never,
+          subscribe: () =>
+            Stream.concat(
+              Stream.fromEffect(
+                Deferred.await(authority).pipe(Effect.as(snapshot(0, 10, replacement))),
+              ),
+              Stream.never,
+            ),
           execute: () =>
             Effect.suspend(() => {
               calls += 1;
@@ -731,7 +737,11 @@ it("never rebinds an ambiguous unbound command to a newly observed authority", (
       yield* lease.execute(Counter.actions.add, { amount: 2 }).pipe(Effect.result);
       const id = (yield* lease.read).pending[0].commandId;
 
-      yield* lease.hydrate(snapshot(0, 10, replacement));
+      yield* Deferred.succeed(authority, undefined);
+      yield* stateWhere(
+        lease,
+        (state) => state.authoritative?.position.sourceAuthorityGeneration === replacement,
+      );
       expect(yield* Effect.result(lease.retry(id))).toMatchObject({
         _tag: "Failure",
         failure: { reason: "OutcomeUnknown", commandId: id },
@@ -759,7 +769,7 @@ it.each([
         const finishWrite = yield* Deferred.make<void>();
         const finishLookup = yield* Deferred.make<void>();
         const sourceScope = yield* Scope.fork(yield* Effect.scope);
-        const write = transition === "admission" ? "put" : "replace";
+        const write = transition === "admission" ? "insert" : "replace";
 
         const delayCommit = Effect.fn("delayCommit")(function* (row: JournalRow) {
           yield* Deferred.succeed(
@@ -785,14 +795,12 @@ it.each([
           Effect.provideService(ReplicaPersistence, {
             ...storage,
             intentJournal: {
-              transaction: (f) =>
-                storage.intentJournal.transaction((tx) =>
-                  f({
-                    ...tx,
-                    [write]: (row: JournalRow) =>
-                      tx[write](row).pipe(Effect.andThen(delayCommit(row))),
-                  }),
-                ),
+              ...storage.intentJournal,
+              commit: (target, changes) =>
+                Effect.gen(function* () {
+                  for (const row of changes[write]) yield* delayCommit(row);
+                  yield* storage.intentJournal.commit(target, changes);
+                }),
             },
           }),
         );
@@ -820,8 +828,8 @@ it.each([
         expect((yield* Fiber.await(response))._tag).toBe("Failure");
         expect(remote.calls).toEqual(transition === "admission" ? [] : [intent.command]);
         expect(
-          yield* storage.intentJournal.transaction((tx) =>
-            tx.get(address, intent.command.commandId),
+          (yield* storage.intentJournal.load(address, 10)).find(
+            (row) => row.commandId === intent.command.commandId,
           ),
         ).toMatchObject({ value: intent });
 
@@ -840,7 +848,7 @@ it.each([
         yield* stateWhere(reopened, (state) => state.pending.length === 0);
         expect(remote.lookups[0]).toEqual(intent.command);
         expect(remote.calls).toEqual([intent.command]);
-        expect(yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10))).toEqual([]);
+        expect(yield* storage.intentJournal.load(address, 10)).toEqual([]);
       }),
     ).pipe(
       Effect.provideService(Client.CurrentActor, { actorId: "alice" }),

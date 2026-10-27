@@ -1,12 +1,9 @@
 import { Action, ProtocolError, Source } from "@yielded/sync";
-import {
-  Client,
-  ReplicaPersistence,
-  type Persistence,
-  type PersistenceError,
-} from "@yielded/sync/client";
-import { Deferred, Effect, Exit, Fiber, Schema, type Scope, Stream } from "effect";
+import { Client, ReplicaPersistence, type PersistenceError } from "@yielded/sync/client";
+import { Deferred, Effect, Exit, Schema, type Scope, Stream } from "effect";
 import * as TestClock from "effect/testing/TestClock";
+
+import type { Persistence } from "../../persistence/src/index.ts";
 
 export type Open = (
   options: Persistence.Options,
@@ -49,7 +46,7 @@ export const seed = (open: Open, namespace: string) =>
     Effect.gen(function* () {
       const storage = yield* open(options(namespace));
 
-      yield* storage.intentJournal.transaction((tx) => tx.put(evidence));
+      yield* storage.intentJournal.commit(address, { insert: [evidence], replace: [], remove: [] });
       yield* storage.snapshotCache.put(address, { value: 7 });
     }),
   );
@@ -60,7 +57,9 @@ export const restore = (open: Open, namespace: string) =>
       const storage = yield* open(options(namespace));
 
       equal(
-        yield* storage.intentJournal.transaction((tx) => tx.get(address, evidence.commandId)),
+        (yield* storage.intentJournal.load(address, 10)).find(
+          (row) => row.commandId === evidence.commandId,
+        ),
         evidence,
         "exact evidence did not survive reopen",
       );
@@ -74,118 +73,49 @@ export const restore = (open: Open, namespace: string) =>
     }),
   );
 
-export const exercise = (open: Open, namespace: string) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const config = options(namespace);
-      const first = yield* open(config);
-      const second = yield* open(config);
-
-      yield* first.intentJournal.transaction((tx) => tx.put(evidence));
-
-      const entered = yield* Deferred.make<void>();
-      const resume = yield* Deferred.make<void>();
-
-      const writer = yield* first.intentJournal
-        .transaction((tx) =>
-          Effect.gen(function* () {
-            yield* tx.replace({ ...evidence, value: "late" });
-            yield* Deferred.succeed(entered, undefined);
-            yield* Deferred.await(resume);
-          }),
-        )
-        .pipe(Effect.forkScoped);
-
-      yield* Deferred.await(entered);
-      yield* second.wipe;
-      const fresh = yield* open(config);
-
-      yield* fresh.intentJournal.transaction((tx) =>
-        tx.put({ ...evidence, value: "new generation" }),
-      );
-      yield* Deferred.succeed(resume, undefined);
-      equal(
-        yield* failureReason(Fiber.join(writer)),
-        "StaleGeneration",
-        "delayed writer crossed a wipe",
-      );
-      equal(
-        yield* fresh.intentJournal.transaction((tx) => tx.get(address, evidence.commandId)),
-        { ...evidence, value: "new generation" },
-        "late writer destroyed new evidence",
-      );
-
-      return "generation fencing";
-    }),
-  );
-
-export const concurrent = (open: Open, namespace: string) =>
+export const concurrent = (open: Open, namespace: string, concurrency: 1 | 2 = 2) =>
   Effect.scoped(
     Effect.gen(function* () {
       const a = yield* open(options(namespace));
       const b = yield* open(options(namespace));
-      const entered = yield* Deferred.make<void>();
-      const resume = yield* Deferred.make<void>();
 
-      const pending = yield* a.intentJournal
-        .transaction((tx) =>
-          Effect.gen(function* () {
-            yield* tx.put(evidence);
-            yield* Deferred.succeed(entered, undefined);
-            yield* Deferred.await(resume);
-          }),
-        )
-        .pipe(Effect.forkScoped);
-
-      yield* Deferred.await(entered);
-      yield* b.intentJournal.transaction((tx) => tx.put({ ...evidence, commandId: "winner" }));
-      yield* Deferred.succeed(resume, undefined);
-      equal(
-        yield* failureReason(Fiber.join(pending)),
-        "Conflict",
-        "concurrent commit lost a writer",
-      );
-      equal(
-        (yield* b.intentJournal.transaction((tx) => tx.scan(address, 10))).map(
-          (row) => row.commandId,
-        ),
-        ["winner"],
-        "conflicting transaction partially committed",
+      const results = yield* Effect.forEach(
+        [a, b],
+        (storage, index) =>
+          failureReason(
+            storage.intentJournal.commit(address, {
+              insert: [{ ...evidence, commandId: `writer-${index}` }, evidence],
+              replace: [],
+              remove: [],
+            }),
+          ),
+        { concurrency },
       );
 
-      const cancelled = yield* a.intentJournal
-        .transaction((tx) =>
-          Effect.gen(function* () {
-            yield* tx.put(evidence);
-
-            return yield* Effect.never;
-          }),
-        )
-        .pipe(Effect.forkScoped);
-
-      yield* Fiber.interrupt(cancelled);
       equal(
-        yield* b.intentJournal.transaction((tx) => tx.get(address, evidence.commandId)),
-        undefined,
-        "interruption committed a staged write",
+        [...results].sort(),
+        ["Conflict", "Success"],
+        `concurrent commit results: ${results.join(", ")}`,
+      );
+      equal(
+        (yield* b.intentJournal.load(address, 10)).map((row) => row.commandId).sort(),
+        [evidence.commandId, `writer-${results.indexOf("Success")}`],
+        "conflicting batch partially committed",
       );
 
-      return "conflict and interruption rollback";
+      return "atomic conflict rollback";
     }),
   );
 
 const Counter = Source.make({
   kind: "counter",
-  plugins: [],
   schemaVersion: 1,
   snapshot: Schema.Struct({ value: Schema.Int }),
   event: Schema.Struct({ value: Schema.Int }),
-  message: Schema.Never,
   actions: [Action.make("set", { payload: Schema.Int, success: Schema.Int, error: Schema.Never })],
 });
 
 const definition = Client.definition(Counter, {
-  plugins: [],
   applyEvent: (_state, event) => event,
   optimistic: { set: (_state, value) => ({ value }) },
 });
@@ -251,7 +181,7 @@ export const runtimeSeed = (open: Open, namespace: string) =>
         snapshot,
         "background flush did not persist authority",
       );
-      const rows = yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10));
+      const rows = yield* storage.intentJournal.load(address, 10);
 
       equal(rows.length, 1, "lost response did not retain journal");
 
@@ -263,7 +193,7 @@ export const runtimeRestore = (open: Open, namespace: string) =>
   Effect.scoped(
     Effect.gen(function* () {
       const storage = yield* open(options(namespace));
-      const rows = yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10));
+      const rows = yield* storage.intentJournal.load(address, 10);
       let resent: Client.EncodedCommand | undefined;
 
       const transport: Client.Transport = {
@@ -293,7 +223,7 @@ export const runtimeRestore = (open: Open, namespace: string) =>
 
       return {
         resent,
-        remaining: yield* storage.intentJournal.transaction((tx) => tx.scan(address, 10)),
+        remaining: yield* storage.intentJournal.load(address, 10),
       };
     }),
   );

@@ -3,7 +3,7 @@
 These boundaries apply to changes in the library and its adapters. For usage,
 start with [getting started](src/content/docs/guide/getting-started.md), the
 [counter example](src/content/docs/api/consumer.md), or the
-[client guide](src/content/docs/client.md). Schemas and source interfaces own
+[client guide](src/content/docs/client.mdx). Schemas and source interfaces own
 wire formats and implementation details.
 
 ## Package boundaries
@@ -11,18 +11,19 @@ wire formats and implementation details.
 | Entry point                         | Responsibility                                                                     |
 | ----------------------------------- | ---------------------------------------------------------------------------------- |
 | `@yielded/sync`                     | Shared sources, actions, plugins, identities, envelopes, and derived RPC contracts |
-| `@yielded/sync/server`              | Private state, authorization, execution, storage and outbox contracts              |
-| `@yielded/sync/client`              | Scoped replicas, transport, recovery, and client persistence                       |
+| `@yielded/sync/server`              | Private state, portable hosting, RPC handlers, storage and outbox contracts        |
+| `@yielded/sync/client`              | Scoped replicas, transport, recovery, and persistence ports                        |
 | `@yielded/sync/atom`                | Atom bindings over the headless client                                             |
-| `@yielded/sync-platform-cloudflare` | Shared Cloudflare protocol and SQLite storage                                      |
+| `@yielded/sync-platform-browser`    | Browser services and source bindings with caller-provided persistence              |
+| `@yielded/sync-platform-cloudflare` | Native Cloudflare transport, lifecycle, scheduling, and SQLite storage             |
 | `@yielded/sync-platform-effect-cf`  | Native effect-cf integration                                                       |
 | `@yielded/sync-platform-alchemy-cf` | Native Alchemy integration                                                         |
+| `@yielded/sync-persistence`         | Optional durable client persistence policy and driver contracts                    |
 | `@yielded/sync-local-indexeddb`     | Browser client persistence                                                         |
-| `@yielded/sync-local-expo`          | Native Expo client persistence                                                     |
 
 Adapters depend inward on core. Root and client imports never expose server
-implementations or platform dependencies. The two Cloudflare framework adapters
-share the lower-level runtime and do not import each other's framework.
+implementations or platform dependencies. The Cloudflare adapters use the same
+core host and do not import each other's framework.
 Applications own domain models, authentication, authorization policy, routes,
 bindings, projection destinations, bootstrap workflows, and UI.
 
@@ -38,6 +39,19 @@ result, rejection, and service types.
 messages, actions, and plugins. `address(id)` identifies one source authority.
 Application entity revisions are separate from source cursors.
 
+Optional `id` supplies a string identity schema, including a branded type; its
+type-side validation applies to addresses and URL segments. The default is a
+nonempty string. Optional `path` supplies a fixed absolute base path without a
+trailing slash; it defaults to `/sync/<encoded kind>`. `Source.pathFor` encodes one
+ID segment, and `Source.matchPath` decodes it with the same schema, returning
+`Option.none` for unmatched paths. Invalid matched IDs fail with `ProtocolError`.
+HTTP IDs must be valid Unicode and cannot be `.` or `..`. HTTP routing metadata
+never changes source identity or storage keys.
+
+Omit `message` when there are no ephemeral messages; it defaults to `Schema.Never`.
+Omit `plugins` when a source has none. If the contract declares plugins,
+`Server.make` and `Client.definition` require matching implementations.
+
 `Action.make` correlates its payload, success, and declared rejection schemas.
 `Plugin.make` defines a reusable public capability; `Server.plugin` supplies its
 private implementation and `Client.plugin` its pure reducers. Composed snapshots
@@ -46,8 +60,8 @@ Cross-slot domain transactions belong in a source capability.
 
 Root operations use the `$source` namespace; plugin operations use the plugin id.
 All share the source's authorization, cursor, and lifetime. Reject reserved or
-duplicate registrations, duplicate catalog kinds, and missing or extra handlers
-and reducers before resource acquisition. Literal duplicates also fail typechecking.
+duplicate registrations, missing or extra handlers, and unknown optimistic reducers
+before resource acquisition. Literal duplicates also fail typechecking.
 Acquire plugins in declaration order and finalize them in reverse order.
 
 Contract schemas and RPC definitions live in [Source.ts](../packages/sync/src/Source.ts),
@@ -88,9 +102,30 @@ protection that prevents re-execution.
 `Server.make` supplies private state, initialization, snapshot projection,
 authorization, and handlers. Authorized viewers of a source receive the same
 public snapshot. Viewer-private projections need a separate authorization boundary.
+The portable host requires `SourceStorage` and `ServerCrypto`. Cloudflare
+integrations supply these through a per-object platform layer, using native
+SQLite by default. A custom storage layer replaces SQLite without opening it.
+Durable outbox delivery is an optional storage capability;
+omitting it must reject any nonempty outbox commit before state is committed.
 
-`Server.commit` constructs a plan. The runtime validates it and atomically commits
-private state, contiguous events, the exact outcome, receipts, and outbox work
+`Server.host(definition, options)` supplies platform-independent ordering,
+subscriptions, publication, and optional outbox delivery. Use one host per
+storage authority. Its scope captures `SourceStorage`, `ServerCrypto`, and the
+definition's services; `Server.open` acquires operation resources for each turn.
+`connect({ address, session })` binds a trusted session to a scoped live connection.
+Its `closed` Effect requests transport closure on failure; ordinary connection
+scope disposal completes it successfully. Subscription scopes are independent
+of connection scopes.
+
+The host provides `snapshot`, `dispatch`, `lookup`, `subscribe`, `publishMessage`,
+and `checkConnection`. `ServerRpc.handlers(host)` returns the source's Effect RPC
+group and handler services. Applications supply `ServerRpc.CurrentConnection`
+from authenticated context and choose an Effect RPC transport. Native socket,
+request, and process APIs stay outside core.
+
+Action handlers return `{ state, events, result, outbox? }`. `Server.commit` is an
+optional helper that defaults `outbox` to an empty array. The runtime validates the
+plan and atomically commits private state, contiguous events, the exact outcome, receipts, and outbox work
 before publication or reply. Changed state must emit an event. Authorization,
 receipt lookup, handler evaluation, and commit share one serialized source turn;
 a storage adapter cannot introduce a check/commit race.
@@ -104,25 +139,54 @@ rerun automatically after a conflict.
 
 Outbox delivery is at least once, with stable ids and durable claim fencing.
 Applications own destination idempotency and classification of delivery results.
-Only completed delivery removes an obligation; failures retain evidence. Hosts
-arm durable wakeups before accepting retryable work. An alarm is a wakeup, not
-proof that the destination committed.
+Only completed delivery removes an obligation; failures retain evidence. Outbox
+users supply `deliver` and a durable `schedule(atMillis | undefined)` callback,
+then run `host.drainOutbox` on wakeup. `batchSize` defaults to 10 records per drain
+and per command; `retryMillis` defaults to 60,000 ms for claims and automatic
+retries. Delivery attempts time out after half that interval. Hosts arm wakeups
+before accepting retryable work. A wakeup is not proof that the destination
+committed.
 
-Cloudflare hosts bind one source to each object. See the
+Cloudflare adapters bind one source to each object and adapt the core host's
+connection closure and wakeup requests to native sockets and alarms. See the
 [Cloudflare host API](../packages/platform-cloudflare/README.md) for shared
 handlers and framework integration.
 
-Applications authenticate callers, select typed stubs, and pass the request,
-address, and identity to `prepareRequest`. It replaces internal identity headers.
-Only authenticated boundaries may expose the binding. Check authorization for
+`DurableObject.make(server, options)` in `@yielded/sync-platform-cloudflare`
+defines the source and platform settings without choosing a framework or opening
+resources. At application composition, `definition.provide(EffectCfServices)`
+constructs the native effect-cf class; its `binding(name)` supplies the typed
+namespace client and Worker layer. `definition.provide(AlchemyServices(name))`
+constructs Alchemy's native resource declaration with an explicit logical name.
+The provided object exposes a type-only `Type` member for its native instance:
+`typeof CounterObject.Type`.
+These construction providers preserve the framework's native lifecycle and
+registration. Each adapter package also exports `layer(options)` for per-object services in
+ordinary Effect composition. Both use shared SQLite and crypto defaults, with
+optional layer overrides. Storage opens only in the object runtime, never during
+infrastructure planning. Shared request preparation, remote clients, and protocol
+types belong to the Cloudflare package.
+
+Generated Effect CF bindings expose `handler({ authenticate, objectName? })`;
+Alchemy declarations expose a handler factory that acquires their native binding.
+Both delegate to the shared Cloudflare request handler. It matches the source's
+path, validates the ID, authenticates the request, replaces trusted metadata, and
+forwards HTTP or WebSocket requests. Unmatched paths return 404; protocol failures
+retain their HTTP status. The default object key is `<kind>:<id>`; `objectName`
+preserves application-specific keys independently of public paths.
+
+Applications supply authentication and authorization policy. Custom routes may
+use `prepareRequest` directly with a trusted identity and source address. Only
+authenticated boundaries may expose the binding. Check authorization for
 snapshots, subscriptions, actions, results, and messages, and revalidate bound
 identity and expiry after hibernation.
 
 The instance scope owns RPC and socket resources; `Server.provide` scopes services
-to source operations. Bootstrap, commits, and publication share a bounded source
-gate; network delivery stays outside it and SQLite transactions. Lost activations
-reset streams so clients reconnect and replay. Sync owns the object's alarm;
-other alarm jobs require application scheduling.
+to source operations. Bootstrap, commits, and publication share the core host's
+bounded source gate; network delivery stays outside it and storage transactions.
+Lost activations reset streams so clients reconnect and replay. When outbox
+delivery is enabled, Sync uses the object's alarm; other jobs require application
+scheduling.
 
 ## Client and persistence
 
@@ -131,35 +195,89 @@ choice for its lifetime. Concurrent scoped opens share one coordinator per addre
 Closing a lease cancels its operations; closing the last releases the connection.
 Close the old session before changing actors. All resources and queues are bounded.
 
-Reducers are pure. Apply complete valid event batches atomically, ignore duplicates,
-and recover on gaps or overflow. Cache restores remain provisional. History and
-unversioned observations do not advance cursors or settle commands. A successful
+`Client.layerWebSocketTransport(source, { origin, id, query? })` derives the URL
+from the shared path and ID schema, including percent encoding and WebSocket
+scheme selection. The existing `{ url }` form supports custom connection setup.
+Applications supply credentials and the socket constructor.
+
+`Client.view(lease)` exposes root snapshot data through `read`, `changes`, and
+`ready`; `Client.view(lease, id)` exposes a declared plugin's data. Views share the
+lease's lifetime and source-wide status, pending commands, and failures. The root
+view's shape is independent of plugin count; composite snapshots retain their
+`{ source, plugins }` shape.
+
+Reducers are pure; omitted optimistic reducers leave the snapshot unchanged.
+Apply complete valid event batches atomically, ignore duplicates, and recover on
+gaps or overflow. Cache restores remain provisional. A successful
 result keeps optimism until its events arrive or authority covers its position;
 a declared rejection removes it. Dismissing a failure never deletes unresolved work.
 
 Persistent mode requires `ReplicaPersistence` and never falls back to volatile
-mode. Handles capture actor and generation; mismatched actors are rejected.
+mode. Its required port is an actor-bound journal with `load` and atomic `commit`;
+the snapshot cache is optional. Handles fence operations against actor and generation
+changes; mismatched actors are rejected.
 Journal admission commits before transport. Capacity failure refuses new work
 instead of evicting unresolved evidence. Snapshot caches are separate and disposable.
 Unsupported intents remain quarantined, reserving their exact identities and capacity.
 
-Journal callbacks run once and commit with atomic revision/generation checks.
-Conflicts are explicit; callbacks are not replayed. Wipe rotates the generation
-with journal deletion, invalidating old handles. Delayed cache writes and cleanup
-cannot affect a newer generation. Unreadable journals and unknown physical formats
-remain intact for recovery. Cache recovery never resets journal data.
+Journal batches apply atomically with generation checks. Inserts reserve new
+identities and replacements require existing rows. Conflicts are explicit.
+Unreadable journals and unknown physical formats remain intact for recovery.
+Cache recovery never resets journal data or permits stale-generation writes.
 
-The application owns namespaces, background hooks, and logout deletion. Disposal
-retains durable data; `flush` reports pending save failures. Changing namespace is
+Cache failures appear separately from synchronization/journal failures and cannot
+park an otherwise healthy replica. They remain observable through `cacheError`
+and explicit `flush` failures.
+
+The application owns namespaces, background hooks, and destructive cleanup.
+Close all writers before deleting their storage. Disposal retains durable data;
+`flush` reports pending save failures. Changing namespace is
 not migration: reconcile old journals, receipts, and outbox evidence before
 switching. Wire, source-schema, storage-format, authority, and local persistence
 generations remain distinct.
 
 [ReplicaPersistence.ts](../packages/sync/src/client/ReplicaPersistence.ts) defines
-the port; [Persistence.ts](../packages/sync/src/client/Persistence.ts) defines
-shared durable-record policy. Memory persistence is process-local. Durable adapters
-implement the same ownership and recovery contract using their native stores.
+the ports. Physical formats and cache bounds belong to the optional
+`@yielded/sync-persistence` package. The browser driver lives separately in
+`@yielded/sync-local-indexeddb`. Applications may implement the ports directly with
+their own persistence strategy.
 
-`SourceAtom.make` uses the same runtime. Active atoms hold leases; passive reads
-never connect. Registry disposal releases leases. UI code owns no second command
-queue, retry loop, or replica store.
+`SourceAtom.bind(definition, { runtime, address, persistence })` binds one source
+to the application's Atom runtime. It lazily acquires one client and lease per
+registry, using the runtime's actor, transport, persistence, and definition
+services. `replica` projects root data; `action.<name>` exposes typed callable
+atoms. Calling an action returns an Effect requiring the current `AtomRegistry`
+and completes with that invocation's result or error. It shares the writable
+atom's execution and observable mutation state. Declared plugins have the same
+bindings under `plugins.<id>`. `retry` and
+`recover` use the same lease and exact command identities. Action atoms follow
+Effect Atom's cancellation behavior; `actions.<name>.concurrent` opts into
+concurrent writes. Cancellation interrupts the caller's invocation without
+discarding an admitted command. `binding.fn(function* (input) { ... })` creates a
+function atom using the binding's runtime, inferring its input, success, and error
+types. A generator without a parameter takes no input. Read and write local atoms
+with `Atom.get` and `Atom.set`; optimistic source reducers remain in the client
+definition and run independently of awaiting the server result.
+
+`BrowserSource.bind` from `@yielded/sync-platform-browser` composes that binding
+with a browser WebSocket transport, crypto, and `CurrentActor`. Supply the client
+definition, typed `id`, `actorId`, and either a `ReplicaPersistence` Layer or
+`"volatile"`. A supplied Layer selects persistent mode; setup failures remain
+typed failures and never select volatile mode. Persistence may require the
+browser services, including `CurrentActor`; the adapter owns no storage driver.
+The origin defaults to the current page and may be overridden. Query parameters
+are explicit application credentials or routing data, never inferred from the
+actor. The source contract owns the path and ID encoding. Browser resources are
+acquired lazily, and `runtime` exposes the same browser services for application
+workflow atoms. Use `SourceAtom.bind` with an application runtime for custom
+platform services or transport.
+
+`presence(payloadAtom)` optionally publishes ephemeral heartbeats while observed
+and lists other actors' latest payloads by connection. Peers expire, leave on
+departure or disconnect, and are bounded independently of durable state. Its
+payload and rendering remain application-owned. Registry disposal releases the
+lease and all presence work.
+
+`SourceAtom.make` binds an existing headless runtime. Active atoms hold leases;
+passive reads never connect. UI code owns no second command queue, retry loop,
+or replica store.

@@ -1,8 +1,8 @@
 # Shared board
 
 A React and Effect Atom frontend over Sync's public client. An effect-cf Worker
-stores cards and board titles in SQLite; the browser uses IndexedDB for snapshots
-and pending commands.
+stores cards and board titles in SQLite; the browser uses
+`@yielded/sync-local-indexeddb` for snapshots and pending commands.
 
 ## Run it
 
@@ -23,7 +23,7 @@ the frontend and Worker locally without a Cloudflare account.
 
 Use `/?board=another-board&actor=alice` for another board. Switching identity
 navigates to a new page, closes the old session, and opens the selected actor's
-persistence partition. It does not wipe pending commands.
+persistence partition. Pending commands stay with their original identity.
 
 While disconnected, cached content remains visible and editing waits for authority.
 An uncertain command can be retried using its saved id. The client reconnects and
@@ -31,19 +31,36 @@ recovers from its cursor after a lost Durable Object activation.
 
 ## Read the example
 
-| File                             | Responsibility                                                      |
-| -------------------------------- | ------------------------------------------------------------------- |
-| [contract.ts](src/contract.ts)   | Cards, actions, presence messages, and board-title plugin           |
-| [worker.ts](src/worker.ts)       | Authorization, domain actions, routing, and Durable Object          |
-| [client.ts](src/client.ts)       | Pure event and optimistic reducers                                  |
-| [atoms.ts](src/browser/atoms.ts) | Actor-scoped session, persistence, mutation workflows, and presence |
-| [App.tsx](src/browser/App.tsx)   | React rendering and dispatch                                        |
-| [main.tsx](src/browser/main.tsx) | The application's `RegistryProvider`                                |
+| File                             | Responsibility                                             |
+| -------------------------------- | ---------------------------------------------------------- |
+| [contract.ts](src/contract.ts)   | The board's title, cards, actions, and presence messages   |
+| [worker.ts](src/worker.ts)       | Authorization, domain actions, routing, and Durable Object |
+| [client.ts](src/client.ts)       | Pure event and optimistic reducers                         |
+| [atoms.ts](src/browser/atoms.ts) | Browser binding, draft workflows, and presence             |
+| [App.tsx](src/browser/App.tsx)   | React rendering and dispatch                               |
+| [main.tsx](src/browser/main.tsx) | The application's `RegistryProvider`                       |
 
-`Atom.runtime` owns the session scope. `SourceAtom` leases share its headless
-client; registry disposal releases them. `CurrentActor` is provided once to the
-client, transport, and IndexedDB Layers. Presence uses ephemeral messages and
-stays outside the durable replica.
+`Board` is the shared source contract; `BoardClient` supplies its reducers.
+`BrowserSource.bind` connects one board instance and provides its browser services.
+React reads `board.replica` and dispatches `board.action.moveCard`, `board.retry`,
+or `board.recover` directly. Add and rename use `board.fn` generators to await
+callable actions before clearing their draft inputs. Optimistic reducers update
+the board while the action awaits its server result.
+
+The app supplies its board ID, actor, demo authentication query, and IndexedDB
+Layer. The binding derives the route, defaults to the current origin, and supplies
+the actor to persistence. `board.fn` shares its crypto service with the
+add-card workflow. The client and lease are acquired lazily; registry disposal
+releases them.
+
+`board.presence(payloadAtom)` owns heartbeats, bounded peers, and expiry while
+observed. The app supplies the focused card ID; presence stays outside the
+durable replica. This source needs no plugins.
+
+Server action handlers use `Effect.fn` and return `{ state, events, result }`.
+`events` update every replica; `result` is the reply to the caller. Yield a
+`CardRejected` error to reject an action. Sync commits accepted changes atomically.
+Authentication reads `HttpServerRequest` from the Worker's request context.
 
 ## Demo boundaries
 
@@ -56,6 +73,7 @@ with real authentication before deployment.
 The example has no projection destination. Applications needing one own the
 projection records, idempotent destination, and outbox delivery Effect.
 
-Run `vp run sync-list-board-example#test` for the Worker consumer check and
+Run `vp run sync-list-board-example#test` for deterministic multi-client race and
+recovery tests against the Worker and SQLite. Run
 `vp run sync-list-board-example#build` to build the UI and Worker followed by a
 deployment dry run. The browser steps above exercise the React UI.

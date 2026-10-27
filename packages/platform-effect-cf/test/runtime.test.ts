@@ -1,15 +1,14 @@
 import { ProtocolError } from "@yielded/sync";
+import { Cloudflare } from "@yielded/sync-platform-cloudflare";
 import { SELF, env, reset, runInDurableObject, evictDurableObject } from "cloudflare:test";
-import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient } from "effect/http";
-import { RpcClient, RpcSerialization } from "effect/rpc";
+import { Effect, Schema } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { Counter } from "../../../examples/cloudflare/src/contract.ts";
-import type { CounterObject } from "../../../examples/cloudflare/src/worker.ts";
+import { Counter, CounterId } from "./fixtures/counter/contract.ts";
+import type { CounterObject } from "./fixtures/counter/worker.ts";
 
 const bindings = env as { COUNTERS: DurableObjectNamespace<InstanceType<typeof CounterObject>> };
-const address = Counter.address("test");
+const address = Counter.address(CounterId.make("test"));
 const header = { protocolVersion: 1, schemaVersion: 1, address };
 const stub = () => bindings.COUNTERS.getByName("counter:test");
 const Json = Schema.decodeUnknownSync(Schema.Json);
@@ -61,42 +60,33 @@ afterEach(() => reset());
 
 describe("public source on a SQLite Durable Object", () => {
   it("uses authenticated Worker identity instead of a supplied session header", async () => {
-    const transport = RpcClient.layerProtocolHttp({
-      url: "https://example.test/sync/counters/test",
-    }).pipe(Layer.provide(FetchHttpClient.layer), Layer.provide(RpcSerialization.layerJson));
-
     await Effect.runPromise(
       Effect.gen(function* () {
-        const client = yield* RpcClient.make(Counter.rpc, { flatten: true });
+        const client = yield* Cloudflare.client(Counter, {
+          address,
+          identity: {
+            actorId: "bob",
+            principal: { actorId: "bob" },
+            expiresAtMillis: 4_000_000_000_000,
+          },
+          fetch: (request) =>
+            Effect.tryPromise(() => {
+              const forwarded = new Request("https://example.test/sync/counters/test", request);
 
-        const initial = yield* client("snapshot", {
-          ...header,
-          protocolVersion: 1,
-          schemaVersion: 1,
+              forwarded.headers.set("authorization", "Bearer alice-local");
+
+              return SELF.fetch(forwarded);
+            }),
         });
 
-        yield* client("execute/$source/set", {
-          ...header,
-          protocolVersion: 1,
-          schemaVersion: 1,
-          namespace: "$source",
-          action: "set",
+        const initial = yield* client.snapshot;
+
+        yield* client.execute(Counter.actions.set, {
           commandId: "native",
           admittedGeneration: initial.position.sourceAuthorityGeneration,
           payload: 12,
         });
-      }).pipe(
-        Effect.provide(transport),
-        Effect.provideService(FetchHttpClient.Fetch, (input, init) => {
-          const request = new Request(input, init);
-
-          request.headers.set("authorization", "Bearer alice-local");
-          request.headers.set("x-yielded-session", JSON.stringify({ actorId: "bob" }));
-
-          return SELF.fetch(request);
-        }),
-        Effect.scoped,
-      ),
+      }).pipe(Effect.scoped),
     );
 
     const stored = await runInDurableObject(stub(), (_instance, state) =>

@@ -5,10 +5,8 @@ export {
   ReplicaPersistence,
   PersistenceError,
   JournalRow,
-  memory,
-  layerMemory,
   type Handle as PersistenceHandle,
-  type JournalTransaction,
+  type IntentJournal,
+  type JournalChanges,
+  type SnapshotCache,
 } from "./client/ReplicaPersistence.ts";
-
-export * as Persistence from "./client/Persistence.ts";

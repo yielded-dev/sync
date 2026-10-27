@@ -3,7 +3,7 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   pack: {
     entry: ["src/index.ts", "src/server.ts", "src/client.ts", "src/atom.ts"],
-    dts: true,
+    dts: { tsconfig: "tsconfig.build.json" },
     format: ["esm"],
     sourcemap: true,
   },

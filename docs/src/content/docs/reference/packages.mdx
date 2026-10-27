@@ -1,0 +1,81 @@
+---
+title: Packages and hosts
+---
+
+import { OwnershipLadder } from "@yielded/starlight-theme/components";
+
+Core contracts and `Server.host` are portable. Add an optional server adapter for
+native transport and lifecycle hooks, and client persistence for restart recovery.
+
+| Entry point                         | Use it for                                                         |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `@yielded/sync`                     | Shared contracts, with `./client` and `./atom` entry points        |
+| `@yielded/sync/server`              | `Server.host`, `ServerRpc`, execution, and server storage ports    |
+| `@yielded/sync-platform-browser`    | `BrowserSource`: browser services and source Atom bindings         |
+| `@yielded/sync-persistence`         | `Persistence`: shared record policy and custom drivers             |
+| `@yielded/sync-local-indexeddb`     | `IndexedDb`: browser persistence                                   |
+| `@yielded/sync-platform-cloudflare` | `DurableObject` definitions; `Cloudflare` runtime; `SqliteStorage` |
+| `@yielded/sync-platform-effect-cf`  | `EffectCfServices`: native effect-cf integration                   |
+| `@yielded/sync-platform-alchemy-cf` | `AlchemyServices`: native Alchemy integration                      |
+
+`Server.host` owns ordering, subscriptions, publication, and optional outbox
+delivery. Supply `SourceStorage` and `ServerCrypto`; connect it to Effect RPC with
+`ServerRpc.handlers`. Applications own authentication, routing, transport,
+durable wakeup scheduling, and projection destinations.
+
+`DurableObject.make(server, options)` defines a Cloudflare object independently
+of the framework. At application composition, use `.provide(EffectCfServices)` or
+`.provide(AlchemyServices("CounterObject"))` to construct its native class or
+resource declaration. Each provider supplies SQLite, crypto, requests, WebSockets,
+and alarms. Pass a custom `SourceStorage` Layer in `storage` to replace SQLite.
+Generated handlers share the source's path and ID schema with the client; the
+application supplies authentication. Each adapter's `layer(options)` export exposes
+the same platform services for custom composition. Server implementations are
+not exported from root or client entry points.
+
+For browser clients, `BrowserSource.bind` derives the connection from the client
+definition and ID, supplies browser crypto, and creates the Atom runtime. Supply
+an actor and either a persistence Layer or `"volatile"`; credentials remain
+application-owned. Use `SourceAtom.bind` for custom runtime composition.
+
+For client persistence, choose how much implementation to supply:
+
+<OwnershipLadder
+  caption="Core defines the client persistence port; optional packages supply shared record policy and platform storage."
+  levels={[
+    { name: "Core port", api: "ReplicaPersistence" },
+    { name: "Shared policy", api: "Persistence.make(…)" },
+    { name: "Browser adapter", api: "IndexedDb" },
+  ]}
+  layers={[
+    {
+      name: "Storage access",
+      cells: [
+        { owner: "app", note: "Supply an actor-bound journal and optional cache." },
+        { owner: "app", note: "Supply two scoped AtomicStore drivers." },
+        { owner: "library", note: "Browser IndexedDB." },
+      ],
+    },
+    {
+      name: "Record policy",
+      cells: [
+        { owner: "app", note: "Your formats and atomic commits." },
+        { owner: "library", note: "Journal formats, atomic batches, bounds, and cache policy." },
+        { owner: "library", note: "The same shared persistence policy." },
+      ],
+    },
+  ]}
+  shared={{
+    name: "Client runtime",
+    label: "Same core",
+    note: "The same `Client`, views, and retry protocol use `ReplicaPersistence` at every level.",
+  }}
+/>
+
+IndexedDB remains subject to browser quota and eviction. It uses
+`@yielded/sync-persistence` and retains unresolved command journals separately from disposable snapshot
+caches. See [client persistence](../client.mdx#persistence).
+
+Keep Sync packages on the same exact version. Package manifests declare supported
+Effect and framework peer ranges; the repository catalog pins the development
+combination. Read the [upgrade guidance](../RELEASE.md) before changing versions.

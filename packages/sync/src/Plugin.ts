@@ -12,6 +12,20 @@ export interface Spec {
   readonly actions: ReadonlyArray<Action.Definition>;
 }
 
+interface Input extends Omit<Spec, "message"> {
+  readonly message?: Spec["message"];
+}
+
+type Normalized<S extends Input> = S extends Spec
+  ? S
+  : Omit<S, "message"> & {
+      readonly message: "message" extends keyof S
+        ?
+            | Exclude<S["message"], undefined>
+            | (undefined extends S["message"] ? typeof Schema.Never : never)
+        : typeof Schema.Never;
+    };
+
 export interface Definition<Id extends string = string, S extends Spec = Spec> {
   readonly id: Id;
   readonly spec: S;
@@ -27,11 +41,20 @@ const PluginId = Schema.NonEmptyString.check(
   Schema.makeFilter((id) => id !== "$source", { expected: "a plugin id other than $source" }),
 );
 
-export const make = <const Id extends string, const S extends Spec>(
+export function make<const Id extends string, const S extends Input>(
+  id: Id & ValidId<Id>,
+  input: S & { readonly actions: S["actions"] & Unique<Names<S["actions"]>> } & ([S] extends [Spec]
+      ? never
+      : unknown),
+): Definition<Id, Normalized<S>>;
+
+export function make<const Id extends string, const S extends Spec>(
   id: Id & ValidId<Id>,
   input: S & { readonly actions: S["actions"] & Unique<Names<S["actions"]>> },
-): Definition<Id, S> => {
-  const spec: S = input;
+): Definition<Id, S>;
+
+export function make(id: string, input: Input): unknown {
+  const spec = { ...input, message: input.message ?? Schema.Never };
 
   validate(PluginId, id, "plugin id");
   const actions = registry(spec.actions);
@@ -39,10 +62,10 @@ export const make = <const Id extends string, const S extends Spec>(
 
   return Object.freeze({
     id,
-    spec: frozenSpec as S,
+    spec: frozenSpec,
     snapshot: spec.snapshot,
     event: spec.event,
     message: spec.message,
     actions,
   });
-};
+}

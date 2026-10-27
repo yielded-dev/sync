@@ -12,11 +12,12 @@ const fromRegistry = process.argv.includes("--registry");
 
 const packages = [
   ["sync", "@yielded/sync"],
+  ["persistence", "@yielded/sync-persistence"],
+  ["platform-browser", "@yielded/sync-platform-browser"],
   ["platform-cloudflare", "@yielded/sync-platform-cloudflare"],
   ["platform-effect-cf", "@yielded/sync-platform-effect-cf"],
   ["platform-alchemy-cf", "@yielded/sync-platform-alchemy-cf"],
   ["local-indexeddb", "@yielded/sync-local-indexeddb"],
-  ["local-expo", "@yielded/sync-local-expo"],
 ];
 
 const run = (command, args, cwd = root) => execFileSync(command, args, { cwd, stdio: "inherit" });
@@ -81,7 +82,6 @@ try {
   dependencies.effect = rootManifest.catalog.effect;
   dependencies["effect-cf"] = rootManifest.catalog["effect-cf"];
   dependencies.alchemy = rootManifest.catalog.alchemy;
-  dependencies["expo-sqlite"] = rootManifest.catalog["expo-sqlite"];
 
   await writeFile(
     join(consumer, "package.json"),
@@ -138,15 +138,16 @@ try {
   await writeFile(
     join(consumer, "src/index.ts"),
     [
-      'export { Action, Plugin, Source, SourceCatalog } from "@yielded/sync";',
+      'export { Action, Plugin, Source } from "@yielded/sync";',
       'export { Server, SourceStorage } from "@yielded/sync/server";',
       'export { Client, ReplicaPersistence } from "@yielded/sync/client";',
+      'export { Persistence } from "@yielded/sync-persistence";',
       'export { SourceAtom } from "@yielded/sync/atom";',
-      'export { Cloudflare, SqliteStorage } from "@yielded/sync-platform-cloudflare";',
-      'export { EffectCf } from "@yielded/sync-platform-effect-cf";',
-      'export { AlchemyCf } from "@yielded/sync-platform-alchemy-cf";',
+      'export { BrowserSource } from "@yielded/sync-platform-browser";',
+      'export { Cloudflare, DurableObject, SqliteStorage } from "@yielded/sync-platform-cloudflare";',
+      'export { EffectCfServices } from "@yielded/sync-platform-effect-cf";',
+      'export { AlchemyServices } from "@yielded/sync-platform-alchemy-cf";',
       'export { IndexedDb } from "@yielded/sync-local-indexeddb";',
-      'export { ExpoSqlite } from "@yielded/sync-local-expo";',
       "",
     ].join("\n"),
   );

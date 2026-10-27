@@ -76,6 +76,7 @@ export interface Replica<Snapshot, Rejection = never> {
     readonly error: Rejection | ClientError;
   }>;
   readonly error: ClientError | undefined;
+  readonly cacheError: ClientError | undefined;
 }
 
 export const initial = <Snapshot, Rejection = never>(
@@ -88,6 +89,7 @@ export const initial = <Snapshot, Rejection = never>(
   pending: [],
   failures: [],
   error: undefined,
+  cacheError: undefined,
 });
 
 export const encode = <S extends WireSchema>(

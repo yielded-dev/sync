@@ -1,0 +1,314 @@
+---
+title: Headless clients and Atom
+---
+
+import { Trace } from "@yielded/starlight-theme/components";
+
+A client session captures one authenticated actor. It owns the source connections,
+optimistic state, and recovery; UI bindings read that same state.
+
+## Open a source
+
+`Client.definition` supplies a pure event reducer for the shared contract.
+Add optimistic reducers only for actions that need immediate local feedback;
+other actions leave the view unchanged until authority arrives. Register matching
+`Client.plugin` definitions for declared plugins, or omit `plugins` when there are
+none. Each reducer receives only its own snapshot slot.
+
+Using the `Counter` from [getting started](./guide/getting-started.md):
+
+```ts
+import { Client } from "@yielded/sync/client";
+import { Effect } from "effect";
+
+import { Counter, CounterId } from "./counter";
+
+const definition = Client.definition(Counter, {
+  applyEvent: (_snapshot, event) => ({ value: event.value }),
+});
+
+export const program = Effect.gen(function* () {
+  const session = yield* Client.make(definition, { persistence: { mode: "volatile" } });
+  const lease = yield* session.open(Counter.address(CounterId.make("demo")));
+  const counter = Client.view(lease);
+
+  yield* counter.ready;
+  return yield* lease.execute(Counter.actions.set, { value: 7 });
+});
+```
+
+Provide `Client.CurrentActor`, `Client.Transport`, and a `Scope` around the whole
+workflow. `CurrentActor` contains `{ actorId }`; it selects local ownership and
+does not authenticate the user. Close the old session before opening one for a
+different actor. Do not return a live client from an already-completed scope.
+
+Each `open` holds a scoped lease. Concurrent leases share one coordinator; closing
+the last disconnects it. Closing a lease cancels its in-flight operations while
+retaining admitted commands for recovery.
+
+`Client.view(lease)` exposes root data through `read`, `changes`, and `ready`.
+Here, `counter.read` returns a replica whose `value` is `{ value: number }` or
+`undefined`. Its authoritative and provisional snapshots use the same shape,
+even when plugins are added. `Client.view(lease, id)` selects a declared plugin
+with its inferred snapshot type. All views share the lease's lifetime, connection
+state, pending commands, and failures. Commands still run through the lease.
+
+Use `lease.read`, `lease.changes`, and `lease.ready` when you need the complete
+`{ source, plugins }` snapshot. Views do not change wire or persisted data.
+
+## Retry and recovery
+
+`execute` captures the payload and journals the command before sending it.
+For local-first interactions, `enqueue` returns the command id after journal
+admission and delivers it in the background. Observe `pending`, `failures`, and
+`error` on the replica for delivery progress; a returned id is not server
+acceptance. A declared rejection removes its optimistic overlay and appears in `failures`;
+`dismissFailure(id)` hides that terminal failure.
+
+An offline edit in persistent mode keeps one identity through delivery and recovery:
+
+<Trace
+  lanes={[
+    { id: "app", label: "Your app" },
+    { id: "library", label: "Sync client" },
+    { id: "server", label: "Sync server" },
+  ]}
+  steps={[
+    {
+      lane: "app",
+      title: "Queue an edit",
+      code: "lease.enqueue(action, payload)",
+      detail: "A known authority permits admission while disconnected.",
+    },
+    {
+      lane: "library",
+      title: "Retain the command",
+      detail:
+        "The original command id and encoded payload stay in your journal. A supplied optimistic reducer updates the view.",
+    },
+    {
+      lane: "library",
+      title: "Resume delivery",
+      code: "lease.recover",
+      detail:
+        "After a parked connection recovers, Sync looks up uncertain results before resending the same command.",
+    },
+    {
+      lane: "server",
+      title: "Return the authoritative outcome",
+      detail:
+        "A retained receipt returns its exact result. A safe resend without a receipt can execute the action.",
+    },
+    {
+      lane: "library",
+      title: "Reconcile the accepted edit",
+      detail:
+        "Ordered events replace optimism. The command stays pending until its result is known and authority covers its position.",
+    },
+  ]}
+/>
+
+When an admitted outcome is unknown, `ClientError` retains its `commandId`.
+Call `retry(id)` to look up the result and, when safe, resend the original command.
+It accepts no replacement payload and never allocates a new identity. Because an
+id may belong to any action, retry returns the union of action result/error types;
+`execute` retains the selected action's exact types.
+
+Action results and replicated views arrive independently; observe `changes` for
+updated state. An event can confirm the edit before its return value arrives. The overlay then
+clears, but `ConfirmedAwaitingResult` stays pending until the result is known.
+Expired results and ambiguous commands remain unresolved. An authority change
+marks old work `AuthorityChanged`; the application must reconcile it before
+reissuing edits.
+
+The client applies ordered events and recovers after gaps or buffer overflow.
+Cached snapshots remain provisional and cannot overwrite live state. A restored
+cache retains its authority identity for offline command admission without
+treating its contents as fresh. Connection
+retry exhaustion does not prevent these edits; authorization, storage, and
+protocol failures still refuse new work. Reconnect with `recover` to resume
+delivery. Commands remain bound to their original authority after recovery.
+
+Keep application history and other projections outside the replica. Ephemeral
+`messages`, `publishMessage`, and `publishPluginMessage` never enter the durable
+journal. Slow observers may receive coalesced view updates or miss ephemeral
+messages.
+
+Configure bounds through `Client.make` options:
+
+| Option                                  | Default                                                        |
+| --------------------------------------- | -------------------------------------------------------------- |
+| `limits.maxSources`                     | 32 retained sources                                            |
+| `limits.maxPendingPerSource`            | 100 commands                                                   |
+| `limits.frameBuffer`                    | 256 frames                                                     |
+| `limits.operationTimeout`               | 10 seconds                                                     |
+| `limits.heartbeatInterval`              | 30 seconds between snapshot probes                             |
+| `retry.maxAttempts`                     | 8 consecutive connection attempts; also bounds result recovery |
+| `retry.initialDelay` / `retry.maxDelay` | 250 ms exponential backoff, capped at 30 seconds               |
+
+When supplying `limits` or `retry`, include its required fields. Authentication
+failures or exhausted connection attempts park the source. `recover` restarts it
+and resets result-recovery attempts. Sources with unresolved work are retained
+when inactive.
+
+## Transport
+
+`Client.layerWebSocketTransport` provides `Client.Transport` with JSON RPC. Use
+the shared source definition to construct the URL:
+
+```ts
+Client.layerWebSocketTransport(Counter, {
+  origin: window.location.origin,
+  id: CounterId.make("demo"),
+});
+```
+
+It uses the source's `path`, encodes the ID, and chooses `ws` or `wss` from the
+origin. Optional `query` supplies application parameters, such as short-lived
+connection credentials. Invalid origins or IDs fail the Layer with `ProtocolError`.
+For a custom URL, pass `{ url }` instead; it accepts a string or an Effect that
+produces one when connecting.
+
+Supply `Socket.WebSocketConstructor`, such as
+`Socket.layerWebSocketConstructorGlobal` in a browser. The application owns
+authentication and session lifetime. A route serving one address needs one
+transport; multi-address applications need a routing transport.
+
+Use `Client.layerRpcTransport(contract)` with your own `RpcClient.Protocol` for
+other protocol composition, or scoped `Client.rpcTransport` to decorate it.
+
+Custom transports provide typed Effects for snapshot, execute, result, and publish,
+and a scoped Stream for subscription. Subscription must include bootstrap/replay.
+Capture transport dependencies when constructing its Layer so operations have no
+remaining service requirements. Core imports no platform transport implementation.
+
+## Persistence
+
+Choose `{ mode: "volatile" }` or `{ mode: "persistent" }` explicitly. Persistent
+mode requires `ReplicaPersistence`; failures never silently switch to volatile
+mode. Provide the actor once around the client, transport, and persistence Layers.
+Core requires only an actor-bound journal; a snapshot cache is optional.
+
+Use `IndexedDb` from
+[`@yielded/sync-local-indexeddb`](https://github.com/yielded-dev/sync/blob/main/packages/local-indexeddb/README.md)
+in browsers. Keep the persistence Layer alive for the complete client session.
+For custom storage, implement the
+[`ReplicaPersistence` port](https://github.com/yielded-dev/sync/blob/main/packages/sync/src/client/ReplicaPersistence.ts)
+directly or use the shared `Persistence` driver policy from
+[`@yielded/sync-persistence`](https://github.com/yielded-dev/sync/blob/main/packages/persistence/README.md).
+Core does not depend on these implementations or their storage formats.
+
+Snapshot caches are disposable. Journals retain exact unresolved commands; storage
+or capacity failure refuses new work instead of evicting them. Unsupported journal
+entries remain quarantined and reserve their identities and capacity. `retry`
+returns `Quarantined` for these entries; keep them for explicit recovery.
+
+Snapshot saves coalesce. Cache failures appear in `replica.cacheError` and do not
+park synchronization or prevent journal admission. Await `session.flush` when the
+application backgrounds to report pending save failures. Initial journal admission
+is already durable and does not depend on an unload callback. Session disposal
+retains stored data. Close sessions and reconcile unresolved commands before
+deleting local data or changing namespaces.
+
+## Atom bindings
+
+`BrowserSource.bind` creates a browser source instance with typed action atoms.
+It supplies the WebSocket transport, browser crypto, current actor, and Atom
+runtime. The client definition already contains the source contract.
+
+```tsx
+import { useAtom } from "@effect/atom-react";
+import { BrowserSource } from "@yielded/sync-platform-browser";
+
+export const counter = BrowserSource.bind(definition, {
+  id: CounterId.make("demo"),
+  actorId: "alice",
+  persistence: "volatile",
+});
+
+function SetCounter() {
+  const [result, set] = useAtom(counter.action.set);
+
+  return (
+    <button disabled={result.waiting} onClick={() => set({ value: 7 })}>
+      Set to 7
+    </button>
+  );
+}
+```
+
+The origin defaults to the current page; optional `origin` and `query` configure
+the connection. The actor scopes local ownership and does not authenticate it.
+Pass a `ReplicaPersistence` Layer, such as `IndexedDb.layer({ namespace: "counter" })`,
+instead of `"volatile"` for persistent operation. The Layer receives the current
+actor; storage setup failures never switch to volatile mode.
+
+Use `counter.fn` to compose callable actions with local state. It accepts a
+generator directly and provides the binding's runtime services:
+
+```ts
+import { Atom } from "effect/reactivity";
+
+const draft = Atom.make(0);
+const save = counter.fn(function* () {
+  const value = yield* Atom.get(draft);
+  yield* counter.action.set({ value });
+  yield* Atom.set(draft, 0);
+});
+```
+
+The action applies its configured optimistic reducer after local admission;
+awaiting it waits for the server result. The draft clears only on success.
+Rejections remove the prediction; uncertain outcomes retain the original command
+for recovery. Actions without an optimistic reducer wait for authoritative state.
+
+For an existing runtime or custom transport, `SourceAtom.bind(definition,
+{ runtime, address, persistence })` accepts an `Atom.runtime` containing
+`CurrentActor`, `Transport`, and the definition's services. Its persistence option
+is `{ mode: "volatile" }` or `{ mode: "persistent" }`; persistent mode requires
+`ReplicaPersistence` in that runtime.
+
+Define bindings once, or use `Atom.family` for parameterized addresses. Their
+client and lease are acquired lazily and shared within the registry. Disposal
+releases them; dispose the old registry before switching actors.
+The [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
+shows browser persistence, workflows, and `RegistryProvider` setup.
+
+| Binding             | Behavior                                                                          |
+| ------------------- | --------------------------------------------------------------------------------- |
+| `replica`           | An `AsyncResult` replica whose snapshots contain root data directly               |
+| `status`            | Connection state; observing it keeps the source connected                         |
+| `action.<name>`     | A callable writable atom; the call returns an Effect of that invocation's result  |
+| `fn(generator)`     | A function atom using the binding's runtime, with inferred input and result types |
+| `retry` / `recover` | Writable atoms accepting a saved command ID / no input                            |
+| `plugins.<id>`      | The declared plugin's `replica`, `action`, and `presence` bindings                |
+
+Action atoms use Effect Atom's shared mutation state and cancellation semantics.
+Set `actions: { set: { concurrent: true } }` to allow overlapping writes;
+plugin options use `plugins.<id>.actions`. Interrupted waits do not delete
+admitted commands. Callable actions use the current `AtomRegistry`, supplied by
+`fn`; each call receives its own result even when writes overlap. The shared atom
+retains Effect Atom's concurrent mutation state. Native Atom combinators derive
+atoms; use the original bound action when calling it as a function.
+
+For ephemeral presence, define `counter.presence(payloadAtom)` when the source
+declares a message schema. Observing the returned atom announces the current
+payload and lists other actors' peers as `{ actorId, connectionId, value,
+expiresAtMillis }`. Payload changes publish immediately; heartbeats refresh
+unchanged values. Departures and disconnects clear peers, and unmounting stops
+both publication and observation. Presence never enters the journal.
+
+| Presence option     | Default                                                 |
+| ------------------- | ------------------------------------------------------- |
+| `heartbeatInterval` | 8 seconds                                               |
+| `timeToLive`        | 25 seconds; expiry is checked every 5 seconds or sooner |
+| `maxPeers`          | 32 connections, retaining the most recently heard       |
+
+Durations must be finite and positive, with the heartbeat shorter than the TTL.
+`maxPeers` must be a positive integer. Transient publication failures are dropped;
+the next heartbeat sends the latest value.
+
+For an existing headless session, `SourceAtom.make(session)` supplies
+`replica(address)`, `passiveReplica(address)`, and `status(address)` atoms, plus
+Effect-returning `execute`, `retry`, and `recover` methods. Its passive replicas
+and status reads do not connect; active replicas hold leases.

@@ -1,10 +1,10 @@
 import { Action, Source } from "@yielded/sync";
-import { EffectCf } from "@yielded/sync-platform-effect-cf";
+import { DurableObject } from "@yielded/sync-platform-cloudflare";
+import { EffectCfServices } from "@yielded/sync-platform-effect-cf";
 import { Server } from "@yielded/sync/server";
 import { Effect, Schema } from "effect";
-import { DurableObject } from "effect-cf";
 
-export { CounterObject, default } from "../../../../examples/cloudflare/src/worker.ts";
+export { CounterObject, default } from "./counter/worker.ts";
 
 export const Publication = Source.make({
   kind: "publication",
@@ -29,18 +29,13 @@ const server = Server.make(Publication, {
     return Effect.void;
   },
   actions: {
-    set: ({ payload }) =>
-      Effect.succeed(
-        Server.commit({ state: payload, events: [payload], result: payload, outbox: [] }),
-      ),
+    set: ({ payload }) => Effect.succeed({ state: payload, events: [payload], result: payload }),
   },
   plugins: [],
 });
 
-const sync = EffectCf.make(server, {
-  storageNamespace: "publication",
+export const PublicationObject = DurableObject.make(server, {
+  storage: { namespace: "publication" },
   replay: { maxEvents: 4, maxBatchBytes: 600_000 },
   sockets: { maxConnections: 4, bufferSize: 16 },
-});
-
-export const PublicationObject = DurableObject.make(sync.layer, sync.handlers);
+}).provide(EffectCfServices);
