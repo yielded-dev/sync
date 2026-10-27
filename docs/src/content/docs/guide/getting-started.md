@@ -2,41 +2,19 @@
 title: Getting started
 ---
 
-Yielded Sync separates a source's public contract from its authoritative host and
-its clients. The core host runs wherever Effect runs. Install it with its Effect
-peer:
+Start with a shared contract: the state clients can read and the actions they can
+submit. Install Sync with its Effect peer:
 
 ```sh
 bun add @yielded/sync@{{SYNC_VERSION}} effect
 ```
 
-For Cloudflare's native Worker and Durable Object lifecycle, optionally add one
-framework adapter:
+## Define a source
 
-```sh
-bun add @yielded/sync-platform-effect-cf@{{SYNC_VERSION}} effect-cf
-# Or:
-bun add @yielded/sync-platform-alchemy-cf@{{SYNC_VERSION}} @alchemy.run/cloudflare alchemy
-```
+This counter has one action, `set`, which returns the previous and new values.
+Save the contract in a module shared by your server and client:
 
-For durable browser storage, add IndexedDB persistence:
-
-```sh
-bun add @yielded/sync-local-indexeddb@{{SYNC_VERSION}}
-```
-
-Keep Sync packages on the same exact version and satisfy the peer ranges in
-their manifests. Applications with custom client
-storage can use `@yielded/sync-persistence` for shared record policy or implement
-the core port directly. See [packages and hosts](../reference/packages.mdx).
-
-## Define a shared contract
-
-`Source.make` defines a public snapshot, durable event, and registered actions.
-Messages and plugins are optional. Effect Schema owns values that cross the wire
-or are persisted.
-
-```ts
+```ts title="counter.ts"
 import { Action, Source } from "@yielded/sync";
 import { Schema } from "effect";
 
@@ -46,51 +24,40 @@ export const Counter = Source.make({
   kind: "counter",
   id: CounterId,
   schemaVersion: 1,
-  snapshot: Schema.Struct({ value: Schema.Number }),
-  event: Schema.Struct({ value: Schema.Number }),
+  snapshot: Schema.Struct({ value: Schema.Finite }),
+  event: Schema.Struct({ value: Schema.Finite }),
   actions: [
     Action.make("set", {
-      payload: Schema.Struct({ value: Schema.Number }),
-      success: Schema.Struct({
-        previous: Schema.Number,
-        current: Schema.Number,
-      }),
+      payload: Schema.Struct({ value: Schema.Finite }),
+      success: Schema.Struct({ previous: Schema.Finite, current: Schema.Finite }),
       error: Schema.Never,
     }),
   ],
 });
 ```
 
-The optional `id` schema gives addresses a branded string type and validates IDs
-on both sides of the connection. Without it, IDs are nonempty strings. The default
-HTTP path is `/sync/counter/<id>`; set `path: "/sync/counters"` in this shared
-definition to override the base path for both client and server. IDs are encoded
-as one path segment; dot-only IDs (`.` and `..`) cannot be used in HTTP routes.
+| Field      | What it describes                           |
+| ---------- | ------------------------------------------- |
+| `snapshot` | State every authorized client can read      |
+| `event`    | A durable change the client reducer applies |
+| `actions`  | Typed payloads, results, and domain errors  |
+| `id`       | Validation and typing for instance IDs      |
 
-The root import is portable between server and client. Server implementations
-come from `@yielded/sync/server`; headless clients come from
-`@yielded/sync/client`. The [consumer example](../api/consumer.md) shows the
-matching server definition and links to the runnable React board.
+A source definition can have many instances:
 
-## Connect server and client
+```ts
+const address = Counter.address(CounterId.make("demo"));
+```
 
-Use `Server.make` to supply private state, action handlers, authorization, and
-initialization. Open one `Server.host` per storage authority, providing
-`SourceStorage`, `ServerCrypto`, and the definition's services. Its scoped
-connections carry authenticated sessions; `ServerRpc.handlers` binds the host to
-Effect RPC. The host commits state, events, exact outcomes, and optional outbox
-obligations atomically. Cloudflare adapters supply SQLite, crypto, native transports,
-and lifecycle hooks automatically. The [counter example](../api/consumer.md)
-explains this composition.
+The default HTTP path is `/sync/counter/demo`. Set `path` on the source to change
+the base path. HTTP IDs must be nonempty and cannot be `.` or `..`.
 
-On the client, `Client.definition` supplies a pure event reducer and optional
-optimistic reducers. `Client.make` opens a session for one authenticated actor,
-with an application transport and explicit persistence. Open a source address,
-wait for `ready`, then execute a registered action. For a UI, `SourceAtom.bind`
-handles session acquisition and exposes the replica and typed `action.<name>`
-atoms through the application's Atom runtime.
+## Add the server and client
 
-Use `{ mode: "volatile" }` for disposable client state or `{ mode: "persistent" }`
-with a `ReplicaPersistence` Layer. Persistent journals retain unresolved command
-identities across restarts; snapshot caches can be rebuilt. The
-[client guide](../client.mdx) covers session lifetime and safe retry.
+Continue with the [counter example](../api/consumer.md) to implement the action
+and client reducer, then [connect a client](../client.mdx).
+
+Choose a [host and persistence adapter](../reference/packages.mdx) for your app.
+Keep Sync packages on the same exact version; their manifests specify compatible
+Effect and framework peers. For a complete frontend and Worker, run the
+[React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board).
