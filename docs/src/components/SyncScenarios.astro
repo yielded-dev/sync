@@ -1,0 +1,275 @@
+---
+/**
+ * Animated Sync scenarios: three clients reserve seats from one source while the server
+ * orders commands, publishes events, and answers exact retries from receipts.
+ *
+ * ```mdx
+ * <SyncScenarios scenarios={["conflict", "retry"]} />
+ * ```
+ *
+ * Scenarios default to all of them, shown as tabs. A scenario plays once when it scrolls
+ * into view; readers can pause it or replay any step from its list. With reduced motion it
+ * waits for the reader and changes state without movement. Without JavaScript, the first
+ * frame and every step's caption still render.
+ */
+import SyncLegend from "./SyncLegend.astro";
+import SyncPlay from "./SyncPlay.astro";
+import SyncStage from "./SyncStage.astro";
+import { inline, scenarios, type ScenarioId } from "./sync-scenarios.ts";
+
+interface Props {
+  readonly scenarios?: ReadonlyArray<ScenarioId>;
+}
+
+const { scenarios: ids = scenarios.map(({ id }) => id) } = Astro.props;
+
+const shown = ids.map((id) => {
+  const scenario = scenarios.find((candidate) => candidate.id === id);
+
+  if (scenario === undefined) throw new Error(`Unknown Sync scenario "${id}"`);
+
+  return scenario;
+});
+
+const tabs = shown.length > 1;
+const base = `sync-scenarios-${ids.join("-")}`;
+---
+
+<figure class="sync-scenarios sync-demo not-content" data-sync-scenarios>
+  {
+    tabs && (
+      <div class="tabs" role="tablist" aria-label="Sync scenarios">
+        {shown.map((scenario, index) => (
+          <button
+            type="button"
+            role="tab"
+            id={`${base}-${scenario.id}-tab`}
+            aria-controls={`${base}-${scenario.id}`}
+            aria-selected={index === 0 ? "true" : "false"}
+            tabindex={index === 0 ? 0 : -1}
+          >
+            {scenario.label}
+          </button>
+        ))}
+      </div>
+    )
+  }
+  {
+    shown.map((scenario, index) => (
+      <section
+        class="scenario"
+        id={`${base}-${scenario.id}`}
+        data-scenario={scenario.id}
+        role={tabs ? "tabpanel" : undefined}
+        aria-labelledby={tabs ? `${base}-${scenario.id}-tab` : undefined}
+        hidden={index !== 0}
+      >
+        <SyncStage scenario={scenario} />
+        <SyncLegend />
+        <div class="intro">
+          <p class="setup">{scenario.setup}</p>
+          <SyncPlay />
+        </div>
+        <ol class="steps">
+          {scenario.steps.map(({ caption }) => (
+            <li>
+              <button type="button" data-step>
+                <span>
+                  {inline(caption).map((part) =>
+                    "code" in part ? <code>{part.code}</code> : part.text,
+                  )}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      </section>
+    ))
+  }
+  <noscript>
+    <style is:inline>
+      .sync-scenarios .scenario[hidden] {
+        display: block !important;
+      }
+
+      .sync-scenarios .tabs {
+        display: none;
+      }
+    </style>
+  </noscript>
+</figure>
+
+<script>
+  import { mount } from "./sync-player.ts";
+  import { scenarios } from "./sync-scenarios.ts";
+
+  for (const figure of document.querySelectorAll<HTMLElement>("[data-sync-scenarios]")) {
+    const panels = [...figure.querySelectorAll<HTMLElement>(".scenario")];
+    const tabs = [...figure.querySelectorAll<HTMLButtonElement>("[role=tab]")];
+
+    const players = panels.map((panel) => {
+      const scenario = scenarios.find(({ id }) => id === panel.dataset.scenario);
+
+      return scenario === undefined ? undefined : mount(panel, scenario, { loop: false });
+    });
+
+    const select = (index: number) => {
+      tabs.forEach((tab, position) => {
+        tab.setAttribute("aria-selected", position === index ? "true" : "false");
+        tab.tabIndex = position === index ? 0 : -1;
+      });
+      panels.forEach((panel, position) => {
+        panel.hidden = position !== index;
+        if (position !== index) players[position]?.deactivate();
+      });
+      players[index]?.activate();
+    };
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => select(index));
+      tab.addEventListener("keydown", (event) => {
+        const target = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: tabs.length - 1 }[
+          event.key
+        ];
+
+        if (target === undefined) return;
+        event.preventDefault();
+        const next = (target + tabs.length) % tabs.length;
+
+        select(next);
+        tabs[next]?.focus();
+      });
+    });
+
+    select(0);
+  }
+</script>
+
+<style>
+  .sync-scenarios {
+    margin: 2rem 0 0;
+  }
+
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1.25rem;
+    margin-bottom: 0.9rem;
+    border-bottom: 1px solid var(--yl-border);
+  }
+
+  [role="tab"] {
+    margin-bottom: -1px;
+    padding: 0.45rem 0;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--sl-color-gray-3);
+    font: inherit;
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  [role="tab"]:hover {
+    color: var(--sl-color-white);
+  }
+
+  [role="tab"][aria-selected="true"] {
+    border-bottom-color: var(--ss-accent);
+    color: var(--sl-color-white);
+  }
+
+  .scenario > :global(.sync-legend) {
+    margin-top: 0.6rem;
+  }
+
+  .intro {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1.1rem;
+  }
+
+  .setup {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+
+  .steps {
+    display: grid;
+    gap: 0.1rem;
+    margin: 0.6rem 0 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+  }
+
+  .steps li {
+    counter-increment: step;
+  }
+
+  .steps button {
+    display: grid;
+    grid-template-columns: 1.4rem minmax(0, 1fr);
+    width: 100%;
+    padding: 0.35rem 0.5rem;
+    border: 0;
+    border-radius: 0.4rem;
+    background: none;
+    color: var(--sl-color-gray-3);
+    font: inherit;
+    font-size: var(--sl-text-sm);
+    line-height: 1.55;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .steps button::before {
+    content: counter(step);
+    color: var(--sl-color-gray-4);
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: calc(var(--sl-text-sm) * 1.55);
+  }
+
+  .steps button:hover {
+    background: var(--yl-bg-raised);
+    color: var(--sl-color-white);
+  }
+
+  .steps button[aria-current="step"] {
+    background: color-mix(in srgb, var(--ss-accent) 9%, transparent);
+    color: var(--sl-color-white);
+  }
+
+  .steps button[aria-current="step"]::before {
+    color: var(--ss-accent);
+  }
+
+  .sync-scenarios .steps code {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--sl-color-white);
+    font-family: var(--sl-font-mono);
+    font-size: 0.9em;
+  }
+
+  @media (max-width: 40rem) {
+    .intro {
+      align-items: flex-start;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .steps button {
+      transition: none;
+    }
+  }
+</style>

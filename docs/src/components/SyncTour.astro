@@ -1,0 +1,296 @@
+---
+/**
+ * A looping Sync demo for the landing page: one story through optimistic edits, fan-out,
+ * a lost response answered from its receipt, and a race for the last seat.
+ *
+ * ```mdx
+ * <SyncTour />
+ * ```
+ *
+ * It plays while visible and loops until the reader pauses it or picks a step. With reduced
+ * motion it waits for the reader. Without JavaScript, the first frame and the captions render
+ * as a list.
+ */
+import SyncLegend from "./SyncLegend.astro";
+import SyncPlay from "./SyncPlay.astro";
+import SyncStage from "./SyncStage.astro";
+import { inline, tour } from "./sync-scenarios.ts";
+---
+
+<figure class="sync-tour sync-demo not-content" data-sync-tour aria-label="Live Sync demo">
+  <div class="top">
+    <p class="eyebrow"><span class="dot" aria-hidden="true"></span>Live demo</p>
+    <SyncLegend />
+  </div>
+  <SyncStage scenario={tour} />
+  <div class="bar">
+    <div class="ticker">
+      <p class="setup">{tour.setup}</p>
+      <ol class="captions">
+        {
+          tour.steps.map(({ caption }) => (
+            <li data-caption>
+              {inline(caption).map((part) => ("code" in part ? <code>{part.code}</code> : part.text))}
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+    <div class="controls">
+      <div class="dots">
+        {
+          tour.steps.map((_, index) => (
+            <button type="button" data-step aria-label={`Play step ${index + 1}`} />
+          ))
+        }
+      </div>
+      <SyncPlay />
+    </div>
+  </div>
+</figure>
+
+<script>
+  import { mount } from "./sync-player.ts";
+  import { tour } from "./sync-scenarios.ts";
+
+  for (const figure of document.querySelectorAll<HTMLElement>("[data-sync-tour]")) {
+    mount(figure, tour, { loop: true })?.activate();
+    figure.dataset.ready = "";
+  }
+</script>
+
+<style>
+  .sync-tour {
+    margin: 0 0 3.5rem;
+  }
+
+  .top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--sl-color-gray-3);
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-xs);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--ss-accent);
+    animation: live 1.8s ease-in-out infinite;
+  }
+
+  /* A soft glow behind the server, and brighter messages on the wire. */
+  .sync-tour :global(.sync-stage) {
+    background-image:
+      radial-gradient(
+        70% 55% at 50% 100%,
+        color-mix(in srgb, var(--ss-accent) 8%, transparent),
+        transparent
+      ),
+      linear-gradient(var(--yl-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--yl-grid) 1px, transparent 1px);
+    background-position:
+      0 0,
+      -1px -1px,
+      -1px -1px;
+    background-size:
+      100% 100%,
+      1.25rem 1.25rem,
+      1.25rem 1.25rem;
+  }
+
+  .sync-tour :global(.packet[data-direction="down"]) {
+    box-shadow: 0 0 1rem color-mix(in srgb, var(--ss-accent) 45%, transparent);
+  }
+
+  .sync-tour :global(.packet[data-rejected]) {
+    box-shadow: 0 0 1rem color-mix(in srgb, var(--ss-fail) 45%, transparent);
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .ticker {
+    min-width: 0;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-base);
+    line-height: 1.5;
+  }
+
+  .setup {
+    color: var(--sl-color-gray-3);
+  }
+
+  .captions {
+    margin: 0.5rem 0 0;
+    padding-left: 1.25rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  .sync-tour .captions code {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: var(--sl-font-mono);
+    font-size: 0.9em;
+  }
+
+  .controls {
+    display: none;
+    flex: none;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  /* Once the player runs, captions take turns in one place instead of forming a list. */
+  [data-ready] .ticker {
+    display: grid;
+  }
+
+  [data-ready] .ticker > *,
+  [data-ready] .captions li {
+    grid-area: 1 / 1;
+  }
+
+  [data-ready] .captions {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    color: var(--sl-color-white);
+    list-style: none;
+  }
+
+  [data-ready] .setup,
+  [data-ready] .captions li {
+    transition:
+      opacity 300ms ease,
+      translate 300ms ease;
+  }
+
+  [data-ready] .captions li:not([data-current]),
+  [data-ready] .ticker:has([data-current]) .setup {
+    opacity: 0;
+    translate: 0 0.3rem;
+  }
+
+  [data-ready] .controls {
+    display: flex;
+  }
+
+  .dots {
+    display: flex;
+    align-items: center;
+  }
+
+  .dots button {
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  .dots button::before {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: var(--yl-border-strong);
+    transition:
+      width 250ms ease,
+      background-color 250ms ease;
+  }
+
+  .dots button:hover::before {
+    background: var(--sl-color-gray-3);
+  }
+
+  .dots button:has(~ [aria-current])::before {
+    background: var(--sl-color-gray-4);
+  }
+
+  .dots button[aria-current]::before {
+    width: 1.1rem;
+    background: var(--ss-accent);
+  }
+
+  @media (min-width: 50rem) {
+    .sync-tour {
+      --ss-gap: 1.5rem;
+      --ss-wire: 5rem;
+      --ss-seat: 1.9rem;
+      --ss-text: 0.78rem;
+    }
+
+    .sync-tour :global(.sync-stage) {
+      padding: 1.5rem;
+    }
+
+    .sync-tour :global(.node) {
+      padding: 0.9rem 1rem;
+    }
+
+    .sync-tour :global(.client .name) {
+      font-size: var(--sl-text-base);
+    }
+
+    .sync-tour :global(.seats) {
+      gap: 0.4rem;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .bar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .ticker {
+      font-size: var(--sl-text-sm);
+    }
+
+    .controls {
+      justify-content: space-between;
+    }
+  }
+
+  @keyframes live {
+    50% {
+      box-shadow: 0 0 0 5px color-mix(in srgb, var(--ss-accent) 18%, transparent);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot {
+      animation: none;
+    }
+
+    [data-ready] .setup,
+    [data-ready] .captions li,
+    .dots button::before {
+      transition: none;
+    }
+  }
+</style>

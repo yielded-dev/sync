@@ -1,0 +1,529 @@
+/*
+ * The Sync stage: clients above, their connections, and the server below. Panel contents are
+ * rendered from strings at build time and in the browser, so these styles are global and
+ * scoped by the `sync-demo` root class.
+ */
+.sync-demo {
+  --ss-accent: var(--sl-color-accent);
+  --ss-fail: var(--sl-color-red);
+  --ss-gap: 1rem;
+  --ss-wire: 4.75rem;
+  --ss-seat: 1.4rem;
+  --ss-text: 0.7rem;
+}
+
+.sync-demo [hidden] {
+  display: none !important;
+}
+
+.sync-demo p {
+  margin: 0;
+}
+
+.sync-demo button:focus-visible {
+  outline: 2px solid var(--ss-accent);
+  outline-offset: 2px;
+}
+
+.sync-demo .sync-stage {
+  padding: 1rem;
+  border: 1px solid var(--yl-border);
+  border-radius: 0.6rem;
+  background-color: var(--yl-bg-sunken);
+  background-image:
+    linear-gradient(var(--yl-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--yl-grid) 1px, transparent 1px);
+  background-position: -1px -1px;
+  background-size: 1.25rem 1.25rem;
+}
+
+.sync-demo .sync-stage > * {
+  transition: opacity 350ms ease;
+}
+
+.sync-demo .sync-stage[data-restarting] > * {
+  opacity: 0;
+}
+
+.sync-demo .lanes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: auto var(--ss-wire);
+  column-gap: var(--ss-gap);
+}
+
+.sync-demo .node {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--yl-border-strong);
+  border-radius: 0.5rem;
+  background: var(--yl-bg-raised);
+  transition:
+    border-color 250ms ease,
+    opacity 250ms ease;
+}
+
+.sync-demo .client[data-connection="idle"] {
+  opacity: 0.55;
+}
+
+.sync-demo .client[data-connection="offline"] {
+  border-style: dashed;
+}
+
+.sync-demo .server {
+  border-color: color-mix(in srgb, var(--ss-accent) 45%, var(--yl-border-strong));
+}
+
+.sync-demo .node[data-pulse] {
+  animation: sync-demo-pulse 650ms ease-out;
+}
+
+.sync-demo .head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.1rem 0.5rem;
+}
+
+.sync-demo .name {
+  color: var(--sl-color-white);
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+}
+
+.sync-demo .server .name {
+  color: var(--ss-accent);
+}
+
+.sync-demo .status,
+.sync-demo .cursor,
+.sync-demo .chips,
+.sync-demo .log,
+.sync-demo .packet {
+  font-family: var(--sl-font-mono);
+  font-size: var(--ss-text);
+}
+
+.sync-demo .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--sl-color-gray-3);
+  white-space: nowrap;
+}
+
+.sync-demo .status::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--sl-color-gray-4);
+}
+
+.sync-demo [data-connection="live"] .status::before {
+  background: var(--ss-accent);
+}
+
+.sync-demo [data-connection="connecting"] .status::before {
+  background: var(--sl-color-orange);
+  animation: sync-demo-blink 700ms ease-in-out infinite alternate;
+}
+
+.sync-demo [data-connection="offline"] .status::before {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--sl-color-gray-4);
+}
+
+.sync-demo .cursor {
+  color: var(--sl-color-gray-3);
+}
+
+.sync-demo .client .cursor {
+  margin: 0.15rem 0 0.55rem;
+}
+
+.sync-demo .cursor[data-change],
+.sync-demo .status[data-change] {
+  animation: sync-demo-text 900ms ease-out;
+}
+
+.sync-demo .seats {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.sync-demo .seat {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--ss-seat);
+  height: var(--ss-seat);
+  border: 1px solid var(--yl-border-strong);
+  border-radius: 0.3rem;
+  color: var(--sl-color-white);
+  font-family: var(--sl-font-mono);
+  font-size: calc(var(--ss-seat) * 0.52);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.sync-demo .seat[data-holder] {
+  border-color: var(--sl-color-gray-4);
+  background: var(--sl-color-gray-6);
+}
+
+.sync-demo .seat[data-predicted] {
+  border: 1px dashed var(--ss-accent);
+  background: color-mix(in srgb, var(--ss-accent) 10%, transparent);
+  color: var(--ss-accent);
+}
+
+.sync-demo .seat[data-unknown] {
+  border-style: dotted;
+}
+
+.sync-demo .seat[data-change="predict"],
+.sync-demo .seat[data-change="commit"] {
+  animation: sync-demo-pop 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sync-demo .seat[data-change="confirm"] {
+  animation: sync-demo-confirm 900ms ease-out;
+}
+
+.sync-demo .seat[data-change="replace"] {
+  animation: sync-demo-replace 1100ms ease-out;
+}
+
+.sync-demo .seat[data-change="release"] {
+  animation: sync-demo-release 900ms ease-out;
+}
+
+.sync-demo .chips,
+.sync-demo .log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sync-demo .chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 0.25rem;
+  min-height: 1.4rem;
+  margin-top: 0.5rem;
+}
+
+.sync-demo .chips li {
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--yl-border-strong);
+  border-radius: 999px;
+  color: var(--sl-color-gray-2);
+  line-height: 1.45;
+}
+
+.sync-demo .chips [data-kind="pending"] {
+  border: 1px dashed var(--ss-accent);
+  color: var(--ss-accent);
+}
+
+.sync-demo .chips [data-kind="failed"] {
+  border-color: var(--ss-fail);
+  background: var(--sl-color-red-low);
+  color: var(--ss-fail);
+}
+
+.sync-demo [data-change="enter"] {
+  animation: sync-demo-enter 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sync-demo .chips [data-kind="failed"][data-change="enter"],
+.sync-demo .log [data-kind="failed"][data-change="enter"] {
+  animation:
+    sync-demo-enter 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    sync-demo-shake 420ms ease-in-out 120ms;
+}
+
+.sync-demo .columns {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 1.5rem;
+  margin-top: 0.6rem;
+}
+
+.sync-demo .label {
+  margin-bottom: 0.35rem;
+  color: var(--sl-color-gray-4);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sync-demo .log {
+  display: grid;
+  align-content: start;
+  gap: 0.1rem;
+  min-height: calc(3 * 1.5em + 0.2rem);
+  color: var(--sl-color-gray-2);
+  line-height: 1.5;
+}
+
+.sync-demo .log li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-demo .log [data-kind="failed"] {
+  color: var(--ss-fail);
+}
+
+/* Connections run from each client down to the server. */
+.sync-demo .wire {
+  position: relative;
+  justify-self: center;
+  width: 0;
+  border-left: 1.5px dashed var(--yl-border-strong);
+}
+
+.sync-demo .wire[data-connection="live"] {
+  border-left-style: solid;
+  border-left-color: color-mix(in srgb, var(--sl-color-gray-3) 55%, transparent);
+}
+
+.sync-demo .wire[data-connection="idle"] {
+  border-left-style: dotted;
+  opacity: 0.5;
+}
+
+.sync-demo .wire[data-connection="offline"] {
+  border-left-style: dotted;
+}
+
+.sync-demo .wire[data-connection="offline"]::after {
+  content: "✕";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  padding: 0.15rem;
+  background: var(--yl-bg-sunken);
+  color: var(--sl-color-gray-4);
+  font-size: 0.7rem;
+  line-height: 1;
+  translate: -50% -50%;
+}
+
+.sync-demo .packet {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  translate: -50% -50%;
+}
+
+.sync-demo .packet[data-direction="down"] {
+  background: var(--ss-accent);
+  color: var(--yl-bg);
+}
+
+.sync-demo .packet[data-direction="up"] {
+  background: var(--yl-bg-raised);
+  box-shadow: inset 0 0 0 1px var(--ss-accent);
+  color: var(--ss-accent);
+}
+
+.sync-demo .packet[data-rejected] {
+  background: var(--ss-fail);
+  color: var(--yl-bg);
+}
+
+.sync-demo .packet[data-lost] {
+  background: var(--yl-bg-raised);
+  box-shadow: inset 0 0 0 1px var(--ss-fail);
+  color: var(--ss-fail);
+  text-decoration: line-through;
+}
+
+.sync-demo .sync-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  color: var(--sl-color-gray-4);
+  font-size: var(--sl-text-xs);
+}
+
+.sync-demo .sync-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sync-demo .sync-legend .seat {
+  --ss-seat: 1.1rem;
+}
+
+.sync-demo .sync-legend code {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sl-color-gray-2);
+  font-size: 0.72rem;
+}
+
+.sync-demo .sync-play {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem 0.3rem 0.65rem;
+  border: 1px solid var(--yl-border-strong);
+  border-radius: 999px;
+  background: var(--yl-bg-raised);
+  color: var(--sl-color-white);
+  font: inherit;
+  font-size: var(--sl-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+
+.sync-demo .sync-play:hover {
+  border-color: var(--ss-accent);
+}
+
+.sync-demo .sync-play svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  fill: var(--ss-accent);
+}
+
+.sync-demo .sync-play:not([data-state="play"]) .play-icon,
+.sync-demo .sync-play:not([data-state="pause"]) .pause-icon,
+.sync-demo .sync-play:not([data-state="replay"]) .replay-icon {
+  display: none;
+}
+
+@media (max-width: 40rem) {
+  .sync-demo {
+    --ss-gap: 0.45rem;
+    --ss-wire: 4.25rem;
+    --ss-seat: 1.2rem;
+    --ss-text: 0.64rem;
+  }
+
+  .sync-demo .sync-stage {
+    padding: 0.6rem;
+  }
+
+  .sync-demo .node {
+    padding: 0.45rem 0.5rem;
+  }
+
+  .sync-demo .seats {
+    gap: 0.2rem;
+  }
+
+  .sync-demo .chips {
+    min-height: 2.6rem;
+  }
+
+  .sync-demo .columns {
+    gap: 0.75rem;
+  }
+}
+
+@keyframes sync-demo-pulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ss-accent) 45%, transparent);
+  }
+
+  to {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+
+@keyframes sync-demo-blink {
+  from {
+    opacity: 0.35;
+  }
+}
+
+@keyframes sync-demo-text {
+  from {
+    color: var(--ss-accent);
+  }
+}
+
+@keyframes sync-demo-pop {
+  from {
+    opacity: 0;
+    scale: 0.55;
+  }
+}
+
+@keyframes sync-demo-confirm {
+  from {
+    border-color: var(--ss-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ss-accent) 40%, transparent);
+  }
+}
+
+@keyframes sync-demo-replace {
+  0% {
+    border-color: var(--ss-fail);
+    background: var(--sl-color-red-low);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ss-fail) 45%, transparent);
+  }
+
+  15% {
+    translate: -2px 0;
+  }
+
+  30% {
+    translate: 2px 0;
+  }
+
+  45% {
+    translate: 0 0;
+  }
+}
+
+@keyframes sync-demo-release {
+  from {
+    background: color-mix(in srgb, var(--ss-fail) 20%, transparent);
+  }
+}
+
+@keyframes sync-demo-enter {
+  from {
+    opacity: 0;
+    translate: 0 -0.25rem;
+  }
+}
+
+@keyframes sync-demo-shake {
+  25% {
+    translate: -2px 0;
+  }
+
+  75% {
+    translate: 2px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-demo *,
+  .sync-demo *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
