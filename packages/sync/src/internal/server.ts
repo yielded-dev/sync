@@ -52,6 +52,10 @@ interface Evaluated {
 /** @internal Schema-erased slot, after validating the typed definition. */
 export interface Slot {
   readonly id: string;
+  readonly stateVersion: number;
+  readonly migrate:
+    | ((state: Schema.Json, fromVersion: number) => Effect.Effect<Schema.Json, ProtocolError>)
+    | undefined;
   readonly initialize: Effect.Effect<Schema.Json, ProtocolError>;
   readonly snapshot: (state: Schema.Json) => Effect.Effect<Schema.Json, ProtocolError>;
   readonly actions: ReadonlyMap<
@@ -149,7 +153,38 @@ export const open = Effect.fn("Server.open")(function* <S extends Source.Spec, R
           "Stored source identity or version differs; an explicit migration is required",
         );
 
-      return current;
+      const versions = current.stateVersions ?? {};
+      const version = (id: string) => (Object.hasOwn(versions, id) ? versions[id] : 0);
+
+      const outdated = implementation.slots.filter(
+        (slot) => version(slot.id) !== slot.stateVersion,
+      );
+
+      if (outdated.length === 0) return current;
+
+      for (const slot of outdated) {
+        if (version(slot.id) > slot.stateVersion)
+          return yield* invalid("Stored private state is newer than this server");
+      }
+      if (tx.migrateState === undefined)
+        return yield* unavailable("Source storage does not support private-state migration");
+
+      const state = { ...(yield* decode(StateSlots, current.state)) };
+      let stateVersions = versions;
+
+      for (const slot of outdated) {
+        if (slot.migrate === undefined)
+          return yield* invalid("An explicit private-state migration is required");
+        state[slot.id] = yield* slot.migrate(state[slot.id], version(slot.id));
+        stateVersions = { ...stateVersions, [slot.id]: slot.stateVersion };
+      }
+      const migrated = { ...current, state, stateVersions };
+
+      if (canonicalJson(migrated).length * 3 > limits.maxBytes)
+        return yield* unavailable("Migrated state exceeds encoded size limit");
+      yield* tx.migrateState(state, stateVersions);
+
+      return migrated;
     }
 
     const state = Object.fromEntries(
@@ -165,6 +200,9 @@ export const open = Effect.fn("Server.open")(function* <S extends Source.Spec, R
       ...header,
       position: { sourceAuthorityGeneration: yield* crypto.generation, cursor: 0 },
       state,
+      stateVersions: Object.fromEntries(
+        implementation.slots.map((slot) => [slot.id, slot.stateVersion]),
+      ),
     };
 
     if (canonicalJson(initial).length * 3 > limits.maxBytes)

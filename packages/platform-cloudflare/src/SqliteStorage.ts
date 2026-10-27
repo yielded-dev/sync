@@ -129,6 +129,18 @@ export const layer = (native: DurableObjectStorage, options: Options) =>
         yield* sql`INSERT INTO sync_head(singleton, generation, cursor, value) VALUES(1, ${head.position.sourceAuthorityGeneration}, ${head.position.cursor}, ${value})`;
       }, Effect.mapError(failure));
 
+      const migrateState: NonNullable<SourceTransaction["migrateState"]> = Effect.fn(
+        "SqliteStorage.migrateState",
+      )(function* (state, stateVersions) {
+        const current = yield* readHead;
+
+        if (current === undefined)
+          return yield* StorageError.make({ message: "Cannot migrate an uninitialized source" });
+        const value = yield* toJson(StoredHead, { ...current, state, stateVersions });
+
+        yield* sql`UPDATE sync_head SET value = ${value} WHERE singleton = 1`;
+      }, Effect.mapError(failure));
+
       const readReceipt = Effect.fn("SqliteStorage.readReceipt")(function* (
         identity: ReceiptIdentity,
       ) {
@@ -186,9 +198,9 @@ export const layer = (native: DurableObjectStorage, options: Options) =>
       }, Effect.mapError(failure));
 
       const transaction: SourceStorage["Service"]["transaction"] = (body) =>
-        transact(body({ readHead, initialize, readReceipt, readEvents, commit })).pipe(
-          Effect.catchTag("SqlError", (cause) => Effect.fail(failure(cause))),
-        );
+        transact(
+          body({ readHead, initialize, migrateState, readReceipt, readEvents, commit }),
+        ).pipe(Effect.catchTag("SqlError", (cause) => Effect.fail(failure(cause))));
 
       const claimOutbox: OutboxStorage["claim"] = Effect.fn("SqliteStorage.claimOutbox")(function* (
         now,
