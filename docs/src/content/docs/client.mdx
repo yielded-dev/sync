@@ -2,6 +2,8 @@
 title: Clients and React
 ---
 
+import { Trace } from "@yielded/starlight-theme/components";
+
 Continue from the [counter client](./guide/getting-started.md#connect-a-client).
 
 ## Atom bindings
@@ -104,18 +106,26 @@ for custom URLs and RPC composition.
 
 A lost response does not mean the edit failed:
 
-```mermaid
-sequenceDiagram
-  accTitle: Retrying a command after its response is lost
-  accDescr: The server commits a command and its receipt. When the response is lost, the client looks up the same command and receives the original result.
-  participant C as Client
-  participant S as Sync server
-  C->>S: Set to 7, command c1
-  S->>S: Commit state and receipt
-  S--xC: Response lost
-  C->>S: Look up command c1
-  S-->>C: Original result
-```
+<Trace
+  lanes={[
+    { id: "client", label: "Client" },
+    { id: "library", label: "Sync server" },
+  ]}
+  steps={[
+    { lane: "client", title: "Send command c1" },
+    {
+      lane: "library",
+      title: "Commit the edit and its receipt",
+      detail: "The response is lost.",
+    },
+    { lane: "client", title: "Look up command c1" },
+    {
+      lane: "library",
+      title: "Return the original result",
+      detail: "The edit is not applied again.",
+    },
+  ]}
+/>
 
 | Headless operation               | When to use it                                                 |
 | -------------------------------- | -------------------------------------------------------------- |

@@ -2,18 +2,55 @@
 title: How Sync works
 ---
 
+import { FlowMap } from "@yielded/starlight-theme/components";
+
 A **source** is a shared entity, such as a board or counter. Your contract defines
 its state and actions; one server authority decides which changes are accepted.
 
-```mermaid
-flowchart LR
-  accTitle: A source connects clients to one authority
-  accDescr: Clients send typed actions to the Sync server and receive snapshots and events. The server commits to server storage. Clients can retain pending edits in a separate local journal.
-  Client[Client and UI] -->|Typed actions| Server[Sync server]
-  Server -->|Snapshots and events| Client
-  Server <--> Storage[Server storage]
-  Client <--> Journal[Optional local journal]
-```
+<FlowMap
+  title="One source, one server authority"
+  description="The client sends typed actions to the Sync server and receives snapshots and events. The server reads and commits authoritative storage. An optional local journal retains pending client edits across reloads."
+  columns={2}
+  boundary={{ row: 2, above: "Browser", below: "Server" }}
+  nodes={[
+    {
+      id: "client",
+      at: [1, 1],
+      owner: "library",
+      title: "Sync client",
+      note: "Send actions, receive updates",
+    },
+    {
+      id: "journal",
+      at: [1, 2],
+      owner: "external",
+      title: "Local journal",
+      note: "Optional: retain pending edits",
+    },
+    {
+      id: "server",
+      at: [3, 1],
+      owner: "library",
+      title: "Sync server",
+      note: "Authorize, commit, publish",
+    },
+    {
+      id: "storage",
+      at: [3, 2],
+      owner: "external",
+      title: "Server storage",
+      note: "State, events, receipts",
+    },
+  ]}
+  edges={[
+    { from: "client", to: "server" },
+    { from: "server", to: "client" },
+    { from: "client", to: "journal" },
+    { from: "journal", to: "client" },
+    { from: "server", to: "storage" },
+    { from: "storage", to: "server" },
+  ]}
+/>
 
 ## Define, handle, reduce
 
