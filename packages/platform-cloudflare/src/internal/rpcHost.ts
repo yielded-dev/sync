@@ -1,4 +1,5 @@
-import { Deferred, Effect } from "effect";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
 import type { RpcServer } from "effect/rpc";
 
 /** Keep a native message event alive until its request produces a response or first stream batch. */

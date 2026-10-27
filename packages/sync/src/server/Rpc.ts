@@ -1,5 +1,17 @@
-import { Context, Effect, Schema, Stream } from "effect";
-import { type Rpc, type RpcGroup, RpcSerialization } from "effect/rpc";
+/**
+ * Effect RPC handlers and bounded serialization for a portable source host.
+ * Authenticated host events supply connection context; client RPC headers cannot.
+ *
+ * @since 0.1.0-beta.0
+ */
+
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import type * as Rpc from "effect/rpc/Rpc";
+import type * as RpcGroup from "effect/rpc/RpcGroup";
+import * as RpcSerialization from "effect/rpc/RpcSerialization";
 
 import { ProtocolError, type SourceAddress, type SourcePosition } from "../Model.ts";
 import type * as Source from "../Source.ts";
@@ -9,6 +21,13 @@ const unavailable = () =>
   ProtocolError.make({ reason: "Unavailable", message: "Source temporarily unavailable" });
 
 // Only an authenticated host event supplies this context; RPC headers cannot set it.
+/**
+ * Trusted context for one authenticated host event. Defaults to no connection.
+ * Handlers fail with an unauthenticated protocol error when it is absent.
+ *
+ * @category services
+ * @since 0.1.0-beta.0
+ */
 export const CurrentConnection = Context.Reference<Connection | undefined>(
   "@yielded/sync/server/Rpc/CurrentConnection",
   { defaultValue: () => undefined },
@@ -21,7 +40,12 @@ const connection = CurrentConnection.pipe(
   ),
 );
 
-/** Bound the transport input while retaining Effect RPC's serializer and envelope semantics. */
+/**
+ * Bound the transport input while retaining Effect RPC's serializer and envelope semantics.
+ *
+ * @category utilities
+ * @since 0.1.0-beta.0
+ */
 export const serialization = (maxBytes: number): RpcSerialization.RpcSerialization["Service"] => ({
   ...RpcSerialization.json,
   makeUnsafe: () => {
@@ -55,7 +79,12 @@ type Payload = {
   readonly message?: unknown;
 };
 
-/** Domain handlers are registered against the same schemas that built the public RPC group. */
+/**
+ * Domain handlers are registered against the same schemas that built the public RPC group.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const handlers = <S extends Source.Spec>(
   host: Host<S>,
 ): {

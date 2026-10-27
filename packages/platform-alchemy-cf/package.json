@@ -20,6 +20,10 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
+    },
+    "./AlchemyServices": {
+      "types": "./dist/AlchemyServices.d.mts",
+      "import": "./dist/AlchemyServices.mjs"
     }
   },
   "publishConfig": {

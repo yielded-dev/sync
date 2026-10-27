@@ -32,6 +32,70 @@
     "./atom": {
       "types": "./dist/atom.d.mts",
       "import": "./dist/atom.mjs"
+    },
+    "./Action": {
+      "types": "./dist/Action.d.mts",
+      "import": "./dist/Action.mjs"
+    },
+    "./Model": {
+      "types": "./dist/Model.d.mts",
+      "import": "./dist/Model.mjs"
+    },
+    "./Plugin": {
+      "types": "./dist/Plugin.d.mts",
+      "import": "./dist/Plugin.mjs"
+    },
+    "./Source": {
+      "types": "./dist/Source.d.mts",
+      "import": "./dist/Source.mjs"
+    },
+    "./RegistrationError": {
+      "types": "./dist/RegistrationError.d.mts",
+      "import": "./dist/RegistrationError.mjs"
+    },
+    "./server/Server": {
+      "types": "./dist/server/Server.d.mts",
+      "import": "./dist/server/Server.mjs"
+    },
+    "./server/SourceStorage": {
+      "types": "./dist/server/SourceStorage.d.mts",
+      "import": "./dist/server/SourceStorage.mjs"
+    },
+    "./server/Host": {
+      "types": "./dist/server/Host.d.mts",
+      "import": "./dist/server/Host.mjs"
+    },
+    "./server/Rpc": {
+      "types": "./dist/server/Rpc.d.mts",
+      "import": "./dist/server/Rpc.mjs"
+    },
+    "./client/Client": {
+      "types": "./dist/client/Client.d.mts",
+      "import": "./dist/client/Client.mjs"
+    },
+    "./client/CurrentActor": {
+      "types": "./dist/client/CurrentActor.d.mts",
+      "import": "./dist/client/CurrentActor.mjs"
+    },
+    "./client/Model": {
+      "types": "./dist/client/Model.d.mts",
+      "import": "./dist/client/Model.mjs"
+    },
+    "./client/ReplicaPersistence": {
+      "types": "./dist/client/ReplicaPersistence.d.mts",
+      "import": "./dist/client/ReplicaPersistence.mjs"
+    },
+    "./client/Transport": {
+      "types": "./dist/client/Transport.d.mts",
+      "import": "./dist/client/Transport.mjs"
+    },
+    "./client/View": {
+      "types": "./dist/client/View.d.mts",
+      "import": "./dist/client/View.mjs"
+    },
+    "./atom/SourceAtom": {
+      "types": "./dist/atom/SourceAtom.d.mts",
+      "import": "./dist/atom/SourceAtom.mjs"
     }
   },
   "publishConfig": {

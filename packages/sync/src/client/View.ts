@@ -1,28 +1,51 @@
-import { Effect, Stream } from "effect";
+/**
+ * Projections of root and plugin snapshots from an existing source lease.
+ * Views share the lease lifetime, source status, and command failures.
+ *
+ * @since 0.1.0-beta.0
+ */
+
+import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
 
 import type * as Action from "../Action.ts";
 import type * as Source from "../Source.ts";
 import type { ClientError, Replica } from "./Model.ts";
-import type { Actions, Lease } from "./Runtime.ts";
+import type { Actions, Lease } from "./Client.ts";
 
 interface CompositeSnapshot {
   readonly source?: unknown;
   readonly plugins: Readonly<Record<string, unknown>>;
 }
 
-/** A snapshot slot with the owning lease's lifetime and source-wide status. */
+/**
+ * A snapshot slot with the owning lease's lifetime and source-wide status.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface View<Snapshot, Rejection = never> {
   readonly read: Effect.Effect<Replica<Snapshot, Rejection>, ClientError>;
   readonly changes: Stream.Stream<Replica<Snapshot, Rejection>, ClientError>;
   readonly ready: Effect.Effect<Snapshot, ClientError>;
 }
 
-/** Project root data without changing the source's composite snapshot contract. */
+/**
+ * Project root data without changing the source's composite snapshot contract.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export function view<S extends Source.Spec>(
   lease: Lease<S>,
 ): View<S["snapshot"]["Type"], Action.Error<Actions<S>>>;
 
-/** Project a declared plugin's data from the same replica and connection. */
+/**
+ * Project a declared plugin's data from the same replica and connection.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export function view<S extends Source.Spec, Id extends S["plugins"][number]["id"]>(
   lease: Lease<S>,
   plugin: Id,

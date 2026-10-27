@@ -1,4 +1,12 @@
 /**
+ * Shared source definitions, codecs, and derived RPC contracts.
+ *
+ * Server, client, and Atom implementations have separate entry points.
+ *
+ * @since 0.1.0-beta.0
+ */
+
+/**
  * Effect-native realtime contracts and runtimes.
  * Shared source definitions, codecs, and derived RPC contracts.
  */

@@ -1,3 +1,10 @@
+/**
+ * Native Alchemy services for Sync Durable Object declarations.
+ * Planning declares resources; storage and socket handlers are acquired per instance.
+ *
+ * @since 0.1.0-beta.0
+ */
+
 import { ProtocolError, type Source } from "@yielded/sync";
 import {
   Cloudflare,
@@ -13,10 +20,20 @@ import {
   type WebSocket,
   type Worker,
 } from "alchemy/Cloudflare/Workers";
-import { Context, Effect, Layer, Scope } from "effect";
-import { type HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Scope from "effect/Scope";
+import type * as HttpServerError from "effect/http/HttpServerError";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
 
-/** Build in an object's runtime Effect, after Alchemy has supplied native storage. */
+/**
+ * Build in an object's runtime Effect, after Alchemy has supplied native storage.
+ *
+ * @category layers
+ * @since 0.1.0-beta.0
+ */
 export const layer = <DeliveryR = never, E = never, R = never>(
   options: Cloudflare.Options<DeliveryR, E, R> = {},
 ): Layer.Layer<SourceStorage | ServerCrypto, StorageError | E, DurableObjectState | R> =>
@@ -42,7 +59,12 @@ type Handlers = {
 /** Native responses, especially WebSocket upgrades, must pass through intact. */
 const response = (value: Response) => HttpServerResponse.raw(value, { status: value.status });
 
-/** Select Alchemy's logical object name without opening storage during planning. */
+/**
+ * Select Alchemy's logical object name without opening storage during planning.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const AlchemyServices =
   (name: string) =>
   <
@@ -149,6 +171,13 @@ interface RequestOptions<Kind extends string> {
   readonly identity: Cloudflare.Identity;
 }
 
+/**
+ * Attaches trusted source metadata to an authenticated Alchemy request.
+ * Invalid addresses or sessions fail before forwarding to the native object.
+ *
+ * @category http
+ * @since 0.1.0-beta.0
+ */
 export const prepareRequest: <S extends Source.Spec>(
   contract: Source.Definition<S>,
   input: RequestOptions<S["kind"]>,
@@ -169,5 +198,11 @@ export const prepareRequest: <S extends Source.Spec>(
   );
 });
 
+/**
+ * Converts a Sync protocol failure to a native Alchemy HTTP response.
+ *
+ * @category http
+ * @since 0.1.0-beta.0
+ */
 export const errorResponse = (error: Parameters<typeof Cloudflare.errorResponse>[0]) =>
   response(Cloudflare.errorResponse(error));

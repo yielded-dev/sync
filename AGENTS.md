@@ -50,6 +50,12 @@ Keep asynchronous public operations in `Effect` or `Stream`, with typed errors a
 requirements. Effect Schema owns transported and persisted values. Resources must
 be bounded and scoped.
 
+Public modules follow Effect's namespace conventions and have explicit package
+exports. Keep runtime helpers in `internal` modules and public contracts independent
+of inferred implementation return types. Document public declarations with useful
+JSDoc, `@category`, and `@since`; put defaults, errors, and resource ownership beside
+the relevant API. Use direct Effect module imports in library source.
+
 ## Commands
 
 Vite+ is the command authority; Bun is the package manager and script runtime.

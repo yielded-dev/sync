@@ -9,6 +9,13 @@ Effect-native realtime contracts, authoritative execution, and scoped clients.
 | `@yielded/sync/client` | `Client`, `ReplicaPersistence` ports, typed operational errors           |
 | `@yielded/sync/atom`   | `SourceAtom` bindings over the headless client                           |
 
+Public modules also support direct imports:
+
+```ts
+import * as Source from "@yielded/sync/Source";
+import * as Client from "@yielded/sync/client/Client";
+```
+
 Root contracts are portable between server and client. Server implementations and
 platform adapters stay separate. Applications own domain schemas, authentication,
 authorization, projection destinations, and UI.

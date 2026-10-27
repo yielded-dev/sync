@@ -1,13 +1,28 @@
+/**
+ * Browser services and Effect Atom bindings for scoped Sync clients.
+ * Registry lifetime owns the connection; applications choose actors and persistence.
+ *
+ * @since 0.1.0-beta.0
+ */
+
 import { BrowserCrypto } from "@effect/platform-browser";
 import { ProtocolError, type Source } from "@yielded/sync";
 import { SourceAtom } from "@yielded/sync/atom";
 import { Client, type ReplicaPersistence } from "@yielded/sync/client";
-import { type Crypto, Effect, Layer } from "effect";
-import { Atom } from "effect/reactivity";
-import { Socket } from "effect/socket";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Atom from "effect/reactivity/Atom";
+import * as Socket from "effect/socket/Socket";
 
 type Services = Client.CurrentActor | Client.Transport | Crypto.Crypto;
 
+/**
+ * Browser source identity, actor, transport, and persistence choices.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Options<S extends Source.Spec, E = never>
   extends
     Omit<SourceAtom.BindOptions<S, Services, E>, "runtime" | "address" | "persistence">,
@@ -20,6 +35,12 @@ export interface Options<S extends Source.Spec, E = never>
   readonly persistence: "volatile" | Layer.Layer<ReplicaPersistence, E, Services>;
 }
 
+/**
+ * Source Atom bindings and their shared browser runtime, including browser crypto.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Binding<S extends Source.Spec, E = never> extends SourceAtom.Binding<
   S,
   E | ProtocolError,
@@ -33,6 +54,9 @@ export interface Binding<S extends Source.Spec, E = never> extends SourceAtom.Bi
  * Define once, or use Atom.family for parameterized IDs. Browser services and the
  * source lease are acquired lazily per registry. Dispose the old registry before
  * switching actors. Persistence, query parameters, and concurrency are app choices.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
  */
 export const bind = <S extends Source.Spec, E = never>(
   definition: Client.Definition<S, Services>,

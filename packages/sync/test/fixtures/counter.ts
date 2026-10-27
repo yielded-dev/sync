@@ -1,5 +1,7 @@
-import { Action, Plugin, Source } from "@yielded/sync";
-import { Schema } from "effect";
+import * as Action from "@yielded/sync/Action";
+import * as Plugin from "@yielded/sync/Plugin";
+import * as Source from "@yielded/sync/Source";
+import * as Schema from "effect/Schema";
 
 export class InvalidValue extends Schema.TaggedError<InvalidValue>()("InvalidValue", {
   maximum: Schema.Finite,

@@ -10,6 +10,8 @@ beforeAll(async () => {
   server = await createServer({
     configFile: false,
     root: import.meta.dirname + "/..",
+    // Vite's default dependency scan excludes test directories.
+    optimizeDeps: { entries: ["test/host.ts"] },
     server: { host: "127.0.0.1", port: 0 },
   });
   await server.listen();

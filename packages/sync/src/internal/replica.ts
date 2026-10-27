@@ -1,7 +1,8 @@
+import type { ClientError, Connection, Intent, Replica } from "../client/Model.ts";
 import { comparePositions, type SourcePosition } from "../Model.ts";
 import type { Definition as SourceDefinition } from "../Source.ts";
-import type { Slot } from "./Definition.ts";
-import { error, type ClientError, type Connection, type Intent, type Replica } from "./Model.ts";
+import type { Slot } from "./client.ts";
+import { error } from "./clientModel.ts";
 
 export type Snapshot = SourceDefinition["snapshot"]["Type"];
 export type Frame = SourceDefinition["envelope"]["outbound"]["Type"];

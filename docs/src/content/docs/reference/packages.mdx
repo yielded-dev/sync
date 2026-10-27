@@ -18,6 +18,13 @@ native transport and lifecycle hooks, and client persistence for restart recover
 | `@yielded/sync-platform-effect-cf`  | `EffectCfServices`: native effect-cf integration                   |
 | `@yielded/sync-platform-alchemy-cf` | `AlchemyServices`: native Alchemy integration                      |
 
+Public modules also support direct imports:
+
+```ts
+import * as Source from "@yielded/sync/Source";
+import * as Client from "@yielded/sync/client/Client";
+```
+
 `Server.host` owns ordering, subscriptions, publication, and optional outbox
 delivery. Supply `SourceStorage` and `ServerCrypto`; connect it to Effect RPC with
 `ServerRpc.handlers`. Applications own authentication, routing, transport,

@@ -1,3 +1,10 @@
+/**
+ * Durable client record policy over scoped atomic storage drivers.
+ * Journals retain unresolved retry evidence; snapshot caches are disposable.
+ *
+ * @since 0.1.0-beta.0
+ */
+
 import { ActorId, CommandId, SourceAddress, type SourceAddress as Address } from "@yielded/sync";
 import {
   Client,
@@ -6,9 +13,17 @@ import {
   type JournalChanges,
   type PersistenceHandle,
 } from "@yielded/sync/client";
-import { Effect, Exit, Schema, Scope } from "effect";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 
-/** A scoped driver. modify must commit the callback's result atomically or fail. */
+/**
+ * A scoped driver. modify must commit the callback's result atomically or fail.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface AtomicStore {
   readonly read: (key: string) => Effect.Effect<string | undefined, PersistenceError>;
   readonly modify: <A>(
@@ -17,13 +32,30 @@ export interface AtomicStore {
   ) => Effect.Effect<A, PersistenceError>;
 }
 
+/**
+ * Storage namespace and capacity bounds shared by journal and cache drivers.
+ * Capacity failures retain existing unresolved commands.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Options {
+  /** Stable application identity. Changing it selects different storage. */
   readonly namespace: string;
+  /** Maximum unresolved commands per actor. Defaults to 4096. */
   readonly maxJournalRows?: number;
+  /** Maximum cached source snapshots per actor. Defaults to 128. */
   readonly maxSnapshots?: number;
+  /** Maximum encoded bytes in each store. Defaults to 8 MiB. */
   readonly maxBytes?: number;
 }
 
+/**
+ * An actor-bound intent journal and disposable snapshot cache backed by durable drivers.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface DurableHandle extends PersistenceHandle {
   readonly snapshotCache: NonNullable<PersistenceHandle["snapshotCache"]>;
 }
@@ -88,9 +120,21 @@ const decodeChanges = Schema.decodeSync(Changes);
 const decodeAddress = Schema.decodeSync(SourceAddress);
 const decodeLimit = Schema.decodeSync(Natural);
 
+/**
+ * Constructs a typed persistence failure from its reason and message.
+ *
+ * @category utilities
+ * @since 0.1.0-beta.0
+ */
 export const failure = (reason: PersistenceError["reason"], message: string) =>
   PersistenceError.make({ reason, message });
 
+/**
+ * Preserves typed persistence failures and wraps other storage errors as unavailable.
+ *
+ * @category utilities
+ * @since 0.1.0-beta.0
+ */
 export const storageError = (cause: unknown): PersistenceError =>
   Schema.is(PersistenceError)(cause)
     ? cause
@@ -196,7 +240,12 @@ const cacheState = (value: string | undefined) => {
   return decoded._tag === "Some" ? decoded.value : undefined;
 };
 
-/** Portable policy shared by durable adapters; databases remain separate driver resources. */
+/**
+ * Portable policy shared by durable adapters; databases remain separate driver resources.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const make = Effect.fn("Persistence.make")(function* <R1, R2>(
   options: Options,
   drivers: {

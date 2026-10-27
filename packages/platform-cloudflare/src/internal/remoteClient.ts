@@ -1,45 +1,25 @@
 import {
   type Action,
-  type ActionOutcome,
   ProtocolError,
-  type ResultLookup,
   type Source,
 } from "@yielded/sync";
 import type { Client } from "@yielded/sync/client";
-import { Effect, Layer, type Scope } from "effect";
-import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
-import { RpcClient, type RpcClientError, RpcSerialization } from "effect/rpc";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Scope from "effect/Scope";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as RpcClient from "effect/rpc/RpcClient";
+import type * as RpcClientError from "effect/rpc/RpcClientError";
+import * as RpcSerialization from "effect/rpc/RpcSerialization";
 
-import type { Identity, prepareRequest } from "./Cloudflare.ts";
+import type { prepareRequest } from "../Cloudflare.ts";
 
-export interface ClientOptions<Kind extends string, E = never, R = never> {
-  readonly address: { readonly kind: Kind; readonly id: string };
-  readonly identity: Identity;
-  readonly fetch: (request: Request) => Effect.Effect<Response, E, R>;
-}
-
-/** Retain this exact request for retries and result lookup, including a null generation. */
-export type Command<A extends Action.Definition> = Pick<
-  Client.EncodedCommand,
-  "commandId" | "admittedGeneration"
-> & { readonly payload: Action.Payload<A> };
+import type { ClientOptions, Command, RemoteClient } from "../Cloudflare.ts";
 
 type RequestError = ProtocolError | RpcClientError.RpcClientError;
-
-export interface RemoteClient<S extends Source.Spec> {
-  readonly snapshot: Effect.Effect<
-    Source.Definition<S>["envelope"]["snapshotFrame"]["Type"],
-    RequestError
-  >;
-  readonly execute: <A extends Client.Actions<S>>(
-    action: A,
-    command: Command<NoInfer<A>>,
-  ) => Effect.Effect<ActionOutcome<Action.Success<A>, Action.Error<A>>, RequestError>;
-  readonly result: <A extends Client.Actions<S>>(
-    action: A,
-    command: Command<NoInfer<A>>,
-  ) => Effect.Effect<ResultLookup<Action.Success<A>, Action.Error<A>>, RequestError>;
-}
 
 export type ClientConstructor = <S extends Source.Spec, E, R>(
   contract: Source.Definition<S>,

@@ -1,25 +1,19 @@
-import { Clock, Duration, Effect, Option, Schedule, Schema, Stream } from "effect";
-import { Atom, type AsyncResult } from "effect/reactivity";
+import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as Atom from "effect/reactivity/Atom";
+import type * as AsyncResult from "effect/reactivity/AsyncResult";
 
 import type * as Source from "../Source.ts";
-import { error, type ClientError, type Connection } from "./Model.ts";
-import type { Lease } from "./Runtime.ts";
+import { error } from "../internal/clientModel.ts";
+import { type ClientError, type Connection } from "../client/Model.ts";
+import type { Lease } from "../client/Client.ts";
 
-export interface Peer<A> {
-  readonly actorId: string;
-  readonly connectionId: string;
-  readonly value: A;
-  readonly expiresAtMillis: number;
-}
-
-export interface Options {
-  /** Defaults to 8 seconds. */
-  readonly heartbeatInterval?: Duration.Input;
-  /** Defaults to 25 seconds; expiry is checked every 5 seconds or sooner. */
-  readonly timeToLive?: Duration.Input;
-  /** Defaults to 32 connections, keeping the most recently heard peers. */
-  readonly maxPeers?: number;
-}
+import type { Peer, PresenceOptions as Options } from "../atom/SourceAtom.ts";
 
 type Frame<A> = {
   readonly actorId: string;

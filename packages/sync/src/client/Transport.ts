@@ -1,19 +1,44 @@
-import { Context, Effect, Layer, Schema, Stream, type Scope } from "effect";
-import { Url, UrlParams } from "effect/http";
-import { RpcClient, RpcSerialization } from "effect/rpc";
-import { Socket } from "effect/socket";
+/**
+ * The portable JSON transport service and its Effect RPC implementation.
+ *
+ * @since 0.1.0-beta.0
+ */
+
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import type * as Scope from "effect/Scope";
+import * as Url from "effect/http/Url";
+import * as UrlParams from "effect/http/UrlParams";
+import * as RpcClient from "effect/rpc/RpcClient";
+import * as RpcSerialization from "effect/rpc/RpcSerialization";
+import * as Socket from "effect/socket/Socket";
 
 import { ProtocolError, type SourceAddress, type SourcePosition } from "../Model.ts";
 import * as Source from "../Source.ts";
 import type { EncodedCommand } from "./Model.ts";
 
+/**
+ * The protocol version, source address, and application schema version
+ * attached to source operations.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Request {
   readonly protocolVersion: 1;
   readonly address: SourceAddress;
   readonly schemaVersion: number;
 }
 
-/** JSON codecs are checked on both sides of this portable transport port. */
+/**
+ * JSON codecs are checked on both sides of this portable transport port.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Transport {
   readonly snapshot: (request: Request) => Effect.Effect<Schema.Json, ProtocolError>;
   readonly subscribe: (
@@ -26,12 +51,22 @@ export interface Transport {
   ) => Effect.Effect<void, ProtocolError>;
 }
 
-/** Transport implementations capture their dependencies in their construction Layer. */
+/**
+ * Transport implementations capture their dependencies in their construction Layer.
+ *
+ * @category services
+ * @since 0.1.0-beta.0
+ */
 export const Transport: Context.Service<Transport, Transport> = Context.Service(
   "@yielded/sync/client/Transport",
 );
 
-/** The application provides RpcClient.Protocol and its HTTP/socket services. */
+/**
+ * The application provides RpcClient.Protocol and its HTTP/socket services.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const rpcTransport = <S extends Source.Spec>(
   contract: Source.Definition<S>,
 ): Effect.Effect<Transport, never, Scope.Scope | RpcClient.Protocol> =>
@@ -112,14 +147,32 @@ export const rpcTransport = <S extends Source.Spec>(
     } satisfies Transport;
   });
 
-/** Requires the application's scoped RPC protocol, route, and credentials. */
+/**
+ * Requires the application's scoped RPC protocol, route, and credentials.
+ *
+ * @category layers
+ * @since 0.1.0-beta.0
+ */
 export const layerRpcTransport = <S extends Source.Spec>(contract: Source.Definition<S>) =>
   Layer.effect(Transport, rpcTransport(contract));
 
+/**
+ * A WebSocket URL or an Effect that resolves it for a transport connection.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface WebSocketTransportOptions {
   readonly url: string | Effect.Effect<string>;
 }
 
+/**
+ * A source origin, schema-validated identity, and optional query parameters.
+ * The transport derives the WebSocket URL from the shared source route.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface SourceWebSocketOptions<S extends Source.Spec = Source.Spec> {
   readonly origin: string;
   readonly id: Source.Id<S>;
@@ -127,7 +180,12 @@ export interface SourceWebSocketOptions<S extends Source.Spec = Source.Spec> {
   readonly query?: UrlParams.Input;
 }
 
-/** The application supplies the socket constructor, credentials, and session lifetime. */
+/**
+ * The application supplies the socket constructor, credentials, and session lifetime.
+ *
+ * @category layers
+ * @since 0.1.0-beta.0
+ */
 export function layerWebSocketTransport<S extends Source.Spec>(
   contract: Source.Definition<S>,
   options: WebSocketTransportOptions,

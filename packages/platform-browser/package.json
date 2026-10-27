@@ -20,6 +20,10 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
+    },
+    "./BrowserSource": {
+      "types": "./dist/BrowserSource.d.mts",
+      "import": "./dist/BrowserSource.mjs"
     }
   },
   "publishConfig": {
