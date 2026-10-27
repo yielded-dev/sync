@@ -230,6 +230,14 @@ Journal admission commits before transport. Capacity failure refuses new work
 instead of evicting unresolved evidence. Snapshot caches are separate and disposable.
 Unsupported intents remain quarantined, reserving their exact identities and capacity.
 
+`lease.submit(action, payload)` returns an action-typed `Command` after local
+admission. Its status stream and `awaitResult` are passive; `retry` performs exact
+recovery. `lease.restore(action, id)` validates retained evidence before restoring
+that type. Missing/evicted evidence fails with `NotPending`, mismatches with
+`InvalidValue`, and undecodable rows with `Quarantined`. Completed outcomes remain
+available only in the bounded memory cache or accepted journal entries awaiting
+replication. Handles share the originating lease's lifetime.
+
 Journal batches apply atomically with generation checks. Inserts reserve new
 identities and replacements require existing rows. Conflicts are explicit.
 Only one runtime may coordinate an actor's persisted source at a time. The optional

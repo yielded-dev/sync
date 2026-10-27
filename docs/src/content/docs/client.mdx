@@ -155,8 +155,33 @@ A lost response does not mean the edit failed:
 | -------------------------------- | -------------------------------------------------------------- |
 | `lease.execute(action, payload)` | Submit an edit and wait for its result                         |
 | `lease.enqueue(action, payload)` | Return its ID after local admission; deliver in the background |
+| `lease.submit(action, payload)`  | Return a typed command handle after local admission            |
+| `lease.restore(action, id)`      | Restore a typed handle from retained command evidence          |
 | `lease.retry(commandId)`         | Recover an uncertain result using the original command         |
 | `lease.recover`                  | Restart a parked connection                                    |
+
+Use a command handle when you need the chosen action's result type after admission:
+
+```ts
+const command = yield * lease.submit(Counter.actions.set, { value: 7 });
+const savedId = command.id;
+const statuses = command.changes;
+const result = yield * command.awaitResult; // { previous: number, current: number }
+const recovered = yield * command.retry;
+
+// After reopening the lease, validate the retained command against this action.
+const restored = yield * lease.restore(Counter.actions.set, savedId);
+```
+
+`submit` shares `enqueue`'s admission and background delivery. Waiting for a result
+does not request another attempt; `retry` does exact recovery. Statuses are
+`Pending`, `ConfirmedAwaitingResult`, `Succeeded`, or `Rejected`; updates may
+coalesce and the stream completes at the outcome. Handles belong to their lease.
+
+Restoration requires local evidence: wrong actions fail with `InvalidValue`,
+quarantined rows with `Quarantined`, and missing or evicted evidence with
+`NotPending`. Pending journals survive reload; completed results have only bounded
+retention, so saving an id does not guarantee the result can be restored later.
 
 `enqueue` needs a known server authority, which can come from a restored cache.
 The returned ID means the edit was admitted locally; it does not mean the server

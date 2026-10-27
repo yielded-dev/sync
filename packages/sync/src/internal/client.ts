@@ -22,6 +22,8 @@ import type {
   Options,
   Runtime,
   Lease,
+  Command,
+  CommandStatus,
 } from "../client/Client.ts";
 import { CurrentActor } from "../client/CurrentActor.ts";
 import { ClientError, type CommandRecovery, type EncodedCommand, Intent } from "../client/Model.ts";
@@ -78,7 +80,7 @@ interface Entry<S extends Source.Spec> {
   order: number;
   recoveryGeneration: string | undefined;
   dirty: boolean;
-  readonly settled: Map<string, Outcome<S>>;
+  readonly settled: Map<string, { readonly command: EncodedCommand; readonly outcome: Outcome<S> }>;
   readonly recoveryAttempts: Map<string, CommandRecovery>;
   messages: PubSub.PubSub<ReplicaState.Frame> | undefined;
 }
@@ -379,6 +381,16 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     for (const entry of entries.values()) yield* flushEntry(entry);
   });
 
+  const remember = (entry: Entry<S>, command: EncodedCommand, outcome: Outcome<S>) => {
+    entry.settled.set(command.commandId, { command, outcome });
+    while (entry.settled.size > limits.maxPendingPerSource) {
+      const oldest = entry.settled.keys().next();
+
+      if (oldest.done) break;
+      entry.settled.delete(oldest.value);
+    }
+  };
+
   const restore = Effect.fn("Client.restore")(function* (
     entry: Entry<S>,
     sourceScope: Scope.Closeable,
@@ -406,6 +418,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       }
       const intent = parsed.success;
       const action = findAction(intent.command);
+      let accepted: Outcome<S> | undefined;
 
       let valid =
         action === undefined
@@ -439,6 +452,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
           outcome.success.position.cursor !== intent.confirmedAt?.cursor
         )
           valid = false;
+        else accepted = outcome.success;
       }
 
       if (
@@ -450,6 +464,8 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         continue;
       }
       intents.set(row.commandId, intent);
+      // Hydration may retire this journal row before a restored handle reads it.
+      if (accepted !== undefined) remember(entry, intent.command, accepted);
       entry.order = Math.max(entry.order, intent.order + 1);
     }
     yield* assertOpen(entry, sourceScope);
@@ -565,15 +581,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         return ReplicaState.reflected({ ...state, intents });
       },
       leaseScope,
-      () => {
-        entry.settled.set(id, outcome);
-        while (entry.settled.size > limits.maxPendingPerSource) {
-          const oldest = entry.settled.keys().next();
-
-          if (oldest.done) break;
-          entry.settled.delete(oldest.value);
-        }
-      },
+      () => remember(entry, intent.command, outcome),
     );
 
     return outcome;
@@ -590,7 +598,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       yield* assertOpen(entry, sourceScope, leaseScope);
       const remembered = entry.settled.get(id);
 
-      if (remembered !== undefined) return remembered;
+      if (remembered !== undefined) return remembered.outcome;
       if (entry.state.quarantined.has(id))
         return yield* error(
           "Quarantined",
@@ -974,7 +982,9 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
     const operationsScope = yield* Scope.fork(sourceScope);
 
-    yield* Scope.addFinalizerExit(leaseScope, (exit) => Scope.close(operationsScope, exit));
+    yield* Scope.addFinalizerExit(leaseScope, (exit) =>
+      Scope.close(operationsScope, exit).pipe(Effect.ensuring(signal)),
+    );
 
     const active = Effect.suspend(() =>
       leaseScope.state._tag === "Closed"
@@ -1087,6 +1097,98 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         }),
       );
 
+    const retryCommand = (id: string) =>
+      owned(
+        send(entry, sourceScope, id, true, leaseScope).pipe(
+          Effect.mapError((failure) => error(failure.reason, failure.message, id)),
+          Effect.flatMap(unwrap),
+        ),
+      );
+
+    const retained = Effect.fnUntraced(function* (id: string) {
+      yield* active;
+      if (entry.state.quarantined.has(id))
+        return yield* error("Quarantined", "The retained command cannot be decoded", id);
+      const evidence = entry.settled.get(id) ?? entry.state.intents.get(id);
+
+      if (evidence === undefined)
+        return yield* error("NotPending", "Command evidence is missing or no longer retained", id);
+
+      return evidence;
+    });
+
+    const commandStatus = Effect.fnUntraced(function* (
+      id: string,
+    ): Effect.fn.Return<CommandStatus<Actions<S>>, ClientError> {
+      const evidence = yield* retained(id);
+
+      if (!("phase" in evidence)) return evidence.outcome;
+      const generation = entry.state.authoritative?.position.sourceAuthorityGeneration;
+
+      if (
+        evidence.boundGeneration !== null &&
+        generation !== undefined &&
+        generation !== evidence.boundGeneration
+      )
+        return yield* error("AuthorityChanged", "The command belongs to a replaced authority", id);
+      if (evidence.phase === "Accepted") {
+        const action = findAction(evidence.command);
+
+        if (action === undefined) return yield* error("InvalidValue", "Missing command action", id);
+
+        return yield* decode(action.outcome, evidence.outcome);
+      }
+
+      return { _tag: evidence.phase };
+    });
+
+    const command = (id: string): Command<Actions<S>> => {
+      const observations = Stream.unwrap(active.pipe(Effect.as(Stream.fromPubSub(changed)))).pipe(
+        Stream.mapEffect(() => commandStatus(id)),
+        Stream.changesWith((previous, next) => previous._tag === next._tag),
+        Stream.takeUntil((status) => status._tag === "Succeeded" || status._tag === "Rejected"),
+      );
+
+      return {
+        id,
+        changes: observations,
+        awaitResult: owned(
+          observations.pipe(
+            Stream.filter(
+              (status): status is Outcome<S> =>
+                status._tag === "Succeeded" || status._tag === "Rejected",
+            ),
+            Stream.runHead,
+            Effect.flatMap((value) =>
+              value._tag === "Some"
+                ? Effect.succeed(value.value)
+                : Effect.fail(error("Closed", "Source is closed", id)),
+            ),
+            Effect.flatMap(unwrap),
+          ),
+        ),
+        retry: retryCommand(id),
+      };
+    };
+
+    const submit = (action: BoundAction<S>, payload: unknown) =>
+      enqueue(action, payload).pipe(Effect.map(command));
+
+    const restoreCommand = (action: BoundAction<S>, id: string) =>
+      owned(
+        Effect.gen(function* () {
+          if (!actions.includes(action))
+            return yield* error("InvalidValue", "Action belongs to another source contract", id);
+          const evidence = yield* retained(id);
+
+          if (findAction(evidence.command) !== action)
+            return yield* error("InvalidValue", "Retained command belongs to another action", id);
+          yield* decode(action.command, evidence.command);
+
+          return command(id);
+        }),
+      );
+
     const publish = (namespace: string, message: unknown) =>
       owned(
         Effect.gen(function* () {
@@ -1120,13 +1222,9 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       ),
       execute: execute as Lease<S>["execute"],
       enqueue: enqueue as Lease<S>["enqueue"],
-      retry: (id) =>
-        owned(
-          send(entry, sourceScope, id, true, leaseScope).pipe(
-            Effect.mapError((failure) => error(failure.reason, failure.message, id)),
-            Effect.flatMap(unwrap),
-          ),
-        ) as ReturnType<Lease<S>["retry"]>,
+      submit: submit as Lease<S>["submit"],
+      restore: restoreCommand as Lease<S>["restore"],
+      retry: retryCommand,
       recover: owned(
         Effect.sync(() => entry.recoveryAttempts.clear()).pipe(
           Effect.andThen(start(entry, sourceScope, leaseScope)),

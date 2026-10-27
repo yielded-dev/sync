@@ -18,6 +18,7 @@ import type * as Action from "../Action.ts";
 import * as internal from "../internal/client.ts";
 import type { Slot } from "../internal/client.ts";
 import { assertUnique, type Ids, type Unique } from "../internal/registration.ts";
+import type { ActionOutcome } from "../Model.ts";
 import type * as Plugin from "../Plugin.ts";
 import { RegistrationError } from "../RegistrationError.ts";
 import type * as Source from "../Source.ts";
@@ -300,6 +301,34 @@ export interface Options {
 }
 
 /**
+ * Current progress or the exact terminal outcome of an admitted action.
+ *
+ * @category models
+ * @since 0.1.0-beta.4
+ */
+export type CommandStatus<A extends Action.Definition> =
+  | { readonly _tag: "Pending" | "ConfirmedAwaitingResult" }
+  | ActionOutcome<Action.Success<A>, Action.Error<A>>;
+
+/**
+ * An action-typed command owned by the lease that admitted or restored it.
+ * Closing that lease interrupts its operations. Missing or evicted local
+ * evidence fails with `NotPending`; this is not a durable result archive.
+ *
+ * @category models
+ * @since 0.1.0-beta.4
+ */
+export interface Command<A extends Action.Definition> {
+  readonly id: string;
+  /** Emits the current status, coalesces updates, and completes after the outcome. */
+  readonly changes: Stream.Stream<CommandStatus<A>, ClientError>;
+  /** Waits without transport calls; interruption leaves the admitted command intact. */
+  readonly awaitResult: Effect.Effect<Action.Success<A>, Action.Error<A> | ClientError>;
+  /** Looks up the exact result and resends the original command only when safe. */
+  readonly retry: Effect.Effect<Action.Success<A>, Action.Error<A> | ClientError>;
+}
+
+/**
  * A scoped handle to one source replica.
  *
  * Closing the lease interrupts its operations. Closing the last lease releases
@@ -329,6 +358,26 @@ export interface Lease<S extends Source.Spec> {
     action: A,
     payload: Action.Payload<NoInfer<A>>,
   ) => Effect.Effect<string, ClientError>;
+  /**
+   * Like `enqueue`, returns after local admission, durably journaled in persistent
+   * mode. The handle retains the action's result and rejection types. Delivery
+   * belongs to the source scope and does not depend on a result waiter.
+   */
+  readonly submit: <A extends Actions<S>>(
+    action: A,
+    payload: Action.Payload<NoInfer<A>>,
+  ) => Effect.Effect<Command<A>, ClientError>;
+  /**
+   * Validates locally retained evidence against the registered action, without
+   * transport calls. Missing/evicted evidence fails with `NotPending`, mismatched
+   * actions with `InvalidValue`, and undecodable journal rows with `Quarantined`.
+   * Completed results survive only in the bounded memory cache or accepted
+   * journal entries still awaiting replication; a saved id alone is insufficient.
+   */
+  readonly restore: <A extends Actions<S>>(
+    action: A,
+    commandId: string,
+  ) => Effect.Effect<Command<A>, ClientError>;
   /**
    * Captures a new command identity and payload, then submits it. Unknown
    * results retain their identity for exact lookup or retry.
