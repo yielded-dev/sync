@@ -1,6 +1,6 @@
 {
   "name": "@yielded/sync-platform-alchemy-cf",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "description": "alchemy Cloudflare integration for Effect Sync.",
   "license": "MIT",
   "repository": {

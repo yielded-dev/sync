@@ -1,5 +1,19 @@
 # @yielded/sync-local-indexeddb
 
+## 0.1.0-beta.4
+
+### Patch Changes
+
+- fa5ec1f: Publish complete action event batches, admit offline edits through callable Atom `enqueue` bindings, and expose command recovery diagnostics. Enforce one IndexedDB coordinator per namespace, actor, and source through scoped Web Locks; custom persistence must provide ownership or guarantee a single coordinator.
+- Updated dependencies [fa5ec1f]
+- Updated dependencies [0111e0c]
+- Updated dependencies [df571d8]
+- Updated dependencies [ebb37d4]
+- Updated dependencies [85664d7]
+- Updated dependencies [298f319]
+  - @yielded/sync@0.1.0-beta.4
+  - @yielded/sync-persistence@0.1.0-beta.4
+
 ## 0.1.0-beta.3
 
 ### Minor Changes
