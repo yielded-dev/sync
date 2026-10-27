@@ -2,58 +2,9 @@
 title: Clients and React
 ---
 
-Use `CounterClient` from the [counter example](./api/consumer.md).
-For a browser app, [install the browser packages](./reference/packages.mdx#browser-clients)
-and create a binding for one source and signed-in actor.
+Continue from the [counter client](./guide/getting-started.md#connect-a-client).
 
 ## Atom bindings
-
-```ts title="counter-atoms.ts"
-import { BrowserSource } from "@yielded/sync-platform-browser";
-
-import { CounterClient } from "./counter-client";
-import { CounterId } from "./counter";
-
-export const counter = BrowserSource.bind(CounterClient, {
-  id: CounterId.make("demo"),
-  actorId: "alice",
-  persistence: "volatile",
-});
-```
-
-Render its replica and dispatch typed actions inside a `RegistryProvider`:
-
-```tsx title="App.tsx"
-import { RegistryProvider, useAtom, useAtomValue } from "@effect/atom-react";
-
-import { counter } from "./counter-atoms";
-
-function CounterView() {
-  const replica = useAtomValue(counter.replica);
-  const [result, set] = useAtom(counter.action.set);
-
-  if (replica._tag === "Failure") return <p role="alert">Could not load the counter.</p>;
-  const value = replica._tag === "Success" ? replica.value.value?.value : undefined;
-
-  return (
-    <>
-      <output>{value ?? "Connecting…"}</output>
-      <button disabled={value === undefined || result.waiting} onClick={() => set({ value: 7 })}>
-        Set to 7
-      </button>
-      {result._tag === "Failure" && <p role="alert">Could not confirm the change.</p>}
-    </>
-  );
-}
-
-export function App() {
-  return (
-    <RegistryProvider>
-      <CounterView />
-    </RegistryProvider>
-  );
-}
-```
 
 Define bindings once. The registry owns their connections; dispose it before
 switching actors. `actorId` selects local ownership and must match your session,
@@ -62,7 +13,7 @@ but it does not authenticate requests. The server still verifies the connection.
 ## Persistence
 
 To retain pending edits across reloads, replace `"volatile"` with an IndexedDB
-Layer in the binding above:
+Layer in `counter-atoms.ts`:
 
 ```ts
 import { IndexedDb } from "@yielded/sync-local-indexeddb";

@@ -36,11 +36,10 @@ Use `bun add` for consumer package installation examples.
 Use fenced `mermaid` blocks for diagrams, with `accTitle` and `accDescr`.
 The shared Starlight theme owns rendering and colors.
 
-Never hardcode Effect's current version in documentation, including READMEs,
-guides, reference pages, contributor docs, and installation commands. Use plain
-`effect` without a version or release tag in install examples. Package manifests
-and the root catalog own exact versions and peer compatibility; refer to them
-instead of repeating version numbers in prose or tables.
+Do not include dependency version numbers, release tags, or version placeholders
+in documentation or installation commands. Use bare package names, such as
+`bun add @yielded/sync`. Package manifests and the root catalog own exact versions
+and peer compatibility; release history belongs in changelogs and release notes.
 
 ## Effect
 
