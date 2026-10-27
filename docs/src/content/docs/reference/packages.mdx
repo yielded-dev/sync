@@ -2,21 +2,73 @@
 title: Packages and hosts
 ---
 
-import { OwnershipLadder } from "@yielded/starlight-theme/components";
+Install only the integrations your app needs. Keep Sync packages on the same
+exact version; their manifests define supported Effect and framework peers.
 
-Core contracts and `Server.host` are portable. Add an optional server adapter for
-native transport and lifecycle hooks, and client persistence for restart recovery.
+## Cloudflare
 
-| Entry point                         | Use it for                                                         |
-| ----------------------------------- | ------------------------------------------------------------------ |
-| `@yielded/sync`                     | Shared contracts, with `./client` and `./atom` entry points        |
-| `@yielded/sync/server`              | `Server.host`, `ServerRpc`, execution, and server storage ports    |
-| `@yielded/sync-platform-browser`    | `BrowserSource`: browser services and source Atom bindings         |
-| `@yielded/sync-persistence`         | `Persistence`: shared record policy and custom drivers             |
-| `@yielded/sync-local-indexeddb`     | `IndexedDb`: browser persistence                                   |
-| `@yielded/sync-platform-cloudflare` | `DurableObject` definitions; `Cloudflare` runtime; `SqliteStorage` |
-| `@yielded/sync-platform-effect-cf`  | `EffectCfServices`: native effect-cf integration                   |
-| `@yielded/sync-platform-alchemy-cf` | `AlchemyServices`: native Alchemy integration                      |
+Both integrations use the same `DurableObject.make` definition. Choose the
+framework that already owns your Worker and pass its provider to `.provide(...)`:
+
+```sh
+bun add @yielded/sync-platform-cloudflare@{{SYNC_VERSION}} \
+  @yielded/sync-platform-effect-cf@{{SYNC_VERSION}} effect-cf
+```
+
+Or, for Alchemy:
+
+```sh
+bun add @yielded/sync-platform-cloudflare@{{SYNC_VERSION}} \
+  @yielded/sync-platform-alchemy-cf@{{SYNC_VERSION}} @alchemy.run/cloudflare alchemy
+```
+
+| Framework | Provider           | Example                                                                                               |
+| --------- | ------------------ | ----------------------------------------------------------------------------------------------------- |
+| effect-cf | `EffectCfServices` | [Counter Worker](../api/consumer.md#host-on-cloudflare)                                               |
+| Alchemy   | `AlchemyServices`  | [Alchemy setup](https://github.com/yielded-dev/sync/blob/main/packages/platform-alchemy-cf/README.md) |
+
+Each adapter supplies SQLite, crypto, transport, and lifecycle hooks. Your app
+supplies authentication. Replace SQLite by passing a `SourceStorage` Layer as
+`storage` to `DurableObject.make`.
+
+## Other hosts
+
+Use `Server.host` with your own `SourceStorage` and `ServerCrypto` Layers.
+Keep one host per storage authority and keep its scope alive for its connections.
+`ServerRpc.handlers` connects the host to an Effect RPC transport; provide
+`ServerRpc.CurrentConnection` from authenticated server context.
+
+See the [host API](https://github.com/yielded-dev/sync/blob/main/packages/sync/src/server/Host.ts)
+for limits and outbox scheduling, and the
+[RPC API](https://github.com/yielded-dev/sync/blob/main/packages/sync/src/server/Rpc.ts)
+for transport composition.
+
+## Browser clients
+
+```sh
+bun add @yielded/sync-platform-browser@{{SYNC_VERSION}} \
+  @yielded/sync-local-indexeddb@{{SYNC_VERSION}} @effect/atom-react react
+```
+
+`BrowserSource.bind` supplies browser services and Atom bindings. Add an
+`IndexedDb` Layer to retain pending edits across reloads, or choose `"volatile"`.
+See [client setup](../client.mdx).
+
+For custom persistence, implement `ReplicaPersistence` directly or use
+[`Persistence.make`](https://github.com/yielded-dev/sync/blob/main/packages/persistence/README.md)
+for shared record handling over your storage drivers.
+
+## Imports
+
+| Entry point                      | Main APIs                                              |
+| -------------------------------- | ------------------------------------------------------ |
+| `@yielded/sync`                  | `Source`, `Action`, `Plugin`, schemas and errors       |
+| `@yielded/sync/server`           | `Server`, `ServerRpc`, `SourceStorage`, `ServerCrypto` |
+| `@yielded/sync/client`           | `Client`, `ReplicaPersistence`                         |
+| `@yielded/sync/atom`             | `SourceAtom` for custom Atom runtimes                  |
+| `@yielded/sync-platform-browser` | `BrowserSource`                                        |
+| `@yielded/sync-local-indexeddb`  | `IndexedDb`                                            |
+| `@yielded/sync-persistence`      | `Persistence` and storage driver contracts             |
 
 Public modules also support direct imports:
 
@@ -24,65 +76,3 @@ Public modules also support direct imports:
 import * as Source from "@yielded/sync/Source";
 import * as Client from "@yielded/sync/client/Client";
 ```
-
-`Server.host` owns ordering, subscriptions, publication, and optional outbox
-delivery. Supply `SourceStorage` and `ServerCrypto`; connect it to Effect RPC with
-`ServerRpc.handlers`. Applications own authentication, routing, transport,
-durable wakeup scheduling, and projection destinations.
-
-`DurableObject.make(server, options)` defines a Cloudflare object independently
-of the framework. At application composition, use `.provide(EffectCfServices)` or
-`.provide(AlchemyServices("CounterObject"))` to construct its native class or
-resource declaration. Each provider supplies SQLite, crypto, requests, WebSockets,
-and alarms. Pass a custom `SourceStorage` Layer in `storage` to replace SQLite.
-Generated handlers share the source's path and ID schema with the client; the
-application supplies authentication. Each adapter's `layer(options)` export exposes
-the same platform services for custom composition. Server implementations are
-not exported from root or client entry points.
-
-For browser clients, `BrowserSource.bind` derives the connection from the client
-definition and ID, supplies browser crypto, and creates the Atom runtime. Supply
-an actor and either a persistence Layer or `"volatile"`; credentials remain
-application-owned. Use `SourceAtom.bind` for custom runtime composition.
-
-For client persistence, choose how much implementation to supply:
-
-<OwnershipLadder
-  caption="Core defines the client persistence port; optional packages supply shared record policy and platform storage."
-  levels={[
-    { name: "Core port", api: "ReplicaPersistence" },
-    { name: "Shared policy", api: "Persistence.make(…)" },
-    { name: "Browser adapter", api: "IndexedDb" },
-  ]}
-  layers={[
-    {
-      name: "Storage access",
-      cells: [
-        { owner: "app", note: "Supply an actor-bound journal and optional cache." },
-        { owner: "app", note: "Supply two scoped AtomicStore drivers." },
-        { owner: "library", note: "Browser IndexedDB." },
-      ],
-    },
-    {
-      name: "Record policy",
-      cells: [
-        { owner: "app", note: "Your formats and atomic commits." },
-        { owner: "library", note: "Journal formats, atomic batches, bounds, and cache policy." },
-        { owner: "library", note: "The same shared persistence policy." },
-      ],
-    },
-  ]}
-  shared={{
-    name: "Client runtime",
-    label: "Same core",
-    note: "The same `Client`, views, and retry protocol use `ReplicaPersistence` at every level.",
-  }}
-/>
-
-IndexedDB remains subject to browser quota and eviction. It uses
-`@yielded/sync-persistence` and retains unresolved command journals separately from disposable snapshot
-caches. See [client persistence](../client.mdx#persistence).
-
-Keep Sync packages on the same exact version. Package manifests declare supported
-Effect and framework peer ranges; the repository catalog pins the development
-combination. Read the [upgrade guidance](../RELEASE.md) before changing versions.

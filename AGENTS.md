@@ -7,30 +7,33 @@ ticket identifiers; describe behavior, boundaries, and implementation stages dir
 
 ## Documentation
 
-Documentation teaches humans how to use the current API. Keep it terse and edit
-whole pages for a clear reading path. A feature or fix usually needs a small change
-to existing guidance; it does not justify appending another section.
+Documentation helps humans evaluate and understand the current library, then use it.
+Keep it terse and edit whole pages for a clear reading path. Agents can read source
+and API comments; product documentation is not their implementation context.
+A feature or fix usually needs a small change to existing guidance, not another section.
 
-- Guides explain the mental model, ownership, and essential usage. Use one focused
-  example and link to runnable examples for complete setup.
+- Lead usage guides with a focused code example that shows the task. Explain only the choices
+  needed to use it; do not narrate each line. Show imports and required services,
+  and link to runnable examples for complete setup.
+- Use small diagrams for ownership, data flow, and call order, and tables for
+  choices and defaults. Let these replace prose rather than repeat it.
 - References describe public options, defaults, and caller-visible limitations in
   a scannable form. Keep essential security and recovery caveats beside their API.
 - Source, schemas, and API comments own implementation contracts. Keep SQL query
   plans, predicate inventories, internal state-machine walkthroughs, and exhaustive
-  failure explanations out of guides and reference pages.
+  failure explanations out of guides and reference pages. Move an enduring contract
+  into its owning API comment when it is missing there.
 - PRs and release notes own release history, package-version availability,
   `main`/unreleased warnings, old-version fallbacks, migration stories, investigation
   findings, and verification results. Do not put these in product documentation,
   including banners, callouts, compatibility sections, or annotated examples.
 - Review every changed page as a whole before handoff. Remove repetition and material
-  that does not help a reader use the API or avoid a concrete usage pitfall. Preserve
-  the actual constraint in a short explanation; move its implementation rationale
-  to source or the PR. Documentation is not a work log or a feature inventory.
+  that does not help a reader evaluate the library, use an API, or avoid a concrete
+  pitfall. Preserve the actual constraint briefly; put its implementation rationale
+  in source or the PR. Documentation is not a work log or feature inventory.
 
 Use `bun add` for consumer package installation examples.
-Use small diagrams only when they clarify ownership or usage.
-Use the rich MDX diagram components from `@yielded/starlight-theme/components`
-for flows, traces, and ownership comparisons. Keep their accessible labels and descriptions.
+Use fenced `mermaid` blocks for diagrams, with `accTitle` and `accDescr`.
 The shared Starlight theme owns rendering and colors.
 
 Never hardcode Effect's current version in documentation, including READMEs,

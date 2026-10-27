@@ -1,10 +1,10 @@
 ---
 title: Yielded Sync
-description: Effect-native realtime synchronization with exact retries and scoped clients.
+description: Shared state, optimistic updates, and typed actions for Effect applications.
 template: splash
 hero:
-  title: Realtime state, with receipts.
-  tagline: Effect-native contracts, an authoritative server, and scoped clients that keep the same command identity through retries.
+  title: Shared state for Effect apps.
+  tagline: Define typed actions, update clients optimistically, and keep them in sync with an authoritative server.
   actions:
     - text: Get started
       link: /sync/guide/getting-started/
@@ -18,27 +18,24 @@ hero:
 import { Card, CardGrid } from "@astrojs/starlight/components";
 
 <CardGrid>
-  <Card title="One source of authority">
-    Commit state, durable events, exact outcomes, and outbox obligations together. Replay stays
-    ordered and gaps trigger recovery.
+  <Card title="Typed actions">
+    Share schemas for state, events, action payloads, results, and errors.
   </Card>
-  <Card title="Honest optimistic state">
-    Clients expose provisional edits and declared rejections while retaining unresolved commands for
-    exact retry.
+  <Card title="Optimistic clients">
+    Show edits immediately, reconcile with the server, and retry interrupted commands safely.
   </Card>
-  <Card title="Explicit host boundaries">
-    Keep your domain model and authorization in the app. Add Cloudflare hosting and IndexedDB
-    persistence where needed, or supply your own storage.
+  <Card title="Your application, your storage">
+    Keep your domain and authentication. Use Cloudflare and IndexedDB adapters or supply your own.
   </Card>
 </CardGrid>
 
-## Choose your setup
+## Build a counter
 
-Start with the [installation guide](./guide/getting-started.md), then choose a
-[host and persistence adapter](./reference/packages.mdx). Core contracts work on
-both server and client; platform integrations stay in separate packages.
+1. [Define the shared contract](./guide/getting-started.md).
+2. [Implement the server and client reducers](./api/consumer.md).
+3. [Connect a browser or headless client](./client.mdx).
 
-The [counter example](./api/consumer.md) shows how to implement a source.
-The [client guide](./client.mdx) covers sessions, persistence, retries, and Atom
-bindings. For a complete frontend and Worker, run the
+For a complete application, run the
 [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board).
+See [how Sync works](./guide/concepts.mdx) or compare
+[packages and hosts](./reference/packages.mdx) before choosing a setup.

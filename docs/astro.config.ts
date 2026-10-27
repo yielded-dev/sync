@@ -29,7 +29,7 @@ export default defineConfig({
           label: "Build",
           items: [
             { label: "How Sync works", slug: "guide/concepts" },
-            { label: "Consumer example", slug: "api/consumer" },
+            { label: "Counter example", slug: "api/consumer" },
             { label: "Client and Atom", slug: "client" },
           ],
         },

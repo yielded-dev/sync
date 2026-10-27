@@ -2,136 +2,92 @@
 title: Counter example
 ---
 
-A source has three parts: a shared contract, server handlers, and client reducers.
-This example implements the `Counter` contract from
-[getting started](../guide/getting-started.md). The
-[React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
-is the complete runnable application, including IndexedDB persistence.
+Use the shared `Counter` from [getting started](../guide/getting-started.md).
+The [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
+provides a complete runnable app with authentication wiring and persistence.
 
 ## Implement the server
 
-`Server.make` keeps private state separate from the public snapshot. Here,
-`lastActorId` is stored with the counter but is never sent to clients.
-
-```ts
+```ts title="counter-server.ts"
 import { Server } from "@yielded/sync/server";
 import { Effect, Schema } from "effect";
 
 import { authorize, Principal } from "./auth";
-import { Counter, CounterId } from "./counter";
+import { Counter } from "./counter";
 
 export const CounterServer = Server.make(Counter, {
   principal: Principal,
-  state: Schema.Struct({ value: Schema.Number, lastActorId: Schema.NullOr(Schema.String) }),
+  state: Schema.Struct({ value: Schema.Finite, lastActorId: Schema.NullOr(Schema.String) }),
   initialize: Effect.succeed({ value: 0, lastActorId: null }),
   snapshot: (state) => ({ value: state.value }),
   authorize,
   actions: {
-    set: Effect.fn("Counter.set")(function* ({ state, payload, principal }) {
-      return {
+    set: ({ state, payload, principal }) =>
+      Effect.succeed({
         state: { value: payload.value, lastActorId: principal.actorId },
         events: [{ value: payload.value }],
         result: { previous: state.value, current: payload.value },
-      };
-    }),
+      }),
   },
 });
 ```
 
-The application supplies `Principal`, a Schema with an `actorId` field, and
-`authorize`, which checks the principal, source address, state, and operation.
-It returns an Effect that fails with `ProtocolError` when access is denied.
-Authentication happens at the application boundary; an actor id supplied by a
-client is not proof of identity.
+Your auth module supplies `Principal`, a Schema with an `actorId` field, and
+`authorize`, which checks the principal, address, state, and operation. Deny access
+with `ProtocolError`; an actor ID from a client is not proof of identity.
 
-The handler returns a plan: `state` is private server state, `events` update
-replicas, and `result` is the caller's typed reply. Sync validates and atomically
-commits these with any optional `outbox` obligations. Changed state must emit an event.
-Retrying a set from 0 to 7 returns `{ previous: 0, current: 7 }` even after another command
-changes the counter. Actions with a declared error Schema can yield a typed
-domain rejection from the generator; that rejection is also retained for exact retry.
+The private `lastActorId` stays on the server. Sync commits state, events, and the
+result atomically. A state change must emit an event. Keep external side effects
+in an [outbox](https://github.com/yielded-dev/sync/blob/main/packages/platform-cloudflare/README.md#durable-data),
+with a destination that deduplicates deliveries.
 
-## Host the source
+## Host on Cloudflare
 
-`Server.host(CounterServer)` owns ordered turns, subscriptions, publication, and
-optional outbox delivery. Provide `SourceStorage`, `ServerCrypto`, and the
-server definition's services in its scope. Keep one host per storage authority.
-Within that scope, with an authenticated `session`:
+Install the [effect-cf adapter](../reference/packages.mdx#cloudflare), then define
+the object and its authenticated route:
 
-```ts
-const readCounter = Effect.gen(function* () {
-  const host = yield* Server.host(CounterServer);
-  const address = Counter.address(CounterId.make("demo"));
-  const connection = yield* host.connect({ address, session });
+```ts title="worker.ts"
+import { DurableObject } from "@yielded/sync-platform-cloudflare";
+import { EffectCfServices } from "@yielded/sync-platform-effect-cf";
+import { Worker } from "effect-cf";
 
-  return yield* host.snapshot(connection, address);
+import { authenticate } from "./auth";
+import { CounterServer } from "./counter-server";
+
+export const CounterObject = DurableObject.make(CounterServer, {
+  storage: { namespace: "counter-v1" },
+}).provide(EffectCfServices);
+
+const Counters = CounterObject.binding("COUNTERS");
+
+export default Worker.makeFetchHandler(Counters.layer, {
+  fetch: Counters.handler({ authenticate }),
 });
 ```
 
-`connect` returns a scoped connection. Keep its scope alive for the transport
-connection. A failure of `connection.closed` requests transport closure; normal
-scope disposal completes it successfully. Cancelling a subscription does not
-close the connection. The host opens and releases definition resources for each operation;
-`Server.provide` supplies services with that lifetime.
+`authenticate` verifies the request and returns `{ actorId, principal, expiresAtMillis }`.
+The adapter supplies SQLite, crypto, WebSockets, and alarms. Configure the
+`COUNTERS` binding and SQLite migration as in the
+[board's Wrangler config](https://github.com/yielded-dev/sync/blob/main/examples/list-board/wrangler.jsonc).
+Keep object identities and storage namespaces stable when retaining data.
 
-`ServerRpc.handlers(host)` returns the source's `group` and handler `services` for
-an Effect `RpcServer`. Supply `ServerRpc.CurrentConnection` from authenticated
-application context, never client-supplied RPC headers. The application chooses
-its RPC transport and closes native connections when requested by the host.
-`ServerRpc.serialization(maxBytes)` supplies bounded JSON serialization.
+For Alchemy or a portable `Server.host`, see [packages and hosts](../reference/packages.mdx).
 
-Host options default to:
+## Reduce events on the client
 
-| Option                                                  | Default                      |
-| ------------------------------------------------------- | ---------------------------- |
-| `replay.maxEvents` / `replay.maxBatchBytes`             | 512 events / 600,000 bytes   |
-| `connections.maxConnections` / `connections.bufferSize` | 100 connections / 256 frames |
-| `maxQueuedTurns`                                        | 128                          |
-| `turnTimeoutMillis`                                     | 5,000 ms                     |
-| `outbox`                                                | Disabled                     |
-| `outbox.batchSize`                                      | 10 records                   |
-| `outbox.retryMillis`                                    | 60,000 ms                    |
+```ts title="counter-client.ts"
+import { Client } from "@yielded/sync/client";
 
-For durable delivery, supply a storage outbox capability and
-`outbox: { deliver, schedule }`. The batch size also limits outbox records per
-command; delivery attempts time out after half the retry interval.
-`schedule(atMillis)` must persist the next wakeup; `schedule(undefined)` cancels it.
-Run `host.drainOutbox`
-on each wakeup. The destination must deduplicate stable obligation ids. Drain
-pending delivery before disabling it.
+import { Counter } from "./counter";
 
-The optional [Cloudflare adapters](../reference/packages.mdx) wrap this same host
-with native SQLite, crypto, request, WebSocket, and alarm handling. Use
-`DurableObject.make(CounterServer, options)` from `@yielded/sync-platform-cloudflare`
-to define the object, then `.provide(EffectCfServices)` or
-`.provide(AlchemyServices("CounterObject"))` to select the framework at app composition.
-Pass a custom `SourceStorage` Layer in `storage` to replace SQLite.
-An Effect CF binding exposes `Counters.handler({ authenticate })`; an Alchemy
-declaration exposes `CounterObject.handler({ authenticate })`. Both use the shared
-path and branded ID schema, prepare trusted metadata, and forward to the object.
-The application supplies authentication. Object names default to `<kind>:<id>`;
-use `objectName` to preserve an existing scheme. Custom routes can still use
-`prepareRequest` and forward directly.
+export const CounterClient = Client.definition(Counter, {
+  applyEvent: (_snapshot, event) => ({ value: event.value }),
+  optimistic: {
+    set: (_snapshot, payload) => ({ value: payload.value }),
+  },
+});
+```
 
-## Connect a client
-
-Define pure reducers with `Client.definition`: `applyEvent` reads the event's new
-value, and an optional `set` optimistic reducer reads the submitted value.
-Actions without an optimistic reducer wait for the authoritative event.
-
-Create one session per authenticated actor with `Client.make`, then open
-`Counter.address(CounterId.make("demo"))`, await `ready`, and call
-`execute(Counter.actions.set, { value: 7 })`. See the [client guide](../client.mdx)
-for transport, persistence, and Atom setup.
-
-For server-side calls, `Cloudflare.client` from `@yielded/sync-platform-cloudflare`
-provides a scoped HTTP client with `snapshot`, `execute`, and `result`. Supply the address,
-authenticated identity, and an effectful `fetch` forwarding to the selected stub.
-Keep the command id, admitted generation, and payload unchanged for retries and
-result lookup. Live subscriptions and optional presence use WebSockets.
-
-A reusable capability uses `Plugin.make`. Add it to the source's `plugins` list
-and provide matching `Server.plugin` and `Client.plugin` definitions. Omit
-`plugins` in all three constructors when the source has none. Each plugin owns
-its snapshot slot and actions; all share the source's authorization, ordered
-cursor, and lifetime. The runnable board keeps its actions directly on the source.
+`applyEvent` applies confirmed changes. The optional `optimistic` reducer predicts
+the value while an action is pending. Continue with
+[React or headless clients](../client.mdx) to display and edit the counter.
