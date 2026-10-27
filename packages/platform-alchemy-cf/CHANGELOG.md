@@ -1,5 +1,18 @@
 # @yielded/sync-platform-alchemy-cf
 
+## 0.1.0-beta.4
+
+### Patch Changes
+
+- Updated dependencies [fa5ec1f]
+- Updated dependencies [0111e0c]
+- Updated dependencies [df571d8]
+- Updated dependencies [ebb37d4]
+- Updated dependencies [85664d7]
+- Updated dependencies [298f319]
+  - @yielded/sync@0.1.0-beta.4
+  - @yielded/sync-platform-cloudflare@0.1.0-beta.4
+
 ## 0.1.0-beta.3
 
 ### Minor Changes

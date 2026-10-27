@@ -1,6 +1,6 @@
 {
   "name": "@yielded/sync-persistence",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "description": "Durable client persistence policy and driver contracts for Effect Sync.",
   "license": "MIT",
   "repository": {

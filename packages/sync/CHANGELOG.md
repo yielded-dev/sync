@@ -1,5 +1,30 @@
 # @yielded/sync
 
+## 0.1.0-beta.4
+
+### Minor Changes
+
+- 0111e0c: Add `lease.transitions({ capacity })` for bounded, ordered observation of local
+  admissions, complete live commits, command outcomes, and replica status. Each
+  subscription starts with a captured baseline and resets explicitly on overflow
+  or resynchronization. Slow observers do not block replication or command
+  admission; subscriptions share their lease's lifetime.
+- df571d8: Select root and plugin values with `lease.select` and `lease.selectPlugin`, using
+  explicit availability, distinct-value streams, custom equality, and optional
+  authoritative snapshots within the existing lease lifetime.
+- 85664d7: Preserve action result and rejection types after local admission with
+  `lease.submit`, a command status stream, passive result waiting, and exact retry.
+  Restore typed handles with `lease.restore`, which validates retained evidence and
+  rejects unavailable, quarantined, or mismatched commands.
+- 298f319: Define schema-typed outbox obligations with `Outbox.make`, encode them into
+  existing commits with `Outbox.encode`, and validate and dispatch delivery with
+  `Outbox.handlers` while preserving payload types and handler service requirements.
+
+### Patch Changes
+
+- fa5ec1f: Publish complete action event batches, admit offline edits through callable Atom `enqueue` bindings, and expose command recovery diagnostics. Enforce one IndexedDB coordinator per namespace, actor, and source through scoped Web Locks; custom persistence must provide ownership or guarantee a single coordinator.
+- ebb37d4: Upgrade private server and plugin state atomically with `stateVersion` and `migrate`, preserving public snapshots, authority, receipts, replay, and queued outbox work. Support these upgrades in native SQLite storage.
+
 ## 0.1.0-beta.3
 
 ### Minor Changes
