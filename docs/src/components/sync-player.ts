@@ -25,10 +25,14 @@ import {
 } from "./sync-scenarios.ts";
 
 const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
-// Reading time after each step, the pause between operations within one, and the restart fade.
-const dwell = 2400;
-const gap = 300;
+// The pause between operations within a step, the rest before a loop restarts, and its fade.
+const gap = 200;
+const rest = 2000;
 const fade = 350;
+// Every step gets a beat. A caption that replaces the previous one also gets time to be read,
+// counting the step's own animation.
+const beat = 1100;
+const reading = (caption: string) => 500 + caption.length * 24;
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -154,7 +158,7 @@ export const mount = (
         element.dataset.lost = "";
         await element.animate([{ opacity: 1 }, { opacity: 0, scale: 0.85 }], {
           duration: 450,
-          delay: 400,
+          delay: 250,
           easing: "ease-in",
           fill: "forwards",
         }).finished;
@@ -202,6 +206,14 @@ export const mount = (
     if (id === run) completed = index + 1;
   };
 
+  const hold = (index: number, elapsed: number) => {
+    const caption = scenario.steps[index]?.caption;
+
+    return captions.length === 0 || caption === undefined
+      ? beat
+      : Math.max(beat, reading(caption) - elapsed);
+  };
+
   const cancel = () => {
     run += 1;
     for (const animation of stage.getAnimations({ subtree: true })) animation.cancel();
@@ -225,13 +237,19 @@ export const mount = (
     looping = id;
     for (;;) {
       // Show the starting state before the first step moves.
-      if (completed === 0) await wait(gap * 2);
+      if (completed === 0) await wait(gap * 3);
+      let pause = 0;
+
       while (playing && completed < steps.length && id === run) {
-        await perform(completed, id);
-        if (playing && completed < steps.length && id === run) await wait(dwell);
+        const index = completed;
+        const started = performance.now();
+
+        await perform(index, id);
+        pause = hold(index, performance.now() - started);
+        if (playing && completed < steps.length && id === run) await wait(pause);
       }
       if (!options.loop || !playing || id !== run) break;
-      await wait(dwell * 1.5);
+      await wait(Math.max(rest, pause));
       if (!playing || id !== run) break;
       await restart(id);
     }
