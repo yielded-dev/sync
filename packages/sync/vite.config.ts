@@ -15,6 +15,7 @@ export default defineConfig({
       "server/Server": "src/server/Server.ts",
       "server/SourceStorage": "src/server/SourceStorage.ts",
       "server/Host": "src/server/Host.ts",
+      "server/Outbox": "src/server/Outbox.ts",
       "server/Rpc": "src/server/Rpc.ts",
       "client/Client": "src/client/Client.ts",
       "client/CurrentActor": "src/client/CurrentActor.ts",

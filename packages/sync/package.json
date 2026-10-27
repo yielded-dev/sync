@@ -65,6 +65,10 @@
       "types": "./dist/server/Host.d.mts",
       "import": "./dist/server/Host.mjs"
     },
+    "./server/Outbox": {
+      "types": "./dist/server/Outbox.d.mts",
+      "import": "./dist/server/Outbox.mjs"
+    },
     "./server/Rpc": {
       "types": "./dist/server/Rpc.d.mts",
       "import": "./dist/server/Rpc.mjs"
