@@ -13,9 +13,9 @@ import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 
 import type * as Action from "../Action.ts";
-import { assertUnique, type Ids, type Unique } from "../internal/registration.ts";
+import { assertUnique, validate, type Ids, type Unique } from "../internal/registration.ts";
 import type { Session, Slot } from "../internal/server.ts";
-import { decode, encode } from "../internal/serverCodec.ts";
+import { decode, encode, invalid } from "../internal/serverCodec.ts";
 import {
   ProtocolError,
   type SourceAddress,
@@ -213,6 +213,31 @@ type Handlers<S extends Plugin.Spec, State, P, R> = {
 interface SlotSpec<S extends Plugin.Spec, State extends WireSchema, P extends WireSchema, R> {
   readonly principal: P;
   readonly state: State;
+  /**
+   * Nonnegative private-state revision, independent of `Source.schemaVersion`.
+   * Defaults to 0, including for existing unversioned state. New sources initialize
+   * at this revision. Downgrades fail with `UnsupportedVersion`.
+   *
+   * @since 0.1.0-beta.4
+   */
+  readonly stateVersion?: number;
+  /**
+   * Upgrades this slot's encoded state from any supported older revision to
+   * `stateVersion`. The result is encoded with `state` and all upgraded slots
+   * commit together on the first source operation. Missing migrations and schema
+   * decoding failures produce `UnsupportedVersion`; failures roll back the turn.
+   *
+   * Preserve the public snapshot and all public codecs. Do bounded, source-local
+   * work without external side effects: a failed turn may call this again.
+   * Replace old server instances on deployment; this is not a rolling upgrade
+   * protocol. Events, receipts, outbox records, and client commands are unchanged.
+   *
+   * @since 0.1.0-beta.4
+   */
+  readonly migrate?: (input: {
+    readonly state: Schema.Json;
+    readonly fromVersion: number;
+  }) => Effect.Effect<State["Type"], ProtocolError | Schema.SchemaError, R>;
   readonly initialize: Effect.Effect<State["Type"], ProtocolError, R>;
   readonly snapshot: (state: State["Type"]) => S["snapshot"]["Type"];
   readonly actions: Handlers<S, State["Type"], P["Type"], R>;
@@ -264,6 +289,7 @@ const acquireSlot = <S extends Plugin.Spec, State extends WireSchema, P extends 
 ): Effect.Effect<Slot, ProtocolError, R> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
+    const migrate = spec.migrate;
 
     const actions = new Map<
       string,
@@ -326,6 +352,20 @@ const acquireSlot = <S extends Plugin.Spec, State extends WireSchema, P extends 
     return {
       id,
       actions,
+      stateVersion: spec.stateVersion ?? 0,
+      migrate:
+        migrate === undefined
+          ? undefined
+          : Effect.fn("Server.migrate")(function* (state, fromVersion) {
+              const migrated = yield* migrate({ state, fromVersion }).pipe(
+                Effect.provideContext(context),
+                Effect.catchTag("SchemaError", () =>
+                  invalid("Stored private state cannot be migrated"),
+                ),
+              );
+
+              return yield* encode(spec.state, migrated);
+            }),
       initialize: spec.initialize.pipe(
         Effect.provideContext(context),
         Effect.flatMap((state) => encode(spec.state, state)),
@@ -382,6 +422,7 @@ export const plugin = <
   contract: Plugin.Definition<Id, S>,
   spec: HandlerSpec<NoInfer<S>, State, P, R, H>,
 ): PluginDefinition<Id, R | HandlerRequirements<H[keyof H]>> => {
+  validate(Schema.Natural, spec.stateVersion ?? 0, "private state version");
   checkHandlers(contract.spec, spec.actions);
 
   // The handler map retains each method's inferred requirements until this distribution boundary.
@@ -432,6 +473,7 @@ export const make = <
         : never);
   } & (S["plugins"] extends readonly [] ? unknown : { readonly plugins: Plugins }),
 ): Definition<S, R | HandlerRequirements<H[keyof H]> | PluginRequirements<Plugins>> => {
+  validate(Schema.Natural, spec.stateVersion ?? 0, "private state version");
   checkHandlers(contract.spec, spec.actions);
   const providedPlugins = spec.plugins ?? [];
 

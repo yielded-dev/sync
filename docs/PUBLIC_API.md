@@ -113,6 +113,20 @@ protection that prevents re-execution.
 `Server.make` supplies private state, initialization, snapshot projection,
 authorization, and handlers. Authorized viewers of a source receive the same
 public snapshot. Viewer-private projections need a separate authorization boundary.
+`Server.make` and `Server.plugin` may declare a `stateVersion` (default `0`) and
+`migrate({ state, fromVersion })`. On the first operation against older stored
+state, the runtime migrates each affected slot and atomically saves the encoded
+state and revisions. Existing unversioned slots are revision `0`; new sources
+initialize directly at the declared revisions. Downgrades and missing migrations
+fail without changing storage. Migration callbacks must preserve the public
+snapshot and do bounded, source-local work without external side effects.
+
+Private-state migration keeps `Source.schemaVersion`, public codecs, authority,
+cursor, events, receipts, and outbox obligations unchanged. It does not support
+breaking public-contract upgrades or rewrite pending client commands. Incompatible
+snapshot caches are disposable; unresolved journals and durable retry evidence
+are not. Replace old server instances when deploying a state migration.
+
 The portable host requires `SourceStorage` and `ServerCrypto`. Cloudflare
 integrations supply these through a per-object platform layer, using native
 SQLite by default. A custom storage layer replaces SQLite without opening it.
@@ -147,6 +161,9 @@ authority once, compare the current position on commit, and provide consistent
 snapshots and bounded replay. Replay gaps are explicit. Transaction callbacks do
 bounded source-local work; external effects belong in the outbox and are not
 rerun automatically after a conflict.
+Storage adapters opt into private-state upgrades with transactional `migrateState`;
+the native SQLite adapter supports it. Other adapters fail upgrades explicitly
+until they implement that operation and retain `StoredHead.stateVersions`.
 
 Outbox delivery is at least once, with stable ids and durable claim fencing.
 Applications own destination idempotency and classification of delivery results.

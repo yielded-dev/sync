@@ -18,6 +18,11 @@ import { Counter } from "./counter";
 export const CounterServer = Server.make(Counter, {
   principal: Principal,
   state: Schema.Struct({ value: Schema.Finite, lastActorId: Schema.NullOr(Schema.String) }),
+  stateVersion: 1,
+  migrate: ({ state }) =>
+    Schema.decodeUnknownEffect(Schema.Struct({ value: Schema.Finite }))(state).pipe(
+      Effect.map((old) => ({ ...old, lastActorId: null })),
+    ),
   initialize: Effect.succeed({ value: 0, lastActorId: null }),
   snapshot: (state) => ({ value: state.value }),
   authorize,
@@ -39,7 +44,12 @@ access with `ProtocolError`; an actor ID from a client is not proof of identity.
 Only the server sees `lastActorId`: `snapshot` selects the public view. Each
 event updates connected clients, while the result goes to the caller. Sync
 commits state, events, and the result atomically, and every state change must
-emit an event. Put external side effects
+emit an event during an action. `stateVersion` and `migrate` upgrade older private
+state without changing its public snapshot: here, revision `0` gains a private
+`lastActorId` field. New sources use `initialize` directly. The same options work
+on `Server.plugin`; see [upgrade constraints](../RELEASE.md).
+
+Put external side effects
 in an [outbox](https://github.com/yielded-dev/sync/blob/main/packages/platform-cloudflare/README.md#durable-data)
 and make sure the destination deduplicates deliveries.
 

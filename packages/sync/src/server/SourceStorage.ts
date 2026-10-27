@@ -26,6 +26,7 @@ export class StorageError extends Schema.TaggedError<StorageError>()("StorageErr
 
 /**
  * Schema for the source address, schema version, authority position, and encoded private state.
+ * Adapters must retain private `stateVersions` metadata on every head write.
  *
  * @category schemas
  * @since 0.1.0-beta.0
@@ -35,6 +36,11 @@ export const StoredHead = Schema.Struct({
   schemaVersion: Schema.Int,
   position: SourcePosition,
   state: Schema.Json,
+  /**
+   * Private revisions by slot; absent entries are revision 0.
+   * @since 0.1.0-beta.4
+   */
+  stateVersions: Schema.optionalKey(Schema.Record(Schema.String, Schema.Natural)),
 });
 
 /**
@@ -164,6 +170,19 @@ export interface SourceTransaction {
    * Creates the initial authority exactly once; existing authority must not be replaced.
    */
   readonly initialize: (head: StoredHead) => Effect.Effect<void, StorageError>;
+  /**
+   * Replaces only private state and slot revisions in the current serialized
+   * transaction. Requires an existing head; preserves its address, public schema
+   * version, and position, and all events, receipts, and outbox records. Failure
+   * or interruption must roll back the enclosing transaction. Adapters that omit
+   * this capability cannot upgrade existing private state.
+   *
+   * @since 0.1.0-beta.4
+   */
+  readonly migrateState?: (
+    state: Schema.Json,
+    stateVersions: Readonly<Record<string, number>>,
+  ) => Effect.Effect<void, StorageError>;
   /**
    * Reads the durable outcome for an authenticated retry identity.
    */
