@@ -11,6 +11,7 @@
 import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import type * as Option from "effect/Option";
 import type * as Scope from "effect/Scope";
 import type * as Stream from "effect/Stream";
 
@@ -368,6 +369,48 @@ export interface Command<A extends Action.Definition> {
 }
 
 /**
+ * A value-only projection owned by an existing lease. Construction acquires no
+ * resources. `None` means no snapshot is available; `Some(undefined)` is a valid
+ * selected value. The selector is not called while data is unavailable.
+ * Closing the lease fails subsequent reads and stream pulls with `Closed`.
+ *
+ * @category models
+ * @since 0.1.0-beta.4
+ */
+export interface Selection<A> {
+  /** Reads the current value without applying the stream's equality filter. */
+  readonly read: Effect.Effect<Option.Option<A>, ClientError>;
+  /**
+   * Emits the current selection, then distinct observed values and availability
+   * changes. Each subscription has independent equality state and may coalesce
+   * intermediate updates.
+   * Connection and command status remain available on the lease.
+   */
+  readonly changes: Stream.Stream<Option.Option<A>, ClientError>;
+}
+
+/**
+ * Snapshot choice and equality for a value-only projection.
+ *
+ * @category models
+ * @since 0.1.0-beta.4
+ */
+export interface SelectionOptions<A> {
+  /**
+   * Defaults to `visible`, including provisional data and optimism.
+   * `authoritative` uses the last known server snapshot, even while offline;
+   * it never falls back to provisional data or includes optimistic edits.
+   */
+  readonly from?: "visible" | "authoritative";
+  /**
+   * Compares available values for stream emissions; defaults to `Object.is`.
+   * Availability changes always emit. Keep this function pure and synchronous;
+   * thrown errors remain defects.
+   */
+  readonly equals?: (self: A, that: A) => boolean;
+}
+
+/**
  * A scoped handle to one source replica.
  *
  * Closing the lease interrupts its operations. Closing the last lease releases
@@ -385,6 +428,25 @@ export interface Lease<S extends Source.Spec> {
    * Observes replica views while this lease remains open.
    */
   readonly changes: Stream.Stream<State<S>, ClientError>;
+  /**
+   * Projects root data into a value-only selection sharing this lease's lifetime.
+   * The selector is synchronous and pure; thrown errors remain defects.
+   */
+  readonly select: <A>(
+    selector: (snapshot: S["snapshot"]["Type"]) => A,
+    options?: SelectionOptions<NoInfer<A>>,
+  ) => Selection<A>;
+  /**
+   * Projects a declared plugin's data with the same semantics as `select`.
+   * Unknown plugin ids fail reads and streams with `InvalidValue`.
+   */
+  readonly selectPlugin: <Id extends S["plugins"][number]["id"], A>(
+    id: Id,
+    selector: (
+      snapshot: Extract<S["plugins"][number], { readonly id: NoInfer<Id> }>["snapshot"]["Type"],
+    ) => A,
+    options?: SelectionOptions<NoInfer<A>>,
+  ) => Selection<A>;
   /**
    * Observes captured transitions, starting with an atomic `Reset` baseline.
    * Each subscription has its own queue; `capacity` defaults to 256 complete

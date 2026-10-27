@@ -113,9 +113,26 @@ export const setCounter = Effect.gen(function* () {
 ```
 
 This Effect returns `{ previous, current }` and closes the connection when it
-finishes. For a live view, consume `Client.view(lease).changes` inside the same
-scope. Persistent headless sessions use `{ mode: "persistent" }` and require a
+finishes. Persistent headless sessions use `{ mode: "persistent" }` and require a
 `ReplicaPersistence` Layer for that actor.
+
+Select values from an open lease without opening another connection:
+
+```ts
+const value = lease.select((counter) => counter.value);
+const confirmed = lease.select((counter) => counter.value, { from: "authoritative" });
+
+value.read; // Effect<Option<number>, ClientError>
+value.changes; // Stream<Option<number>, ClientError>
+```
+
+`None` means unavailable; a selected `undefined` remains `Some(undefined)`.
+Streams emit the current selection and distinct observed values, using
+`Object.is` unless you supply `equals`. The default includes provisional data and
+optimistic edits; `authoritative` uses the last known server state, even offline.
+Use `lease.selectPlugin(id, selector, options?)` for a declared plugin. Selections
+share the lease lifetime; connection status, pending commands, and failures remain
+on `lease.read` and `lease.changes`.
 
 Use transitions for an incremental index or inspector that needs intermediate
 changes. Pass the open lease from the same scope:
