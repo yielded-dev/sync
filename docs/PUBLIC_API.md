@@ -66,7 +66,8 @@ Omit `plugins` when a source has none. If the contract declares plugins,
 `Plugin.make` defines a reusable public capability; `Server.plugin` supplies its
 private implementation and `Client.plugin` its pure reducers. Composed snapshots
 have `{ source, plugins }` slots. A handler or reducer owns only its slot.
-Cross-slot domain transactions belong in a source capability.
+Data that must change together belongs in one owning state slot. Compose reusable
+operations inside that slot's handler; root handlers cannot update plugin slots.
 
 Root operations use the `$source` namespace; plugin operations use the plugin id.
 All share the source's authorization, cursor, and lifetime. Reject reserved or

@@ -43,6 +43,31 @@ emit an event. Put external side effects
 in an [outbox](https://github.com/yielded-dev/sync/blob/main/packages/platform-cloudflare/README.md#durable-data)
 and make sure the destination deduplicates deliveries.
 
+Compose reusable operations into one commit when their state shares one owner:
+
+```ts
+import { Server } from "@yielded/sync/server";
+
+import { resolveComments } from "./comments";
+import { removeSection } from "./documents";
+import type { WorkspaceState } from "./state";
+
+export const removeSectionPlan = (state: WorkspaceState, sectionId: string) => {
+  const document = removeSection(state.document, sectionId);
+  const comments = resolveComments(state.comments, sectionId);
+
+  return Server.commit({
+    state: { ...state, document: document.state, comments: comments.state },
+    events: [...document.events, ...comments.events],
+    result: undefined,
+  });
+};
+```
+
+Call this from a root action. The application's `WorkspaceState` owns both fields;
+its source event schema and client reducer handle both event types. Separately
+registered plugin slots cannot be updated this way.
+
 For typed outbox work, share an obligation definition between the action and
 its delivery callback:
 
