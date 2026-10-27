@@ -8,7 +8,7 @@ exact version; their manifests define supported Effect and framework peers.
 ## Cloudflare
 
 Both integrations use the same `DurableObject.make` definition. Choose the
-framework that already owns your Worker:
+framework that already owns your Worker and pass its provider to `.provide(...)`:
 
 ```sh
 bun add @yielded/sync-platform-cloudflare@{{SYNC_VERSION}} \
@@ -22,10 +22,10 @@ bun add @yielded/sync-platform-cloudflare@{{SYNC_VERSION}} \
   @yielded/sync-platform-alchemy-cf@{{SYNC_VERSION}} @alchemy.run/cloudflare alchemy
 ```
 
-| Framework | Compose the definition with                  | Example                                                                                               |
-| --------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| effect-cf | `.provide(EffectCfServices)`                 | [Counter Worker](../api/consumer.md#host-on-cloudflare)                                               |
-| Alchemy   | `.provide(AlchemyServices("CounterObject"))` | [Alchemy setup](https://github.com/yielded-dev/sync/blob/main/packages/platform-alchemy-cf/README.md) |
+| Framework | Provider           | Example                                                                                               |
+| --------- | ------------------ | ----------------------------------------------------------------------------------------------------- |
+| effect-cf | `EffectCfServices` | [Counter Worker](../api/consumer.md#host-on-cloudflare)                                               |
+| Alchemy   | `AlchemyServices`  | [Alchemy setup](https://github.com/yielded-dev/sync/blob/main/packages/platform-alchemy-cf/README.md) |
 
 Each adapter supplies SQLite, crypto, transport, and lifecycle hooks. Your app
 supplies authentication. Replace SQLite by passing a `SourceStorage` Layer as
