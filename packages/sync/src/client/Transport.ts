@@ -41,6 +41,14 @@ export interface Request {
  */
 export interface Transport {
   readonly snapshot: (request: Request) => Effect.Effect<Schema.Json, ProtocolError>;
+  /**
+   * Establishes the baseline in the first non-ephemeral frame: a snapshot,
+   * reset, or one replay batch. Subsequent live `Events` frames must preserve
+   * complete action boundaries and contiguous event order; never split one
+   * command across batches. This lets `lease.transitions` identify complete
+   * commits. Replay, individual `Event` frames, and batches without a single
+   * command identity instead establish reset baselines for transition observers.
+   */
   readonly subscribe: (
     request: Request & { readonly after?: SourcePosition },
   ) => Stream.Stream<Schema.Json, ProtocolError>;

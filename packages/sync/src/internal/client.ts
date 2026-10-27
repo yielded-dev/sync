@@ -1,3 +1,4 @@
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -24,6 +25,7 @@ import type {
   Lease,
   Command,
   CommandStatus,
+  Transition,
 } from "../client/Client.ts";
 import { CurrentActor } from "../client/CurrentActor.ts";
 import { ClientError, type CommandRecovery, type EncodedCommand, Intent } from "../client/Model.ts";
@@ -35,6 +37,7 @@ import {
 import { Transport, type Request } from "../client/Transport.ts";
 import {
   ActorId,
+  comparePositions,
   type ActionOutcome,
   type ProtocolError,
   type ResultLookup,
@@ -66,6 +69,7 @@ type Outcome<S extends Source.Spec> = ActionOutcome<
   Action.Success<Actions<S>>,
   Action.Error<Actions<S>>
 >;
+type Change<T> = T extends unknown ? Omit<T, "sequence" | "replica"> : never;
 
 interface Entry<S extends Source.Spec> {
   readonly address: SourceAddress;
@@ -83,6 +87,8 @@ interface Entry<S extends Source.Spec> {
   readonly settled: Map<string, { readonly command: EncodedCommand; readonly outcome: Outcome<S> }>;
   readonly recoveryAttempts: Map<string, CommandRecovery>;
   messages: PubSub.PubSub<ReplicaState.Frame> | undefined;
+  sequence: number;
+  readonly observers: Set<Queue.Queue<Transition<S>, ClientError>>;
 }
 
 const defaults: Limits = { maxSources: 32, maxPendingPerSource: 100, frameBuffer: 256 };
@@ -259,6 +265,42 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         },
     ) as State<S>;
 
+  // Publish synchronously with the installed state. No consumer work or queue
+  // backpressure may run inside a replica transaction.
+  const observe = (entry: Entry<S>, change: Change<Transition<S>>) => {
+    entry.sequence += 1;
+    if (entry.observers.size === 0) return;
+    let replica: State<S>;
+
+    try {
+      replica = present(entry);
+    } catch {
+      const cause = Cause.fail(error("InvalidValue", "Optimistic reducer failed"));
+
+      for (const queue of entry.observers) {
+        Queue.failCauseUnsafe(queue, cause);
+        Queue.shutdownUnsafe(queue);
+      }
+      entry.observers.clear();
+
+      return;
+    }
+    const value: Transition<S> = { ...change, sequence: entry.sequence, replica };
+
+    for (const queue of entry.observers) {
+      if (Queue.offerUnsafe(queue, value)) continue;
+      // Discard the entire incomplete history, retaining a baseline at this
+      // exact sequence. A later overflow can replace this baseline again.
+      while (Queue.takeUnsafe(queue)?._tag === "Success") {}
+      Queue.offerUnsafe(queue, {
+        _tag: "Reset",
+        reason: "Overflow",
+        sequence: entry.sequence,
+        replica,
+      });
+    }
+  };
+
   const commit = Effect.fn("Client.commit")(
     function* (
       entry: Entry<S>,
@@ -266,6 +308,10 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       change: (state: ReplicaState.State) => ReplicaState.State,
       leaseScope?: Scope.Scope,
       onCommit?: () => void,
+      transition?: (
+        previous: ReplicaState.State,
+        next: ReplicaState.State,
+      ) => Change<Transition<S>> | undefined,
     ) {
       yield* assertOpen(entry, sourceScope, leaseScope);
       const previous = entry.state;
@@ -310,6 +356,21 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       yield* assertOpen(entry, sourceScope);
       entry.state = next;
       onCommit?.();
+      if (entry.observers.size === 0) {
+        entry.sequence += 1;
+      } else {
+        const observation =
+          transition !== undefined
+            ? transition(previous, next)
+            : next === previous
+              ? undefined
+              : next.authoritative !== previous.authoritative ||
+                  next.provisional !== previous.provisional
+                ? { _tag: "Reset" as const, reason: "Resync" as const }
+                : { _tag: "StatusChanged" as const };
+
+        if (observation !== undefined) observe(entry, observation);
+      }
       if (saves !== undefined && next.authoritative !== previous.authoritative) {
         entry.dirty = true;
         yield* Queue.offer(saves, undefined);
@@ -324,6 +385,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     sourceScope: Scope.Closeable,
     encoded: Schema.Json,
     leaseScope?: Scope.Scope,
+    replay = false,
   ) {
     const frame = yield* decode(wire.envelope.outbound, encoded);
 
@@ -342,6 +404,43 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       sourceScope,
       (state) => ReplicaState.frame(state, entry.slots, actorId, frame),
       leaseScope,
+      undefined,
+      (previous, next) => {
+        const before = previous.authoritative?.position;
+        const after = next.authoritative?.position;
+
+        const advanced =
+          after !== undefined && (before === undefined || comparePositions(after, before) !== 0);
+
+        if (advanced) {
+          if (!replay && frame._tag === "Events" && before !== undefined) {
+            const first = frame.events[0];
+            const command = first?.command;
+
+            if (
+              command !== undefined &&
+              frame.events.every(
+                (event, index) =>
+                  event.position.cursor === before.cursor + index + 1 &&
+                  event.command?.actorId === command.actorId &&
+                  event.command.commandId === command.commandId,
+              )
+            ) {
+              return {
+                _tag: "Committed",
+                // The source envelope decoded the slot-specific event types.
+                events: frame.events as ReadonlyArray<
+                  Source.Definition<S>["envelope"]["sequenced"]["Type"]
+                >,
+              };
+            }
+          }
+
+          return { _tag: "Reset", reason: "Resync" };
+        }
+
+        return next === previous ? undefined : { _tag: "StatusChanged" };
+      },
     );
     if (entry.state.connection === "recovering")
       return yield* entry.state.error ?? error("Gap", "Source needs recovery");
@@ -368,6 +467,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
       if (entry.state.cacheError !== cacheError) {
         entry.state = { ...entry.state, cacheError };
+        observe(entry, { _tag: "StatusChanged" });
         yield* signal;
       }
       if (saved._tag === "Failure") return yield* saved.failure;
@@ -470,6 +570,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
     }
     yield* assertOpen(entry, sourceScope);
     entry.state = { ...entry.state, intents, quarantined };
+    observe(entry, { _tag: "Reset", reason: "Resync" });
     yield* signal;
   });
 
@@ -582,6 +683,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
       },
       leaseScope,
       () => remember(entry, intent.command, outcome),
+      () => ({ _tag: "Settled", command: copyJson(intent.command), outcome }),
     );
 
     return outcome;
@@ -723,12 +825,17 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
 
     yield* Effect.forkScoped(producer, { startImmediately: true });
 
+    let replay = true;
+
     const consume = Stream.fromQueue(frames).pipe(
       Stream.runForEach((frame) =>
-        acceptFrame(entry, sourceScope, frame).pipe(
+        acceptFrame(entry, sourceScope, frame, undefined, replay).pipe(
           Effect.tap((healthy) =>
             Effect.sync(() => {
-              if (healthy) recovered();
+              if (healthy) {
+                replay = false;
+                recovered();
+              }
             }),
           ),
         ),
@@ -762,6 +869,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         };
 
         entry.recoveryAttempts.set(id, recovery);
+        observe(entry, { _tag: "StatusChanged" });
         yield* signal;
         yield* send(entry, sourceScope, id, true).pipe(
           Effect.onExit((exit) =>
@@ -777,6 +885,7 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
                 automaticRetryExhausted:
                   Exit.isFailure(exit) && recovery.attempts >= retry.maxAttempts,
               });
+              observe(entry, { _tag: "StatusChanged" });
               yield* signal;
             }),
           ),
@@ -908,6 +1017,8 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
             settled: new Map(),
             recoveryAttempts: new Map(),
             messages: undefined,
+            sequence: 0,
+            observers: new Set(),
           };
           entries.set(key, entry);
         }
@@ -1061,6 +1172,14 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
               return { ...state, intents };
             },
             leaseScope,
+            undefined,
+            (_previous, next) => {
+              const admitted = next.intents.get(id);
+
+              return admitted === undefined
+                ? undefined
+                : { _tag: "Admitted", command: copyJson(admitted.command) };
+            },
           );
 
           return id;
@@ -1202,9 +1321,63 @@ export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R
         }),
       );
 
+    const transitions: Lease<S>["transitions"] = (options) =>
+      Stream.unwrap(
+        Effect.gen(function* () {
+          yield* active;
+          const capacity = options?.capacity ?? 256;
+
+          if (!Number.isSafeInteger(capacity) || capacity <= 0)
+            return yield* error(
+              "InvalidValue",
+              "Transition capacity must be a positive safe integer",
+            );
+
+          const queue = yield* Queue.make<Transition<S>, ClientError>({
+            capacity,
+            strategy: "dropping",
+          });
+
+          const subscriptionScope = yield* Scope.fork(operationsScope);
+
+          yield* Effect.addFinalizer((exit) => Scope.close(subscriptionScope, exit));
+          yield* Scope.addFinalizer(
+            subscriptionScope,
+            Effect.sync(() => {
+              entry.observers.delete(queue);
+              Queue.failCauseUnsafe(queue, Cause.fail(error("Closed", "Source lease is closed")));
+              Queue.shutdownUnsafe(queue);
+            }),
+          );
+
+          const baseline = yield* Effect.gen(function* () {
+            yield* active;
+
+            return yield* Effect.try({
+              try: (): Transition<S> => {
+                const replica = present(entry);
+
+                entry.observers.add(queue);
+
+                return { _tag: "Reset", reason: "Initial", sequence: entry.sequence, replica };
+              },
+              catch: () => error("InvalidValue", "Optimistic reducer failed"),
+            });
+          }).pipe(Semaphore.withPermit(entry.lock));
+
+          // Keep the initial baseline ahead of the bounded queue and pull one item
+          // at a time, so stream batching cannot retain a second hidden history.
+          return Stream.make(baseline).pipe(
+            Stream.concat(Stream.fromEffectRepeat(Queue.take(queue))),
+            Stream.mapEffect((value) => active.pipe(Effect.as(value))),
+          );
+        }),
+      );
+
     return {
       read: active.pipe(Effect.andThen(read(address))),
       changes: changes(address).pipe(Stream.mapEffect((state) => active.pipe(Effect.as(state)))),
+      transitions,
       ready: changes(address).pipe(
         Stream.mapEffect((state) =>
           state.connection === "parked"

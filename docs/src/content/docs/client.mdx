@@ -117,6 +117,38 @@ finishes. For a live view, consume `Client.view(lease).changes` inside the same
 scope. Persistent headless sessions use `{ mode: "persistent" }` and require a
 `ReplicaPersistence` Layer for that actor.
 
+Use transitions for an incremental index or inspector that needs intermediate
+changes. Pass the open lease from the same scope:
+
+```ts
+import { Client } from "@yielded/sync/client";
+import { Stream } from "effect";
+
+import { Counter } from "./counter";
+import { applyTransition, rebuildFrom } from "./counter-index";
+
+export const observe = (lease: Client.Lease<typeof Counter.spec>) =>
+  lease
+    .transitions({ capacity: 256 })
+    .pipe(
+      Stream.runForEach((transition) =>
+        transition._tag === "Reset" ? rebuildFrom(transition.replica) : applyTransition(transition),
+      ),
+    );
+```
+
+The first item establishes a replica baseline. Each later item captures its
+resulting replica; `changes` streams instead provide current views and may skip
+intermediate values. A slow transition consumer gets an explicit reset when its
+queue overflows. Snapshots and replay also reset the baseline, so rebuilding must
+replace the derived state. Closing the lease releases its subscriptions.
+
+Live commits contain a complete action's events. Local admission, settlement,
+and status changes are separate observations; a result can arrive before its
+events. This bounded stream cannot recover lost history across resets or reloads.
+Use the [server outbox](https://github.com/yielded-dev/sync/blob/main/packages/platform-cloudflare/README.md#durable-data)
+for durable server-side processing.
+
 ### Transport
 
 The WebSocket transport derives the path from `Counter` and encodes the ID.
