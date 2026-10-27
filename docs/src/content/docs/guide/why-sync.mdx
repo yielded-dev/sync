@@ -3,6 +3,8 @@ title: Why Sync?
 description: Build shared, responsive Effect applications with typed actions, optimistic updates, and recovery built in.
 ---
 
+import { Trace } from "@yielded/starlight-theme/components";
+
 Sync is a real-time state library for Effect. Build shared boards, admin tools,
 and other interactive apps where edits appear immediately and changes reach
 every connected client.
@@ -49,23 +51,23 @@ React reads `counter.replica` and dispatches `counter.action.set`, both typed fr
 Your optimistic reducer updates the UI before the server replies. The server
 still runs your authorization and business rules:
 
-```mermaid
-sequenceDiagram
-  accTitle: Immediate client updates with server approval
-  accDescr: A client shows an optimistic edit and submits its action. The server either confirms the change to connected clients or rejects it, causing the editing client to roll back its prediction.
-  participant C as Client
-  participant S as Your server
-  participant O as Other clients
-  C->>C: Show the update
-  C->>S: Submit typed action
-  alt Accepted
-    S-->>C: Confirm the change
-    S-->>O: Apply the change
-  else Rejected
-    S-->>C: Return typed error
-    C->>C: Roll back the prediction
-  end
-```
+<Trace
+  lanes={[
+    { id: "ui", label: "Your UI" },
+    { id: "library", label: "Sync" },
+    { id: "server", label: "Your server" },
+  ]}
+  steps={[
+    { lane: "ui", title: "Dispatch a typed action" },
+    { lane: "library", title: "Show the optimistic update" },
+    { lane: "server", title: "Authorize and validate the change" },
+    {
+      lane: "library",
+      title: "Confirm or roll back the edit",
+      detail: "Accepted edits reach other connected clients. Rejected edits return a typed error.",
+    },
+  ]}
+/>
 
 ## Recover interrupted work
 
