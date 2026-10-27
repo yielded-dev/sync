@@ -2,12 +2,8 @@
 title: Why Sync?
 ---
 
-You click Save. The server accepts the edit, but the connection drops before the
-reply gets back. Retrying should not apply the same edit twice, and the UI still
-needs to find out whether it succeeded.
-
-Sync handles that coordination. You define your data and the changes people can
-make; it keeps clients caught up with the server.
+Sync keeps clients up to date with server state. It tracks versions and handles
+retries, optimistic updates, rollbacks, and recovery after disconnects.
 
 ## What it takes care of
 
