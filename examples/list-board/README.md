@@ -43,12 +43,13 @@ recovers from its cursor after a lost Durable Object activation.
 `Board` is the shared source contract; `BoardClient` supplies its reducers.
 `BrowserSource.bind` connects one board instance and provides its browser services.
 React reads `board.replica` and dispatches `board.action.moveCard`, `board.retry`,
-or `board.recover` directly. Add and rename workflows also manage their draft
-inputs, awaiting the generated action atom before clearing them.
+or `board.recover` directly. Add and rename use `board.fn` generators to await
+callable actions before clearing their draft inputs. Optimistic reducers update
+the board while the action awaits its server result.
 
 The app supplies its board ID, actor, demo authentication query, and IndexedDB
 Layer. The binding derives the route, defaults to the current origin, and supplies
-the actor to persistence. `board.runtime.fn` shares its crypto service with the
+the actor to persistence. `board.fn` shares its crypto service with the
 add-card workflow. The client and lease are acquired lazily; registry disposal
 releases them.
 

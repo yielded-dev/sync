@@ -243,8 +243,26 @@ Pass a `ReplicaPersistence` Layer, such as `IndexedDb.layer({ namespace: "counte
 instead of `"volatile"` for persistent operation. The Layer receives the current
 actor; storage setup failures never switch to volatile mode.
 
-Use `counter.runtime.fn` for application workflows needing the supplied browser
-services. For an existing runtime or custom transport, `SourceAtom.bind(definition,
+Use `counter.fn` to compose callable actions with local state. It accepts a
+generator directly and provides the binding's runtime services:
+
+```ts
+import { Atom } from "effect/reactivity";
+
+const draft = Atom.make(0);
+const save = counter.fn(function* () {
+  const value = yield* Atom.get(draft);
+  yield* counter.action.set({ value });
+  yield* Atom.set(draft, 0);
+});
+```
+
+The action applies its configured optimistic reducer after local admission;
+awaiting it waits for the server result. The draft clears only on success.
+Rejections remove the prediction; uncertain outcomes retain the original command
+for recovery. Actions without an optimistic reducer wait for authoritative state.
+
+For an existing runtime or custom transport, `SourceAtom.bind(definition,
 { runtime, address, persistence })` accepts an `Atom.runtime` containing
 `CurrentActor`, `Transport`, and the definition's services. Its persistence option
 is `{ mode: "volatile" }` or `{ mode: "persistent" }`; persistent mode requires
@@ -256,19 +274,22 @@ releases them; dispose the old registry before switching actors.
 The [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
 shows browser persistence, workflows, and `RegistryProvider` setup.
 
-| Binding             | Behavior                                                                        |
-| ------------------- | ------------------------------------------------------------------------------- |
-| `replica`           | An `AsyncResult` replica whose snapshots contain root data directly             |
-| `status`            | Connection state; observing it keeps the source connected                       |
-| `action.<name>`     | A writable atom accepting the declared payload and exposing its result or error |
-| `retry` / `recover` | Writable atoms accepting a saved command ID / no input                          |
-| `plugins.<id>`      | The declared plugin's `replica`, `action`, and `presence` bindings              |
+| Binding             | Behavior                                                                          |
+| ------------------- | --------------------------------------------------------------------------------- |
+| `replica`           | An `AsyncResult` replica whose snapshots contain root data directly               |
+| `status`            | Connection state; observing it keeps the source connected                         |
+| `action.<name>`     | A callable writable atom; the call returns an Effect of that invocation's result  |
+| `fn(generator)`     | A function atom using the binding's runtime, with inferred input and result types |
+| `retry` / `recover` | Writable atoms accepting a saved command ID / no input                            |
+| `plugins.<id>`      | The declared plugin's `replica`, `action`, and `presence` bindings                |
 
 Action atoms use Effect Atom's shared mutation state and cancellation semantics.
 Set `actions: { set: { concurrent: true } }` to allow overlapping writes;
 plugin options use `plugins.<id>.actions`. Interrupted waits do not delete
-admitted commands. Use `get.setResult(counter.action.set, payload)` inside a
-sequenced workflow to await success before updating draft state.
+admitted commands. Callable actions use the current `AtomRegistry`, supplied by
+`fn`; each call receives its own result even when writes overlap. The shared atom
+retains Effect Atom's concurrent mutation state. Native Atom combinators derive
+atoms; use the original bound action when calling it as a function.
 
 For ephemeral presence, define `counter.presence(payloadAtom)` when the source
 declares a message schema. Observing the returned atom announces the current

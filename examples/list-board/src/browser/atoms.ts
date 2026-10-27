@@ -44,28 +44,24 @@ export const cardDraftAtom = Atom.make("");
 export const titleDraftAtom = Atom.make<string | null>(null);
 export const focusedCardAtom = Atom.make<string | null>(null);
 
-export const addCardAtom = board.runtime.fn<void>()(
-  Effect.fnUntraced(function* (_, get) {
-    const title = get(cardDraftAtom).trim();
+export const addCardAtom = board.fn(function* () {
+  const title = (yield* Atom.get(cardDraftAtom)).trim();
 
-    if (title.length === 0) return;
-    const crypto = yield* Crypto.Crypto;
-    const id = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
+  if (title.length === 0) return;
+  const crypto = yield* Crypto.Crypto;
+  const id = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
 
-    yield* get.setResult(board.action.addCard, { id, title });
-    get.set(cardDraftAtom, "");
-  }),
-);
+  yield* board.action.addCard({ id, title });
+  yield* Atom.set(cardDraftAtom, "");
+});
 
-export const renameBoardAtom = board.runtime.fn<void>()(
-  Effect.fnUntraced(function* (_, get) {
-    const title = get(titleDraftAtom)?.trim();
+export const renameBoardAtom = board.fn(function* () {
+  const title = (yield* Atom.get(titleDraftAtom))?.trim();
 
-    if (title === undefined || title.length === 0) return;
-    yield* get.setResult(board.action.rename, title);
-    get.set(titleDraftAtom, null);
-  }),
-);
+  if (title === undefined || title.length === 0) return;
+  yield* board.action.rename(title);
+  yield* Atom.set(titleDraftAtom, null);
+});
 
 export const presenceAtom = board.presence(
   Atom.make((get) => ({ editingCardId: get(focusedCardAtom) })),

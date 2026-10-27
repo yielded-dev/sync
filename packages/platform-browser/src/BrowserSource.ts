@@ -22,7 +22,8 @@ export interface Options<S extends Source.Spec, E = never>
 
 export interface Binding<S extends Source.Spec, E = never> extends SourceAtom.Binding<
   S,
-  E | ProtocolError
+  E | ProtocolError,
+  Services
 > {
   /** Use the same browser services, including Crypto, in application workflow atoms. */
   readonly runtime: Atom.AtomRuntime<Services, E | ProtocolError>;

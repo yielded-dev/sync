@@ -1,5 +1,5 @@
-import { type Cause, Effect, Schema, Stream } from "effect";
-import { type AsyncResult, Atom } from "effect/reactivity";
+import { type Cause, Effect, Fiber, Schema, type Scope, Stream } from "effect";
+import { type AsyncResult, Atom, AtomRegistry, type Reactivity } from "effect/reactivity";
 
 import type * as Action from "../Action.ts";
 import type { SourceAddress } from "../Model.ts";
@@ -120,11 +120,19 @@ type ResultAtom<A, E> = Atom.Atom<
   AsyncResult.AsyncResult<A, E | ClientError | Cause.NoSuchElementError>
 >;
 
+/**
+ * Await the original bound action in the current registry. Atom combinators
+ * produce derived atoms and need not retain its call signature at runtime.
+ */
+export interface ActionAtom<Input, A, E> extends Atom.AtomResultFn<Input, A, E> {
+  (input: Input): Effect.Effect<A, E, AtomRegistry.AtomRegistry>;
+}
+
 interface SlotBinding<S extends Plugin.Spec, E, Rejection> {
   /** Snapshot fields contain only this slot's data, with source-wide delivery status. */
   readonly replica: ResultAtom<Replica<S["snapshot"]["Type"], Rejection>, E>;
   readonly action: {
-    readonly [A in S["actions"][number] as A["name"]]: Atom.AtomResultFn<
+    readonly [A in S["actions"][number] as A["name"]]: ActionAtom<
       Action.Payload<A>,
       Action.Success<A>,
       Action.Error<A> | ClientError | E
@@ -137,11 +145,26 @@ interface SlotBinding<S extends Plugin.Spec, E, Rejection> {
   ) => ResultAtom<ReadonlyArray<Presence.Peer<S["message"]["Type"]>>, E>;
 }
 
-export interface Binding<S extends Source.Spec, E = never> extends SlotBinding<
+export interface Binding<S extends Source.Spec, E = never, R = never> extends SlotBinding<
   S,
   E,
   Action.Error<Actions<S>>
 > {
+  /** Create a function atom from a generator using this binding's runtime. */
+  readonly fn: <A, E2 = never, Input = void>(
+    body: (
+      input: Input,
+    ) => Effect.fn.Return<
+      A,
+      E2,
+      R | Scope.Scope | AtomRegistry.AtomRegistry | Reactivity.Reactivity
+    >,
+    options?: {
+      readonly initialValue?: A;
+      readonly reactivityKeys?: Reactivity.KeysInput;
+      readonly concurrent?: boolean;
+    },
+  ) => Atom.AtomResultFn<Input, A, E | E2>;
   readonly status: Atom.Atom<Connection>;
   readonly retry: Atom.AtomResultFn<
     string,
@@ -158,26 +181,109 @@ export interface Binding<S extends Source.Spec, E = never> extends SlotBinding<
   };
 }
 
+const callable = <Input, A, E>(
+  run: (input: Input, get: Atom.FnContext) => Effect.Effect<A, E>,
+  options?: { readonly concurrent?: boolean },
+): ActionAtom<Input, A, E> => {
+  type Invocation = {
+    readonly input: Input;
+    readonly observe?: (effect: Effect.Effect<A, E>) => Effect.Effect<A, E>;
+  };
+
+  const execution = Atom.fn<Invocation>()((invocation, get) => {
+    const effect = run(invocation.input, get);
+
+    return invocation.observe?.(effect) ?? effect;
+  }, options).pipe(Atom.setIdleTTL(0));
+
+  const writable = Atom.writable(
+    (get) => get(execution),
+    (get, input: Input | Atom.Reset | Atom.Interrupt) => {
+      if (input === Atom.Reset) return get.set(execution, Atom.Reset);
+      if (input === Atom.Interrupt) return get.set(execution, Atom.Interrupt);
+
+      get.set(execution, { input });
+    },
+  ).pipe(Atom.setIdleTTL(0));
+
+  const action: ActionAtom<Input, A, E> = Object.assign(
+    (input: Input) =>
+      AtomRegistry.AtomRegistry.use((registry) =>
+        Effect.callback<A, E>((resume) => {
+          const unmount = registry.mount(action);
+          let interrupt = Effect.void;
+          let cancelled = false;
+
+          registry.set(execution, {
+            input,
+            observe: (effect) =>
+              Effect.withFiber((fiber) => {
+                if (cancelled) return Effect.interrupt;
+                interrupt = Fiber.interrupt(fiber);
+
+                return effect;
+              }).pipe(
+                Effect.onExit((exit) =>
+                  Effect.sync(() => {
+                    interrupt = Effect.void;
+                    resume(exit);
+                  }),
+                ),
+              ),
+          });
+          // Start this invocation before a subsequent write can replace its input.
+          registry.get(execution);
+
+          return Effect.gen(function* () {
+            cancelled = true;
+            yield* interrupt;
+            unmount();
+          });
+        }),
+      ),
+    writable,
+  );
+
+  // Atom's protocol and pipe methods live on its prototype.
+  Object.assign(action, Object.getPrototypeOf(writable));
+
+  return action;
+};
+
 /**
  * Define once, or use Atom.family for parameterized addresses. The returned atoms
  * share one lazy client and lease per registry; runtime layers supply external services.
  */
-export function bind<S extends Source.Spec, R, E>(
+export function bind<S extends Source.Spec, R, E, Services = R | CurrentActor | Transport>(
   definition: Definition<S, R>,
   options: BindOptions<NoInfer<S>, NoInfer<R> | CurrentActor | Transport, E> & {
+    readonly runtime: Atom.AtomRuntime<Services, E>;
     readonly persistence: { readonly mode: "volatile" };
   },
-): Binding<S, E>;
+): Binding<S, E, Services>;
 
-export function bind<S extends Source.Spec, R, E>(
+export function bind<
+  S extends Source.Spec,
+  R,
+  E,
+  Services = R | CurrentActor | Transport | ReplicaPersistence,
+>(
   definition: Definition<S, R>,
-  options: BindOptions<NoInfer<S>, NoInfer<R> | CurrentActor | Transport | ReplicaPersistence, E>,
-): Binding<S, E>;
+  options: BindOptions<
+    NoInfer<S>,
+    NoInfer<R> | CurrentActor | Transport | ReplicaPersistence,
+    E
+  > & {
+    readonly runtime: Atom.AtomRuntime<Services, E>;
+  },
+): Binding<S, E, Services>;
 
-export function bind<S extends Source.Spec, R, E>(
+export function bind<S extends Source.Spec, R, E, Services>(
   definition: Definition<S, R>,
-  options: BindOptions<S, R | CurrentActor | Transport | ReplicaPersistence, E>,
-): Binding<S, E> {
+  options: BindOptions<S, R | CurrentActor | Transport | ReplicaPersistence, E> & {
+    readonly runtime: Atom.AtomRuntime<Services, E>;
+  },
+): Binding<S, E, Services> {
   const session = options.runtime
     .atom(
       Effect.gen(function* () {
@@ -204,20 +310,16 @@ export function bind<S extends Source.Spec, R, E>(
         : "idle";
   }).pipe(Atom.setIdleTTL(0));
 
-  const mutation = <Input = void, Output = void, Error = never>(
+  const withLease = <Input = void, Output = void, Error = never>(
     run: (lease: Lease<S>, input: Input) => Effect.Effect<Output, Error>,
-    settings?: { readonly concurrent?: boolean },
   ) =>
-    Atom.fn<Input>()(
-      Effect.fnUntraced(function* (input, get) {
-        // FnContext reads are untracked; hold the session for the mutation's lifetime.
-        get.mount(session);
-        const { lease } = yield* get.result(session);
+    Effect.fnUntraced(function* (input: Input, get: Atom.FnContext) {
+      // FnContext reads are untracked; hold the session for the mutation's lifetime.
+      get.mount(session);
+      const { lease } = yield* get.result(session);
 
-        return yield* run(lease, input);
-      }),
-      settings,
-    ).pipe(Atom.setIdleTTL(0));
+      return yield* run(lease, input);
+    });
 
   const actionAtoms = <P extends Plugin.Spec>(
     registered: Readonly<Record<string, Action.Definition>>,
@@ -228,9 +330,10 @@ export function bind<S extends Source.Spec, R, E>(
 
       return [
         name,
-        mutation(
-          (lease, payload: Action.Payload<typeof action>) =>
+        callable(
+          withLease((lease, payload: Action.Payload<typeof action>) =>
             lease.ready.pipe(Effect.andThen(lease.execute(action, payload))),
+          ),
           settings?.[name as P["actions"][number]["name"]],
         ),
       ];
@@ -277,14 +380,19 @@ export function bind<S extends Source.Spec, R, E>(
   ) as Binding<S, E>["plugins"];
 
   return {
+    fn: (body, settings) => options.runtime.fn(Effect.fnUntraced(body), settings),
     replica,
     status,
     action: actionAtoms<S>(definition.contract.actions, options.actions),
     plugins,
-    retry: mutation((lease, commandId: string) =>
-      lease.ready.pipe(Effect.andThen(lease.retry(commandId))),
-    ),
-    recover: mutation((lease) => lease.recover.pipe(Effect.andThen(lease.ready), Effect.asVoid)),
+    retry: Atom.fn(
+      withLease((lease, commandId: string) =>
+        lease.ready.pipe(Effect.andThen(lease.retry(commandId))),
+      ),
+    ).pipe(Atom.setIdleTTL(0)),
+    recover: Atom.fn(
+      withLease((lease) => lease.recover.pipe(Effect.andThen(lease.ready), Effect.asVoid)),
+    ).pipe(Atom.setIdleTTL(0)),
     presence: (payload, settings) =>
       Presence.make(
         options.runtime,

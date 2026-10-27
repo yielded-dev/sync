@@ -245,11 +245,19 @@ their own persistence strategy.
 `SourceAtom.bind(definition, { runtime, address, persistence })` binds one source
 to the application's Atom runtime. It lazily acquires one client and lease per
 registry, using the runtime's actor, transport, persistence, and definition
-services. `replica` projects root data; `action.<name>` exposes typed writable
-atoms. Declared plugins have the same bindings under `plugins.<id>`. `retry` and
+services. `replica` projects root data; `action.<name>` exposes typed callable
+atoms. Calling an action returns an Effect requiring the current `AtomRegistry`
+and completes with that invocation's result or error. It shares the writable
+atom's execution and observable mutation state. Declared plugins have the same
+bindings under `plugins.<id>`. `retry` and
 `recover` use the same lease and exact command identities. Action atoms follow
 Effect Atom's cancellation behavior; `actions.<name>.concurrent` opts into
-concurrent writes. Application workflows can await them with `get.setResult`.
+concurrent writes. Cancellation interrupts the caller's invocation without
+discarding an admitted command. `binding.fn(function* (input) { ... })` creates a
+function atom using the binding's runtime, inferring its input, success, and error
+types. A generator without a parameter takes no input. Read and write local atoms
+with `Atom.get` and `Atom.set`; optimistic source reducers remain in the client
+definition and run independently of awaiting the server result.
 
 `BrowserSource.bind` from `@yielded/sync-platform-browser` composes that binding
 with a browser WebSocket transport, crypto, and `CurrentActor`. Supply the client
