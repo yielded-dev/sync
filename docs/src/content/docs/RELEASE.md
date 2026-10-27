@@ -20,7 +20,9 @@ Private-state revisions default to `0`, including existing unversioned state.
 Migration runs on the first source operation; failures roll back and downgrades
 are rejected. It preserves the public snapshot **value**, authority, and cursor.
 Use ordinary action commits for public-data changes. See the
-[server example](api/consumer.md).
+[multi-version example](api/consumer.md#migrate-across-several-versions) for
+chaining upgrades when a source skips deployments. The callback runs once and
+must return the current state; Sync does not run intermediate versions for you.
 
 Replace old server instances when deploying a migration. Keep `Source.schemaVersion`
 and public codecs unchanged: changing that version is not a state migration, and
