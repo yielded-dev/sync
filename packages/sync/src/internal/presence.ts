@@ -2,18 +2,17 @@ import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import type * as AsyncResult from "effect/reactivity/AsyncResult";
+import * as Atom from "effect/reactivity/Atom";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as Atom from "effect/reactivity/Atom";
-import type * as AsyncResult from "effect/reactivity/AsyncResult";
-
-import type * as Source from "../Source.ts";
-import { error } from "../internal/clientModel.ts";
-import { type ClientError, type Connection } from "../client/Model.ts";
-import type { Lease } from "../client/Client.ts";
 
 import type { Peer, PresenceOptions as Options } from "../atom/SourceAtom.ts";
+import type { Lease } from "../client/Client.ts";
+import { type ClientError, type Connection } from "../client/Model.ts";
+import { error } from "../internal/clientModel.ts";
+import type * as Source from "../Source.ts";
 
 type Frame<A> = {
   readonly actorId: string;

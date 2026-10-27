@@ -29,7 +29,8 @@
           "effect/reactivity",
           "effect/rpc",
           "effect/socket",
-          "effect/sql"
+          "effect/sql",
+          "@effect/vitest"
         ],
         "diagnosticSeverity": {
           "unknownRuleName": "error",

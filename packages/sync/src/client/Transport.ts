@@ -6,15 +6,15 @@
 
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
-import type * as Scope from "effect/Scope";
 import * as Url from "effect/http/Url";
 import * as UrlParams from "effect/http/UrlParams";
+import * as Layer from "effect/Layer";
 import * as RpcClient from "effect/rpc/RpcClient";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 import * as Socket from "effect/socket/Socket";
+import * as Stream from "effect/Stream";
 
 import { ProtocolError, type SourceAddress, type SourcePosition } from "../Model.ts";
 import * as Source from "../Source.ts";

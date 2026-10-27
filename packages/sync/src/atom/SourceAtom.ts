@@ -7,29 +7,21 @@
  * @since 0.1.0-beta.0
  */
 
-import type * as Duration from "effect/Duration";
 import type * as Cause from "effect/Cause";
+import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
-import * as Schema from "effect/Schema";
-import type * as Scope from "effect/Scope";
-import * as Stream from "effect/Stream";
 import type * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Atom from "effect/reactivity/Atom";
 import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import type * as Reactivity from "effect/reactivity/Reactivity";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 import type * as Action from "../Action.ts";
-import type { SourceAddress } from "../Model.ts";
-import type * as Plugin from "../Plugin.ts";
-import type * as Source from "../Source.ts";
-import type { CurrentActor } from "../client/CurrentActor.ts";
-import type { Definition } from "../client/Client.ts";
-import type { ClientError, Connection, Replica } from "../client/Model.ts";
-import { initial } from "../internal/clientModel.ts";
-import * as Presence from "../internal/presence.ts";
-import type { ReplicaPersistence } from "../client/ReplicaPersistence.ts";
 import {
+  type Definition,
   make as makeClient,
   type Actions,
   type Lease,
@@ -37,8 +29,16 @@ import {
   type Runtime,
   type Snapshot,
 } from "../client/Client.ts";
+import type { CurrentActor } from "../client/CurrentActor.ts";
+import type { ClientError, Connection, Replica } from "../client/Model.ts";
+import type { ReplicaPersistence } from "../client/ReplicaPersistence.ts";
 import type { Transport } from "../client/Transport.ts";
 import { view } from "../client/View.ts";
+import { initial } from "../internal/clientModel.ts";
+import * as Presence from "../internal/presence.ts";
+import type { SourceAddress } from "../Model.ts";
+import type * as Plugin from "../Plugin.ts";
+import type * as Source from "../Source.ts";
 
 /**
  * One live presence announcement, identified by actor and connection with a local expiry.
@@ -67,8 +67,6 @@ export interface PresenceOptions {
   /** Defaults to 32 connections, keeping the most recently heard peers. */
   readonly maxPeers?: number;
 }
-
-
 
 /**
  * Bindings own leases, while every registry observes the same headless state.
@@ -478,7 +476,10 @@ export function bind<S extends Source.Spec, R, E, Services>(
 
 type Address<S extends Source.Spec> = Source.Address<S>;
 type ReplicaAtom<S extends Source.Spec> = Atom.Atom<
-  AsyncResult.AsyncResult<Replica<Snapshot<S>, Action.Error<Actions<S>>>, ClientError | Cause.NoSuchElementError>
+  AsyncResult.AsyncResult<
+    Replica<Snapshot<S>, Action.Error<Actions<S>>>,
+    ClientError | Cause.NoSuchElementError
+  >
 >;
 
 /**
@@ -505,4 +506,3 @@ export interface Bindings<S extends Source.Spec> {
   ) => Effect.Effect<Action.Success<Actions<S>>, Action.Error<Actions<S>> | ClientError>;
   readonly recover: (address: Address<S>) => Effect.Effect<void, ClientError>;
 }
-

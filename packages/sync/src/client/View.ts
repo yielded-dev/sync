@@ -10,8 +10,8 @@ import * as Stream from "effect/Stream";
 
 import type * as Action from "../Action.ts";
 import type * as Source from "../Source.ts";
-import type { ClientError, Replica } from "./Model.ts";
 import type { Actions, Lease } from "./Client.ts";
+import type { ClientError, Replica } from "./Model.ts";
 
 interface CompositeSnapshot {
   readonly source?: unknown;

@@ -9,9 +9,9 @@ let page: Page;
 beforeAll(async () => {
   server = await createServer({
     configFile: false,
-    root: import.meta.dirname + "/..",
+    root: import.meta.dirname + "/fixtures",
     // Vite's default dependency scan excludes test directories.
-    optimizeDeps: { entries: ["test/host.ts"] },
+    optimizeDeps: { entries: ["host.ts"] },
     server: { host: "127.0.0.1", port: 0 },
   });
   await server.listen();

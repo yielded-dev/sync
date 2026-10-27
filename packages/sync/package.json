@@ -107,6 +107,7 @@
     "test": "vp test"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:",
     "effect": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

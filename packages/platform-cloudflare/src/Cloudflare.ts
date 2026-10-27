@@ -7,9 +7,15 @@
  * @since 0.1.0-beta.0
  */
 
-import { ProtocolError, Source, SourceAddress, type Action, type ActionOutcome, type ResultLookup } from "@yielded/sync";
+import {
+  ProtocolError,
+  Source,
+  SourceAddress,
+  type Action,
+  type ActionOutcome,
+  type ResultLookup,
+} from "@yielded/sync";
 import type { Client } from "@yielded/sync/client";
-import type * as RpcClientError from "effect/rpc/RpcClientError";
 import {
   Server,
   ServerCrypto,
@@ -20,18 +26,19 @@ import {
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as PlatformError from "effect/PlatformError";
-import * as Schema from "effect/Schema";
-import * as Scope from "effect/Scope";
 import * as Hex from "effect/encoding/Hex";
+import * as Exit from "effect/Exit";
 import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Url from "effect/http/Url";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as PlatformError from "effect/PlatformError";
+import type * as RpcClientError from "effect/rpc/RpcClientError";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
 import * as RpcServer from "effect/rpc/RpcServer";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 
 import { makeClient, type ClientConstructor } from "./internal/remoteClient.ts";
 import * as RpcHost from "./internal/rpcHost.ts";
@@ -118,8 +125,6 @@ export interface RemoteClient<S extends Source.Spec> {
     command: Command<NoInfer<A>>,
   ) => Effect.Effect<ResultLookup<Action.Success<A>, Action.Error<A>>, RequestError>;
 }
-
-
 
 const webCrypto = Crypto.make({
   randomBytes: (size) => crypto.getRandomValues(new Uint8Array(size)),

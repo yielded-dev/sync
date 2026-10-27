@@ -1,10 +1,10 @@
 import { ProtocolError } from "@yielded/sync";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
-import type * as Scope from "effect/Scope";
 import type * as RpcMessage from "effect/rpc/RpcMessage";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
 import * as RpcServer from "effect/rpc/RpcServer";
+import type * as Scope from "effect/Scope";
 
 const invalid = () =>
   ProtocolError.make({ reason: "UnsupportedVersion", message: "Invalid source request" });

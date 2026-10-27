@@ -50,7 +50,10 @@ are documented in [AGENTS.md](../AGENTS.md#compiler-diagnostics).
 ## Verification boundaries
 
 Use the [testing skill](../.agents/skills/testing/SKILL.md) to select sufficient
-proof. Existing checks cover different environments:
+proof. Runtime suites mirror public modules under each package's `test/` tree;
+Effect programs use `@effect/vitest`. Compile-only public contract assertions live
+in `typetest/*.tst.ts` and run through the package's normal typecheck. Existing
+checks cover different environments:
 
 | Boundary                   | Existing check                                     |
 | -------------------------- | -------------------------------------------------- |

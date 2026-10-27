@@ -11,9 +11,6 @@ import {
   type DurableObject as SyncDurableObject,
 } from "@yielded/sync-platform-cloudflare";
 import type { ServerCrypto, SourceStorage, StorageError } from "@yielded/sync/server";
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import {
   DurableObject,
   DurableObjectDefinition,
@@ -22,6 +19,9 @@ import {
   DurableObjectWebSocket,
   Worker,
 } from "effect-cf";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as RpcServer from "effect/rpc/RpcServer";
 
 /**

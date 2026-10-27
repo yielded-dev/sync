@@ -1,9 +1,14 @@
 import { Action, ProtocolError, Source } from "@yielded/sync";
 import { Client, ReplicaPersistence, type PersistenceError } from "@yielded/sync/client";
-import { Deferred, Effect, Exit, Schema, type Scope, Stream } from "effect";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
-import type { Persistence } from "../../persistence/src/index.ts";
+import type { Persistence } from "../../../persistence/src/index.ts";
 
 export type Open = (
   options: Persistence.Options,

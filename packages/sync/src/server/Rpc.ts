@@ -7,11 +7,11 @@
 
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import type * as Rpc from "effect/rpc/Rpc";
 import type * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { ProtocolError, type SourceAddress, type SourcePosition } from "../Model.ts";
 import type * as Source from "../Source.ts";

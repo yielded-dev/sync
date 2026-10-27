@@ -451,8 +451,18 @@ export function make<S extends Source.Spec, R>(definition: Definition<S, R>, opt
 
 /** @since 0.1.0-beta.0 */
 export { CurrentActor } from "./CurrentActor.ts";
+
 /** @since 0.1.0-beta.0 */
-export { rpcTransport, layerRpcTransport, layerWebSocketTransport, Transport, type Request, type WebSocketTransportOptions, type SourceWebSocketOptions } from "./Transport.ts";
+export {
+  rpcTransport,
+  layerRpcTransport,
+  layerWebSocketTransport,
+  Transport,
+  type Request,
+  type WebSocketTransportOptions,
+  type SourceWebSocketOptions,
+} from "./Transport.ts";
+
 /** @since 0.1.0-beta.0 */
 export { view, type View } from "./View.ts";
 /** @since 0.1.0-beta.0 */

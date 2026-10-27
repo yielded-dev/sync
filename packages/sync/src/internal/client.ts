@@ -25,7 +25,11 @@ import type {
 } from "../client/Client.ts";
 import { CurrentActor } from "../client/CurrentActor.ts";
 import { ClientError, type EncodedCommand, Intent } from "../client/Model.ts";
-import { ReplicaPersistence, type JournalRow, type PersistenceError } from "../client/ReplicaPersistence.ts";
+import {
+  ReplicaPersistence,
+  type JournalRow,
+  type PersistenceError,
+} from "../client/ReplicaPersistence.ts";
 import { Transport, type Request } from "../client/Transport.ts";
 import {
   ActorId,

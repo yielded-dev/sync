@@ -114,6 +114,13 @@ existing checks and direct workflow evidence. Prefer E2E for complex features;
 this does not require writing an E2E suite or a larger substitute for a rejected
 unit test. Save a verifiable, repeatable artifact without building reporting machinery.
 
+Mirror public module paths in runtime tests, such as `test/client/Client.test.ts`.
+Keep helpers beside their suites and browser or Worker entry points in `test/fixtures`.
+Use `@effect/vitest` and `it.effect` for Effect programs; keep native browser and
+Worker interactions at their existing Vitest boundary. Put compile-only public
+contract checks in the owning package's `typetest` tree as `*.tst.ts`, included in
+its normal typecheck. Use `expectTypeOf` for type assertions.
+
 Never write unit tests after implementation. If isolation is necessary, first
 write the scoped failure inventory, then the necessary failing tests, then the
 code. New or expanded committed automation requires a current regression or an
@@ -127,7 +134,7 @@ recovery and authority checks at their strongest boundary; remove redundant
 matrices and implementation mirrors. Preserve blocked required proof explicitly.
 The final `vp run ready` gate still applies.
 
-For a new regression, cite its pre-existing public issue or offending commit beside the test. For an explicit human test request, record the requested seam before implementation. A current PR, invented incident, or private customer identifier is not evidence; provenance does not waive necessity or failure-first order. Keep tests under the owning package's `test/` directory and reuse its runner and the actual runtime boundary. Every E2E run, including a failed or interrupted run, must leave sanitized, inspectable evidence and concise replay instructions with the tested revision, environment, setup/cleanup, and expected and observed results. Keep evidence in the task artifacts or approved store, link it from the handoff, and keep credentials, cookies, private payloads, and capability URLs out of it.
+For a new regression, cite its pre-existing public issue or offending commit beside the test. For an explicit human test request, record the requested seam before implementation. A current PR, invented incident, or private customer identifier is not evidence; provenance does not waive necessity or failure-first order. Keep runtime tests under the owning package's `test/` directory and reuse its runner and the actual runtime boundary. Every E2E run, including a failed or interrupted run, must leave sanitized, inspectable evidence and concise replay instructions with the tested revision, environment, setup/cleanup, and expected and observed results. Keep evidence in the task artifacts or approved store, link it from the handoff, and keep credentials, cookies, private payloads, and capability URLs out of it.
 
 ## Skills and pull requests
 

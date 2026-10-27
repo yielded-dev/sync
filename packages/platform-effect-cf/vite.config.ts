@@ -13,8 +13,8 @@ export default defineConfig({
   ],
   pack: {
     entry: {
-      "index": "src/index.ts",
-      "EffectCfServices": "src/EffectCfServices.ts",
+      index: "src/index.ts",
+      EffectCfServices: "src/EffectCfServices.ts",
     },
     dts: { tsconfig: "tsconfig.build.json" },
     format: ["esm"],

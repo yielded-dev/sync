@@ -1,12 +1,15 @@
+import { expectTypeOf } from "@effect/vitest";
 import { type ProtocolError } from "@yielded/sync";
 import { Server } from "@yielded/sync/server";
-import { Context, DateTime, Effect, Layer, Schema, type Scope } from "effect";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
-import { Counter, InvalidValue, Label } from "../fixtures/counter.ts";
+import { Counter, InvalidValue, Label } from "../../test/fixtures/counter.ts";
 
-type Equal<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
-type Assert<T extends true> = T;
 class Access extends Context.Service<Access, { check: Effect.Effect<void, ProtocolError> }>()(
   "server-example/Access",
 ) {}
@@ -55,12 +58,10 @@ export const definition = Server.make(Counter, {
   plugins: [label],
 });
 
-export type Requirements = Assert<
-  Equal<Effect.Services<typeof definition.acquire>, Access | Audit | Scope.Scope>
->;
+expectTypeOf<Effect.Services<typeof definition.acquire>>().toEqualTypeOf<
+  Access | Audit | Scope.Scope
+>();
 
 const supplied = Server.provide(definition, Layer.succeed(Access, { check: Effect.void }));
 
-export type Remaining = Assert<
-  Equal<Effect.Services<typeof supplied.acquire>, Audit | Scope.Scope>
->;
+expectTypeOf<Effect.Services<typeof supplied.acquire>>().toEqualTypeOf<Audit | Scope.Scope>();

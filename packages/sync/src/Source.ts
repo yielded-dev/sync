@@ -8,13 +8,13 @@
  */
 
 import * as Effect from "effect/Effect";
+import * as Url from "effect/http/Url";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
-import * as Schema from "effect/Schema";
-import * as Url from "effect/http/Url";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import type * as RpcSchema from "effect/rpc/RpcSchema";
+import * as Schema from "effect/Schema";
 
 import type * as Action from "./Action.ts";
 import { bind, registry } from "./internal/action.ts";

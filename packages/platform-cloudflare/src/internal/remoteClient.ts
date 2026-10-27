@@ -1,23 +1,22 @@
-import {
-  type Action,
-  ProtocolError,
-  type Source,
-} from "@yielded/sync";
+import { type Action, ProtocolError, type Source } from "@yielded/sync";
 import type { Client } from "@yielded/sync/client";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import type * as Scope from "effect/Scope";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Layer from "effect/Layer";
 import * as RpcClient from "effect/rpc/RpcClient";
 import type * as RpcClientError from "effect/rpc/RpcClientError";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
+import type * as Scope from "effect/Scope";
 
-import type { prepareRequest } from "../Cloudflare.ts";
-
-import type { ClientOptions, Command, RemoteClient } from "../Cloudflare.ts";
+import {
+  type prepareRequest,
+  type ClientOptions,
+  type Command,
+  type RemoteClient,
+} from "../Cloudflare.ts";
 
 type RequestError = ProtocolError | RpcClientError.RpcClientError;
 

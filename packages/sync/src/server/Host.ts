@@ -14,7 +14,13 @@ import * as internal from "../internal/host.ts";
 import type { ProtocolError, SourceAddress, SourcePosition } from "../Model.ts";
 import type * as Source from "../Source.ts";
 import type { Definition, Runtime, Session } from "./Server.ts";
-import type { DeliveryDisposition, OutboxRecord, ServerCrypto, SourceStorage, StorageError } from "./SourceStorage.ts";
+import type {
+  DeliveryDisposition,
+  OutboxRecord,
+  ServerCrypto,
+  SourceStorage,
+  StorageError,
+} from "./SourceStorage.ts";
 
 /**
  * Trusted application context, never populated from client-supplied RPC headers.
@@ -127,4 +133,8 @@ export interface Host<S extends Source.Spec = Source.Spec> {
 export const host: <S extends Source.Spec, R, DeliveryR = never>(
   definition: Definition<S, R>,
   options?: HostOptions<DeliveryR>,
-) => Effect.Effect<Host<S>, StorageError, R | DeliveryR | SourceStorage | ServerCrypto | Scope.Scope> = internal.host;
+) => Effect.Effect<
+  Host<S>,
+  StorageError,
+  R | DeliveryR | SourceStorage | ServerCrypto | Scope.Scope
+> = internal.host;

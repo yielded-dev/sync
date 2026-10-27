@@ -12,8 +12,8 @@ Effect-native realtime contracts, authoritative execution, and scoped clients.
 Public modules also support direct imports:
 
 ```ts
-import * as Source from "@yielded/sync/Source";
 import * as Client from "@yielded/sync/client/Client";
+import * as Source from "@yielded/sync/Source";
 ```
 
 Root contracts are portable between server and client. Server implementations and
