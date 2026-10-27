@@ -17,10 +17,10 @@ export type Actor = (typeof actors)[number]["id"];
 export type Node = Actor | "server";
 
 /** Milliseconds a message spends on the wire. */
-export const travel = 950;
+export const travel = 700;
 // Concurrent commands leave this far apart; a reply leaves this long after a request lands.
-const stagger = 320;
-const turn = 250;
+const stagger = 240;
+const turn = 150;
 
 const seatCount = 3;
 const recent = 3;
@@ -231,12 +231,9 @@ export const tour = {
   connected: ["a", "b", "c"],
   steps: [
     {
-      caption: "Alice reserves a seat. Her screen updates before the server replies.",
-      ops: [{ reserve: ["a1"] }],
-    },
-    {
-      caption: "The server commits it as event `#1`, and every client applies it.",
-      ops: [{ send: ["a1"] }, { publish: ["a1"] }],
+      caption:
+        "Alice reserves a seat. It shows at once, then the server commits `#1` for everyone.",
+      ops: [{ reserve: ["a1"] }, { send: ["a1"] }, { publish: ["a1"] }],
     },
     {
       caption: "Bob reserves, but his connection drops before the reply arrives.",
@@ -248,12 +245,9 @@ export const tour = {
       ops: [{ resume: "b" }, { lookup: "b1" }],
     },
     {
-      caption: "Alice and Carol race for the last seat.",
-      ops: [{ reserve: ["c1", "a2"] }],
-    },
-    {
-      caption: "Carol's command lands first. Alice's prediction rolls back with `SoldOut`.",
-      ops: [{ send: ["c1", "a2"] }, { publish: ["c1", "a2"] }],
+      caption:
+        "Alice and Carol race for the last seat. Carol lands first; Alice's prediction rolls back with `SoldOut`.",
+      ops: [{ reserve: ["c1", "a2"] }, { send: ["c1", "a2"] }, { publish: ["c1", "a2"] }],
     },
   ],
 } as const satisfies Scenario;
