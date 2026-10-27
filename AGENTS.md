@@ -12,8 +12,6 @@ Keep it terse and edit whole pages for a clear reading path. Agents can read sou
 and API comments; product documentation is not their implementation context.
 A feature or fix usually needs a small change to existing guidance, not another section.
 
-- Open with what the library does. Avoid fictional scenes, slogans, and rhetorical
-  questions.
 - Lead usage guides with a focused code example that shows the task. Explain only the choices
   needed to use it; do not narrate each line. Show imports and required services,
   and link to runnable examples for complete setup.
