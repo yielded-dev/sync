@@ -2,8 +2,9 @@
 title: Server actions
 ---
 
-Use the shared `Counter` from [getting started](../guide/getting-started.md).
-The server can keep private state that clients never receive:
+Using the shared `Counter` from [getting started](../guide/getting-started.md),
+you can keep server state that clients never receive. This example records the
+last actor to call `set`:
 
 ## Implement the server
 
@@ -31,14 +32,14 @@ export const CounterServer = Server.make(Counter, {
 });
 ```
 
-Your auth module supplies `Principal`, a Schema with an `actorId` field, and
-`authorize`, which checks the principal, address, state, and operation. Deny access
-with `ProtocolError`; an actor ID from a client is not proof of identity.
+The auth module supplies `Principal`, a Schema with an `actorId` field, and
+`authorize`, which checks the principal, address, state, and operation. Deny
+access with `ProtocolError`; an actor ID from a client is not proof of identity.
 
-The private `lastActorId` stays on the server. Sync commits state, events, and the
-result atomically. A state change must emit an event. Keep external side effects
-in an [outbox](https://github.com/yielded-dev/sync/blob/main/packages/platform-cloudflare/README.md#durable-data),
-with a destination that deduplicates deliveries.
+Only the server sees `lastActorId`. Sync commits state, events, and the result
+atomically, and every state change must emit an event. Put external side effects
+in an [outbox](https://github.com/yielded-dev/sync/blob/main/packages/platform-cloudflare/README.md#durable-data)
+and make sure the destination deduplicates deliveries.
 
 Use the [Cloudflare setup](../guide/getting-started.md#connect-a-server) to host
 this definition. For Alchemy or a portable `Server.host`, see

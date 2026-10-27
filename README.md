@@ -19,9 +19,9 @@
   <a href="https://yielded.dev">yielded.dev</a>
 </p>
 
-Effect-native realtime synchronization with optimistic clients and exact retries.
-Define a shared source contract, run its authoritative host with Effect, and
-connect scoped clients from a browser or native app.
+Build realtime apps with Effect. Define a shared source, run it on a server, and
+connect clients from a browser or native app. Sync can show edits immediately and
+keeps their identities intact when they need to be retried.
 
 Start with the [documentation](https://yielded.dev/sync/),
 [getting started guide](https://yielded.dev/sync/guide/getting-started/), or
@@ -39,13 +39,15 @@ Start with the [documentation](https://yielded.dev/sync/),
 | `@yielded/sync-platform-effect-cf`  | Native effect-cf Worker and Durable Object integration              |
 | `@yielded/sync-platform-alchemy-cf` | Native Alchemy Worker and Durable Object integration                |
 
-Applications own domain models, authentication, authorization, projection
-destinations, and UI. Core hosts accept application-provided server storage;
-Cloudflare integrations supply native SQLite by default. Applications may implement
-client journals directly; core owns no persistence implementation. Sync coordinates atomic
-state/event/receipt commits, optional outbox obligations, ordered replay, and
-client recovery. Snapshot caches are disposable; unresolved command journals
-retain the identities needed for safe retry.
+You bring the domain model, authentication, authorization, projection destinations,
+and UI. Sync commits state, events, and receipts together, replays changes in order,
+and helps clients recover after a disconnect. It also supports an outbox for work
+that must be delivered elsewhere.
+
+Supply server storage to a core host, or use the Cloudflare integrations with
+their default SQLite storage. Client journals can use an adapter or an application
+implementation. A snapshot cache can be discarded; a journal of unresolved
+commands holds the identities needed for safe retries.
 
 `Server.host` and `ServerRpc` work with application-provided storage and transport.
 The Cloudflare packages add native Worker and Durable Object integration around

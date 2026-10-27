@@ -8,7 +8,8 @@ bun add @yielded/sync
 
 ## Define a source
 
-Share this counter's data and actions between the server and client:
+First, define the counter's data and actions in a contract shared by the server
+and client:
 
 ```ts title="counter.ts"
 import { Action, Source } from "@yielded/sync";
@@ -34,7 +35,7 @@ export const Counter = Source.make({
 
 ## Connect a server
 
-Define what the `set` action does:
+On the server, define what happens when someone calls `set`:
 
 ```ts title="counter-server.ts"
 import { Server } from "@yielded/sync/server";
@@ -82,13 +83,14 @@ export default Worker.makeFetchHandler(Counters.layer, {
 });
 ```
 
-Your app supplies `authenticate`, `authorize`, and `Principal` in `auth.ts`.
-Add the `COUNTERS` binding and SQLite migration to your Worker config, as in the
+Provide `authenticate`, `authorize`, and `Principal` in your app's `auth.ts`.
+Then add the `COUNTERS` binding and SQLite migration to your Worker config, as in the
 [runnable board](https://github.com/yielded-dev/sync/blob/main/examples/list-board/wrangler.jsonc).
 
 ## Connect a client
 
-Tell the client how to apply confirmed changes and show edits while they are pending:
+Tell the client how to apply confirmed changes and what to show while an edit is
+pending:
 
 ```ts title="counter-client.ts"
 import { Client } from "@yielded/sync/client";
@@ -119,7 +121,8 @@ export const counter = BrowserSource.bind(CounterClient, {
 });
 ```
 
-Use your signed-in actor's ID. The server still authenticates the request.
+Replace `"alice"` with your signed-in actor's ID. The server still authenticates
+the request.
 
 ```tsx title="App.tsx"
 import { RegistryProvider, useAtom, useAtomValue } from "@effect/atom-react";
@@ -153,7 +156,7 @@ export function App() {
 }
 ```
 
-For persistence, retry controls, or a client without React, continue with the
+For persistence, retry controls, or a client without React, see the
 [client guide](../client.mdx). The
 [React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board)
 has the complete app setup.

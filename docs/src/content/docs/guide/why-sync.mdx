@@ -5,11 +5,11 @@ description: Keep clients up to date with server data through live updates, auto
 
 import { FlowMap } from "@yielded/starlight-theme/components";
 
-Sync keeps your clients up to date with the data on your server. Connect them
-to a Sync source and they receive its current state, follow live changes, and
-automatically reconnect and catch up after a disconnect.
+Sync keeps your clients up to date with the data on your server. Connect a client
+to a Sync source and it receives the current state, follows live changes, and
+reconnects and catches up after a disconnect.
 
-Your app defines what data to share and who can access it. Sync handles initial
+Your app decides what data to share and who can access it. Sync handles initial
 loading, update delivery, version tracking, and recovery.
 
 <FlowMap
@@ -55,9 +55,9 @@ loading, update delivery, version tracking, and recovery.
 
 ## Keep your UI current
 
-Once the [client is connected](./getting-started.md#connect-a-client), components
-render its data. Server changes update the replica and rerender the component
-automatically:
+Once the [client is connected](./getting-started.md#connect-a-client), your
+components can render its data. Server changes update the replica and rerender
+the component automatically:
 
 ```tsx title="App.tsx"
 import { RegistryProvider, useAtomValue } from "@effect/atom-react";
@@ -94,12 +94,13 @@ Your components keep reading the same replica throughout.
 
 ## Send edits back
 
-Clients can also send typed actions to the server. Optimistic reducers show edits
-immediately; Sync confirms them when accepted or rolls them back when rejected.
+Clients can also send typed actions to the server. An optimistic reducer shows an
+edit immediately, before the server replies. Sync confirms the edit if it's
+accepted or rolls it back if it's rejected.
 
-Automatic retries keep the original command identity, so a lost reply doesn't
-apply the same edit twice. With IndexedDB persistence, pending edits survive
-reloads. Unresolved edits stay available through the
+If a reply is lost, automatic retries use the original command identity so the
+server doesn't apply the same edit twice. With IndexedDB persistence, pending
+edits survive reloads. Unresolved edits stay available through the
 [recovery controls](../client.mdx#retry-and-recovery) for your app to resolve.
 
 ## Built for Effect

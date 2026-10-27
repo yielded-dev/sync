@@ -1,7 +1,7 @@
 # @yielded/sync-platform-alchemy-cf
 
-Define a Sync Durable Object with the shared Cloudflare package, then select
-Alchemy at application composition. The provider supplies native SQLite storage,
+Define a Sync Durable Object with the shared Cloudflare package, then use the
+Alchemy provider in your application. The provider supplies native SQLite storage,
 crypto, transport, and lifecycle handling around `Server.host`.
 
 Install the adapter with Alchemy's Cloudflare provider:
@@ -44,10 +44,10 @@ address. Return an Effect with `actorId`, a Schema JSON `principal`, and
 identity headers and forwards HTTP or WebSocket requests. Unmatched paths return
 404; protocol failures become HTTP error responses.
 
-For custom routing, `yield* CounterObject` obtains its typed namespace.
-The package's `prepareRequest` export accepts `{ request, address, identity }` and returns an
-Effect HTTP request for the selected stub's `fetch`. Only authenticated routes
-should expose the binding.
+For custom routing, `yield* CounterObject` obtains its typed namespace. The
+package's `prepareRequest` export accepts `{ request, address, identity }` and
+returns an Effect HTTP request for the selected stub's `fetch`. Only authenticated
+routes should expose the binding.
 
 Alchemy owns the resource declaration and binding; Sync acquires platform services
 only in the native object's runtime. Planning does not open storage. Initialization
@@ -59,9 +59,9 @@ The package's `layer(options)` export exposes the same platform services for cus
 composition inside an Alchemy object's runtime Effect. Use `Server.provide` for
 services acquired and released within each source operation.
 
-Outbox delivery is optional. Supply `outbox: { deliver }`
-to enable it with bounded SQLite capacity and native alarm scheduling. Drain
-pending work before disabling delivery. Other alarm jobs need an application
+To enable outbox delivery, supply `outbox: { deliver }`. With the default SQLite
+store, capacity is bounded. The adapter schedules delivery with native alarms.
+Drain pending work before disabling delivery. Other alarm jobs need an application
 scheduler. See the shared [options and defaults](../platform-cloudflare/README.md).
 
 Preserve object identity when changing frameworks, or explicitly migrate the

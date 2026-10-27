@@ -1,6 +1,7 @@
 # @yielded/sync
 
-Effect-native realtime contracts, authoritative execution, and scoped clients.
+Define shared contracts, run an authoritative server, and connect scoped clients
+with Effect.
 
 | Entry point            | Public API                                                               |
 | ---------------------- | ------------------------------------------------------------------------ |
@@ -16,26 +17,27 @@ import * as Client from "@yielded/sync/client/Client";
 import * as Source from "@yielded/sync/Source";
 ```
 
-Root contracts are portable between server and client. Server implementations and
-platform adapters stay separate. Applications own domain schemas, authentication,
-authorization, projection destinations, and UI.
+Share root contracts between server and client. Server implementations and
+platform adapters have separate entry points. Your application supplies domain
+schemas, authentication, authorization, projection destinations, and the UI.
 
-`Server.host(definition)` coordinates one storage authority with ordered turns,
-subscriptions, publication, and optional outbox delivery. Provide `SourceStorage`,
-`ServerCrypto`, and the definition's services in its scope. `ServerRpc.handlers(host)`
-connects it to Effect RPC; platform transport and scheduling remain application
-choices. The [server guide](../../docs/src/content/docs/api/consumer.md) explains
-the host and its platform integrations.
+`Server.host(definition)` coordinates ordered operations, subscriptions,
+publication, and optional outbox delivery for one storage authority. Provide
+`SourceStorage`, `ServerCrypto`, and the definition's services in its scope.
+`ServerRpc.handlers(host)` connects it to Effect RPC; your application chooses the
+transport and scheduling. See the [server guide](../../docs/src/content/docs/api/consumer.md)
+for the host and its platform integrations.
 
-Action handlers return `{ state, events, result, outbox? }`; the runtime atomically
-commits state, events, exact outcomes, and outbox obligations. Changed state must emit an event. Declared
-rejections are durable outcomes; operational failures are not. Retrying an
-identical command returns its original result.
+Action handlers return `{ state, events, result, outbox? }`. The runtime commits
+state, events, exact outcomes, and outbox obligations atomically. A state change
+must emit an event. Declared rejections are durable outcomes; operational failures
+are not. Retrying an identical command returns its original result.
 
-Core owns persistence contracts; applications supply server storage and client
-journals. `@yielded/sync-local-indexeddb` provides browser storage;
-`@yielded/sync-persistence` supplies shared record policy for custom drivers. Sources may omit messages and
-plugins; client definitions may omit optimistic reducers.
+Core defines the persistence contracts; you supply server storage and client
+journals. For browsers, `@yielded/sync-local-indexeddb` provides storage.
+`@yielded/sync-persistence` provides shared record handling for custom drivers.
+Sources may omit messages and plugins, and client definitions may omit optimistic
+reducers.
 
 Clients require an actor, transport, explicit persistence choice, and a live scope.
 Close the session before switching actors. Unknown outcomes retain their command

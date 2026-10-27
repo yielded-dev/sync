@@ -4,25 +4,24 @@ Define Cloudflare Durable Objects around Sync's portable `Server.host`, with
 SQLite storage, request handling, WebSockets, and alarms supplied by default.
 
 `DurableObject.make(server, options)` creates a framework-independent definition.
-At application composition, call `definition.provide(EffectCfServices)` for
+To use it in your application, call `definition.provide(EffectCfServices)` for
 [effect-cf](../platform-effect-cf/README.md), or
 `definition.provide(AlchemyServices("CounterObject"))` for
 [Alchemy](../platform-alchemy-cf/README.md). These return the framework's native
 class or resource declaration. Use `typeof CounterObject.Type` to extract its
 instance type. Storage opens only when an object activates.
 
-For custom native integration, `Cloudflare.make(server, state, options)` acquires platform services and adapts
-one source per object. It returns fetch and WebSocket lifecycle handlers plus an
-`alarm` Effect. Acquire it in the native object's scope. Run the same alarm
-Effect for each native notification; framework
-adapters supply the callback. For other environments, use `Server.host` and
-`ServerRpc` directly from `@yielded/sync/server`.
+For a custom native integration, `Cloudflare.make(server, state, options)` acquires
+platform services and adapts one source per object. It returns fetch and WebSocket
+lifecycle handlers plus an `alarm` Effect. Acquire it in the native object's scope
+and run the same alarm Effect for each native notification; framework adapters
+supply the callback. For other environments, use `Server.host` and `ServerRpc`
+directly from `@yielded/sync/server`.
 
 `Cloudflare.layer(nativeStorage, options)` exposes the shared `SourceStorage` and
 `ServerCrypto` defaults for custom composition. Set `storage` to SQLite options
-or a replacement `SourceStorage` Layer; a replacement prevents SQLite from being
-opened. `crypto` accepts a replacement `ServerCrypto` Layer.
-Custom stores implement the
+or a replacement `SourceStorage` Layer. With a replacement, SQLite is not opened.
+`crypto` accepts a replacement `ServerCrypto` Layer. Custom stores implement the
 [transaction contract](../sync/src/server/SourceStorage.ts); durable delivery adds
 the optional `outbox` capability.
 
@@ -43,9 +42,10 @@ is needed. Its required namespace and replay window are explicit.
 
 ## Authentication and transport
 
-`Cloudflare.handler(source, { authenticate, fetch, objectName? })` returns a native
-Request handler Effect. It matches the source's shared path and ID schema, calls
-`authenticate(request, address)`, then forwards through `fetch(objectName, request)`.
+`Cloudflare.handler(source, { authenticate, fetch, objectName? })` returns a function
+that handles a native request as an Effect. It matches the source's shared path and
+ID schema, calls `authenticate(request, address)`, then forwards through
+`fetch(objectName, request)`.
 The default path is `/sync/<kind>/<id>` and the default object name is `<kind>:<id>`.
 The source's `path` overrides the base path; `objectName` overrides storage identity
 independently. Unmatched paths return 404; protocol failures become HTTP responses.
@@ -88,20 +88,19 @@ replay rows only; receipts are retained for exact retry.
 `allowUnboundCommands` defaults to false. Enabling it reserves those command
 identities across authority generations.
 
-Outbox delivery is optional. Supply `outbox: { deliver }`;
-the default SQLite store enables bounded capacity automatically. Override it with
-`storage.maxPendingOutbox`. A custom store must supply its own outbox capability.
-Without a storage outbox capability,
-nonempty outbox plans fail before commit. Host acquisition requires delivery
-configuration and the storage capability to be enabled together.
+To enable outbox delivery, supply `outbox: { deliver }`. The default SQLite store
+then enables bounded capacity, which you can change with `storage.maxPendingOutbox`.
+A custom store must supply its own outbox capability. Without it, nonempty outbox
+plans fail before commit. Host acquisition requires delivery configuration and the
+storage capability to be enabled together.
 
 `retryMillis` controls the claim lease and automatic retry delay. Delivery attempts
-time out after half that interval. Delivery is at least once. Destinations must
+time out after half that interval. Delivery is at least once, so destinations must
 deduplicate by the stable obligation id. Only `Delivered` removes an obligation;
-permanent, retryable, and indeterminate
-failures retain evidence. Drain pending delivery before disabling it. Disabling
-SQLite outbox support retains its records. Sync owns the object's alarm when
-delivery is enabled, so unrelated alarm jobs need an application scheduler.
+permanent, retryable, and indeterminate failures retain evidence. Drain pending
+delivery before disabling it. Disabling SQLite outbox support retains its records.
+Sync owns the object's alarm when delivery is enabled, so unrelated alarm jobs
+need an application scheduler.
 
 Storage schemas and transaction details live in
 [SqliteStorage.ts](src/SqliteStorage.ts). The [portable host](../sync/src/server/Host.ts)

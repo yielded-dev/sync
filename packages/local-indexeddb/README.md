@@ -1,7 +1,7 @@
 # @yielded/sync-local-indexeddb
 
-Scoped browser persistence for Sync clients, with separate snapshot and
-pending-command databases partitioned by actor.
+Keep Sync client data in the browser, with separate snapshot and pending-command
+databases partitioned by actor.
 
 ```sh
 bun add @yielded/sync @yielded/sync-local-indexeddb effect
@@ -21,12 +21,12 @@ and [board session](../../examples/list-board/src/browser/atoms.ts) for composit
 
 The [shared policy](../persistence/README.md#options-and-recovery) describes
 capacity options and recovery. `databaseNames(namespace)` returns the stable
-journal and cache database names. Browser storage remains subject to quota and
-eviction; persistent-storage requests belong to the application.
+journal and cache database names. Browser storage is subject to quota and
+eviction; your application can request persistent storage from the browser.
 
-Keep handles alive until the session finishes and close it before switching
-actors. Disposal closes database connections and retains stored data. An
-IndexedDB version change closes affected connections; reopen the session to
-reconnect. Await `client.flush` when backgrounding to report pending cache-save
-failures; journal admission is already durable. Never delete the journal to
-repair a cache.
+Keep handles alive until the session finishes, and close the session before
+switching actors. Disposing of the persistence scope closes the database
+connections but keeps stored data. An IndexedDB version change closes affected
+connections; reopen the session to reconnect. Await `client.flush` when
+backgrounding to report pending cache-save failures; journal admission is already
+durable. Never delete the journal to repair a cache.
