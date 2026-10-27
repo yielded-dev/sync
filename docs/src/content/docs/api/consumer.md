@@ -36,8 +36,10 @@ The auth module supplies `Principal`, a Schema with an `actorId` field, and
 `authorize`, which checks the principal, address, state, and operation. Deny
 access with `ProtocolError`; an actor ID from a client is not proof of identity.
 
-Only the server sees `lastActorId`. Sync commits state, events, and the result
-atomically, and every state change must emit an event. Put external side effects
+Only the server sees `lastActorId`: `snapshot` selects the public view. Each
+event updates connected clients, while the result goes to the caller. Sync
+commits state, events, and the result atomically, and every state change must
+emit an event. Put external side effects
 in an [outbox](https://github.com/yielded-dev/sync/blob/main/packages/platform-cloudflare/README.md#durable-data)
 and make sure the destination deduplicates deliveries.
 

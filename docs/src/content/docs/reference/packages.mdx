@@ -30,7 +30,8 @@ bun add @yielded/sync-platform-cloudflare \
 Each adapter supplies SQLite, crypto, transport, and lifecycle hooks; your app
 supplies authentication. To use another store, pass a `SourceStorage` Layer as
 `storage` to `DurableObject.make`. Keep object identities and storage namespaces
-stable if you want to retain the existing data.
+stable if you want to retain the existing data. A new namespace starts a separate
+store; reconcile pending commands and delivery work before switching.
 
 ## Other hosts
 

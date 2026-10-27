@@ -19,9 +19,10 @@
   <a href="https://yielded.dev">yielded.dev</a>
 </p>
 
-Build realtime apps with Effect. Define a shared source, run it on a server, and
-connect clients from a browser or native app. Sync can show edits immediately and
-keeps their identities intact when they need to be retried.
+Sync keeps clients in step with shared state on a server. Define the data and
+actions with Effect Schema, write the server rules, and connect browser or native
+clients. Clients receive live updates, can show edits immediately, and recover
+after a disconnect.
 
 Start with the [documentation](https://yielded.dev/sync/),
 [getting started guide](https://yielded.dev/sync/guide/getting-started/), or
@@ -39,23 +40,10 @@ Start with the [documentation](https://yielded.dev/sync/),
 | `@yielded/sync-platform-effect-cf`  | Native effect-cf Worker and Durable Object integration              |
 | `@yielded/sync-platform-alchemy-cf` | Native Alchemy Worker and Durable Object integration                |
 
-You bring the domain model, authentication, authorization, projection destinations,
-and UI. Sync commits state, events, and receipts together, replays changes in order,
-and helps clients recover after a disconnect. It also supports an outbox for work
-that must be delivered elsewhere.
-
-Supply server storage to a core host, or use the Cloudflare integrations with
-their default SQLite storage. Client journals can use an adapter or an application
-implementation. A snapshot cache can be discarded; a journal of unresolved
-commands holds the identities needed for safe retries.
-
-`Server.host` and `ServerRpc` work with application-provided storage and transport.
-The Cloudflare packages add native Worker and Durable Object integration around
-the same host, as shown in the [React board](examples/list-board/README.md).
-
-See [packages and hosts](docs/src/content/docs/reference/packages.mdx) for adapter
-choices and [GitHub releases](https://github.com/yielded-dev/sync/releases) for
-release notes.
+Your application supplies the domain rules, authentication, and UI. Use the
+Cloudflare and IndexedDB adapters or provide your own storage and transport. See
+[how Sync works](docs/src/content/docs/guide/concepts.mdx) for the data flow and
+[packages and hosts](docs/src/content/docs/reference/packages.mdx) for adapter choices.
 
 ## Development
 

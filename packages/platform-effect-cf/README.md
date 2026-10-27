@@ -1,7 +1,7 @@
 # @yielded/sync-platform-effect-cf
 
-Define a Sync Durable Object with the shared Cloudflare package, then use the
-effect-cf provider in your application. The provider supplies native SQLite
+Define a Sync Durable Object with the shared Cloudflare package, then select
+effect-cf at application composition. The provider supplies native SQLite
 storage, crypto, transport, and lifecycle handling around `Server.host`.
 
 ```ts
@@ -41,14 +41,14 @@ and use `Cloudflare.prepareRequest` with `{ request, address, identity }`, then
 the binding.
 
 To replace SQLite, pass a `SourceStorage` Layer as `storage`; the default store
-will not be opened. `crypto` accepts a replacement `ServerCrypto` Layer. For custom
-composition within an effect-cf object, use the package's `layer(options)` export
-to access the same platform services. Use `Server.provide` for services acquired
+will not be opened. `crypto` accepts a replacement `ServerCrypto` Layer.
+The package's `layer(options)` export exposes the same platform services for custom
+composition within an effect-cf object. Use `Server.provide` for services acquired
 and released within each source operation.
 
-To enable outbox delivery, supply `outbox: { deliver }`. With the default SQLite
-store, capacity is bounded. The adapter schedules delivery with native alarms.
-Drain pending work before disabling delivery. Other alarm jobs need an application
+Outbox delivery is optional. Supply `outbox: { deliver }`
+to enable it with bounded SQLite capacity and native alarm scheduling. Drain
+pending work before disabling delivery. Other alarm jobs need an application
 scheduler. See the shared [options and defaults](../platform-cloudflare/README.md).
 
 See the [React board](../../examples/list-board/README.md). Keep class names, named-object

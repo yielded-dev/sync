@@ -4,7 +4,9 @@ title: Clients and React
 
 import { Trace } from "@yielded/starlight-theme/components";
 
-Continue from the [counter client](./guide/getting-started.md#connect-a-client).
+The [getting started counter](./guide/getting-started.md#connect-a-client) uses a
+browser binding with volatile storage. This guide adds persistence and recovery,
+and shows how to open a client without React.
 
 ## Atom bindings
 
@@ -15,17 +17,31 @@ verifies the connection.
 
 ## Persistence
 
-To retain pending edits across reloads, replace `"volatile"` with an IndexedDB
-Layer in `counter-atoms.ts`:
+To retain pending edits across reloads, install the IndexedDB adapter:
 
-```ts
-import { IndexedDb } from "@yielded/sync-local-indexeddb";
-
-const persistence = IndexedDb.layer({ namespace: "counter" });
+```sh
+bun add @yielded/sync-local-indexeddb
 ```
 
-`BrowserSource.bind` supplies the actor to the Layer. Keep the namespace stable,
-and close the session before changing actors or storage.
+Then use its Layer in `counter-atoms.ts`:
+
+```ts title="counter-atoms.ts"
+import { IndexedDb } from "@yielded/sync-local-indexeddb";
+import { BrowserSource } from "@yielded/sync-platform-browser";
+
+import { CounterId } from "./counter";
+import { CounterClient } from "./counter-client";
+
+export const counter = BrowserSource.bind(CounterClient, {
+  id: CounterId.make("demo"),
+  actorId: "alice",
+  persistence: IndexedDb.layer({ namespace: "counter" }),
+});
+```
+
+Use your signed-in actor's ID. `BrowserSource.bind` supplies it to the Layer.
+Keep the namespace stable, and close the session before changing actors or storage.
+With `"volatile"` persistence, pending edits do not survive a reload.
 
 | Stored data             | What it is for                                         |
 | ----------------------- | ------------------------------------------------------ |

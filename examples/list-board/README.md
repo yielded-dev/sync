@@ -1,7 +1,7 @@
 # Shared board
 
-A shared board built with React, Effect Atom, and Sync. An effect-cf Worker stores
-cards and board titles in SQLite; the browser uses
+A React and Effect Atom frontend over Sync's public client. An effect-cf Worker
+stores cards and board titles in SQLite; the browser uses
 `@yielded/sync-local-indexeddb` for snapshots and pending commands.
 
 ## Run it
@@ -21,9 +21,9 @@ the frontend and Worker locally without a Cloudflare account.
    button. Watch the other tab update.
 4. Focus a card's menu to show your presence, then reload a tab to restore the board.
 
-Use `/?board=another-board&actor=alice` to open another board. Switching identity
-opens a new page, closes the old session, and starts one for the selected actor.
-Pending commands stay in their original actor's persistence partition.
+Use `/?board=another-board&actor=alice` for another board. Switching identity
+navigates to a new page, closes the old session, and opens the selected actor's
+persistence partition. Pending commands stay with their original identity.
 
 While disconnected, cached content remains visible and editing waits for authority.
 An uncertain command can be retried using its saved id. The client reconnects and
@@ -41,11 +41,11 @@ recovers from its cursor after a lost Durable Object activation.
 | [main.tsx](src/browser/main.tsx) | The application's `RegistryProvider`                       |
 
 `Board` is the shared source contract; `BoardClient` supplies its reducers.
-`BrowserSource.bind` connects one board and provides its browser services. React
-reads `board.replica` and dispatches `board.action.moveCard`, `board.retry`, or
-`board.recover` directly. The add and rename workflows use `board.fn` generators
-to wait for their actions before clearing draft inputs. Optimistic reducers update
-the board while each action waits for its server result.
+`BrowserSource.bind` connects one board instance and provides its browser services.
+React reads `board.replica` and dispatches `board.action.moveCard`, `board.retry`,
+or `board.recover` directly. Add and rename use `board.fn` generators to await
+callable actions before clearing their draft inputs. Optimistic reducers update
+the board while the action awaits its server result.
 
 The app supplies its board ID, actor, demo authentication query, and IndexedDB
 Layer. The binding derives the route, defaults to the current origin, and supplies
@@ -55,7 +55,7 @@ releases them.
 
 `board.presence(payloadAtom)` owns heartbeats, bounded peers, and expiry while
 observed. The app supplies the focused card ID; presence stays outside the
-durable replica. This source needs no plugins.
+durable replica.
 
 Server action handlers use `Effect.fn` and return `{ state, events, result }`.
 `events` update every replica; `result` is the reply to the caller. Yield a

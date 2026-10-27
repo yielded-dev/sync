@@ -2,8 +2,13 @@
 title: Getting started
 ---
 
+Build a counter shared by a Cloudflare Worker and a React client. The server
+keeps the current value; connected clients receive changes and can send a `set`
+action. For a complete, runnable application, see the
+[React board](https://github.com/yielded-dev/sync/tree/main/examples/list-board).
+
 ```sh
-bun add @yielded/sync
+bun add @yielded/sync effect
 ```
 
 ## Define a source
@@ -33,6 +38,9 @@ export const Counter = Source.make({
 });
 ```
 
+The snapshot is what clients read, the event updates that view, and `set` is a
+request to change it. The action's result is returned to the caller.
+
 ## Connect a server
 
 On the server, define what happens when someone calls `set`:
@@ -61,8 +69,15 @@ export const CounterServer = Server.make(Counter, {
 });
 ```
 
+The handler returns the next server state, an event for clients, and a result
+for the caller. Sync commits them together before publishing the event.
+
 Host it in a Cloudflare Durable Object using the
 [effect-cf adapter](../reference/packages.mdx#cloudflare):
+
+```sh
+bun add @yielded/sync-platform-cloudflare @yielded/sync-platform-effect-cf effect-cf
+```
 
 ```ts title="worker.ts"
 import { DurableObject } from "@yielded/sync-platform-cloudflare";
@@ -90,7 +105,8 @@ Then add the `COUNTERS` binding and SQLite migration to your Worker config, as i
 ## Connect a client
 
 Tell the client how to apply confirmed changes and what to show while an edit is
-pending:
+pending. The optimistic reducer is optional; the event reducer keeps the local
+view in step with the server:
 
 ```ts title="counter-client.ts"
 import { Client } from "@yielded/sync/client";
@@ -107,6 +123,10 @@ export const CounterClient = Client.definition(Counter, {
 
 Use the [browser adapter](../reference/packages.mdx#browser-clients) to connect
 to the `demo` counter on the same origin:
+
+```sh
+bun add @yielded/sync-platform-browser @effect/atom-react react react-dom
+```
 
 ```ts title="counter-atoms.ts"
 import { BrowserSource } from "@yielded/sync-platform-browser";

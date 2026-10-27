@@ -1,7 +1,11 @@
 # @yielded/sync
 
-Define shared contracts, run an authoritative server, and connect scoped clients
-with Effect.
+Define shared state and typed actions with Effect. Your server handles actions
+and publishes events; connected clients keep a local view up to date and can
+show edits optimistically.
+
+Start with the [counter guide](../../docs/src/content/docs/guide/getting-started.md)
+or see [how Sync works](../../docs/src/content/docs/guide/concepts.mdx).
 
 | Entry point            | Public API                                                               |
 | ---------------------- | ------------------------------------------------------------------------ |
@@ -17,34 +21,14 @@ import * as Client from "@yielded/sync/client/Client";
 import * as Source from "@yielded/sync/Source";
 ```
 
-Share root contracts between server and client. Server implementations and
-platform adapters have separate entry points. Your application supplies domain
-schemas, authentication, authorization, projection destinations, and the UI.
+The root contract is shared by server and client. Your application supplies the
+domain rules, authentication, storage, and UI. The
+[platform packages](../../docs/src/content/docs/reference/packages.mdx) provide
+Cloudflare hosting and browser persistence, or you can provide your own.
 
-`Server.host(definition)` coordinates ordered operations, subscriptions,
-publication, and optional outbox delivery for one storage authority. Provide
-`SourceStorage`, `ServerCrypto`, and the definition's services in its scope.
-`ServerRpc.handlers(host)` connects it to Effect RPC; your application chooses the
-transport and scheduling. See the [server guide](../../docs/src/content/docs/api/consumer.md)
-for the host and its platform integrations.
-
-Action handlers return `{ state, events, result, outbox? }`. The runtime commits
-state, events, exact outcomes, and outbox obligations atomically. A state change
-must emit an event. Declared rejections are durable outcomes; operational failures
-are not. Retrying an identical command returns its original result.
-
-Core defines the persistence contracts; you supply server storage and client
-journals. For browsers, `@yielded/sync-local-indexeddb` provides storage.
-`@yielded/sync-persistence` provides shared record handling for custom drivers.
-Sources may omit messages and plugins, and client definitions may omit optimistic
-reducers.
-
-Clients require an actor, transport, explicit persistence choice, and a live scope.
-Close the session before switching actors. Unknown outcomes retain their command
-ids for `retry(id)`; never replace them with a new id to bypass recovery. Atom
-bindings share that session and release their leases on registry disposal.
-
-Start with [getting started](../../docs/src/content/docs/guide/getting-started.md),
-the [client guide](../../docs/src/content/docs/client.mdx), or the
-[React board](../../examples/list-board/README.md). Contributor contracts are in
-[API boundaries](../../docs/PUBLIC_API.md).
+Server action handlers return `{ state, events, result, outbox? }`. Sync commits
+these together; a state change must emit an event. Clients need an actor,
+transport, persistence choice, and a live scope. Close the session before
+switching actors. If an action's outcome is unknown, retry its original command
+ID rather than submitting a new one. See the
+[client guide](../../docs/src/content/docs/client.mdx) for recovery and persistence.

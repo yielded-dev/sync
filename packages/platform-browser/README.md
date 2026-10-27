@@ -23,13 +23,13 @@ export const board = BrowserSource.bind(BoardClient, {
 });
 ```
 
-Read `board.replica` and dispatch `board.action.moveCard`. To compose actions,
-use `board.fn(function* () { ... })`: inside the generator, await
+Read `board.replica`, dispatch `board.action.moveCard`, and compose actions with
+`board.fn(function* () { ... })`. Inside the generator, await
 `board.action.moveCard(payload)` and use `Atom.get` / `Atom.set` for local state.
-The runtime provides `Crypto.Crypto`, `Client.CurrentActor`, and `Client.Transport`.
-Declared plugins have typed bindings under `board.plugins`, and
-`board.presence(payloadAtom)` can share the source connection. See the
-[runnable board](../../examples/list-board/README.md).
+The runtime provides `Crypto.Crypto`,
+`Client.CurrentActor`, and `Client.Transport`. Declared plugins keep their typed
+bindings under `board.plugins`; optional `board.presence(payloadAtom)` shares the
+source connection. See the [runnable board](../../examples/list-board/README.md).
 
 | Option                                  | Behavior                                                                                  |
 | --------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -40,12 +40,11 @@ Declared plugins have typed bindings under `board.plugins`, and
 | `query`                                 | Optional application connection parameters; no actor parameter is added automatically     |
 | `actions`, `plugins`, `limits`, `retry` | The corresponding `SourceAtom.bind` options and defaults                                  |
 
-A persistence Layer selects persistent operation and receives the browser services,
-including the current actor. If storage setup fails, the error remains a typed
-failure; the adapter does not fall back to volatile operation. The adapter has no
-persistence driver dependency. Your application chooses storage namespaces and
-handles authentication, for example with same-origin cookies or explicit
-connection parameters.
+A supplied persistence Layer selects persistent operation and receives the browser
+services, including the current actor. Storage setup errors remain typed failures;
+there is no fallback to volatile operation. The adapter has no persistence driver
+dependency. Applications own storage namespaces and authentication, such as
+same-origin cookies or explicit connection parameters.
 
 Define a binding once or use `Atom.family` for multiple IDs. Browser resources are
 acquired lazily within each Atom registry. Dispose the old registry before changing

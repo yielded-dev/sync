@@ -5,12 +5,12 @@ description: Keep clients up to date with server data through live updates, auto
 
 import { FlowMap } from "@yielded/starlight-theme/components";
 
-Sync keeps your clients up to date with the data on your server. Connect a client
-to a Sync source and it receives the current state, follows live changes, and
-reconnects and catches up after a disconnect.
+Sync keeps clients in step with shared state on your server. Connect a client to
+a source and it receives the current state, follows live changes, and catches up
+after a disconnect.
 
-Your app decides what data to share and who can access it. Sync handles initial
-loading, update delivery, version tracking, and recovery.
+Your app decides what data to share, who can access it, and how it changes. Sync
+handles initial loading, update delivery, reconnection, and recovery.
 
 <FlowMap
   title="Server data stays in sync across clients"
@@ -56,8 +56,9 @@ loading, update delivery, version tracking, and recovery.
 ## Keep your UI current
 
 Once the [client is connected](./getting-started.md#connect-a-client), your
-components can render its data. Server changes update the replica and rerender
-the component automatically:
+components can render its local copy, called a **replica**. Actions handled by
+Sync update the server state and send events to connected clients. The replica
+updates as those events arrive:
 
 ```tsx title="App.tsx"
 import { RegistryProvider, useAtomValue } from "@effect/atom-react";
