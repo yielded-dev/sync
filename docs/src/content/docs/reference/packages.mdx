@@ -2,8 +2,8 @@
 title: Packages and hosts
 ---
 
-Install only the integrations your app needs. Keep Sync packages on the same
-exact version; their manifests define supported Effect and framework peers.
+Install only the integrations your app needs. Their manifests list compatible
+Effect and framework peers.
 
 ## Cloudflare
 
@@ -11,25 +11,26 @@ Both integrations use the same `DurableObject.make` definition. Choose the
 framework that already owns your Worker and pass its provider to `.provide(...)`:
 
 ```sh
-bun add @yielded/sync-platform-cloudflare@{{SYNC_VERSION}} \
-  @yielded/sync-platform-effect-cf@{{SYNC_VERSION}} effect-cf
+bun add @yielded/sync-platform-cloudflare \
+  @yielded/sync-platform-effect-cf effect-cf
 ```
 
 Or, for Alchemy:
 
 ```sh
-bun add @yielded/sync-platform-cloudflare@{{SYNC_VERSION}} \
-  @yielded/sync-platform-alchemy-cf@{{SYNC_VERSION}} @alchemy.run/cloudflare alchemy
+bun add @yielded/sync-platform-cloudflare \
+  @yielded/sync-platform-alchemy-cf @alchemy.run/cloudflare alchemy
 ```
 
 | Framework | Provider           | Example                                                                                               |
 | --------- | ------------------ | ----------------------------------------------------------------------------------------------------- |
-| effect-cf | `EffectCfServices` | [Counter Worker](../api/consumer.md#host-on-cloudflare)                                               |
+| effect-cf | `EffectCfServices` | [Counter Worker](../guide/getting-started.md#connect-a-server)                                        |
 | Alchemy   | `AlchemyServices`  | [Alchemy setup](https://github.com/yielded-dev/sync/blob/main/packages/platform-alchemy-cf/README.md) |
 
 Each adapter supplies SQLite, crypto, transport, and lifecycle hooks. Your app
 supplies authentication. Replace SQLite by passing a `SourceStorage` Layer as
 `storage` to `DurableObject.make`.
+Keep object identities and storage namespaces stable when retaining data.
 
 ## Other hosts
 
@@ -46,8 +47,8 @@ for transport composition.
 ## Browser clients
 
 ```sh
-bun add @yielded/sync-platform-browser@{{SYNC_VERSION}} \
-  @yielded/sync-local-indexeddb@{{SYNC_VERSION}} @effect/atom-react react
+bun add @yielded/sync-platform-browser \
+  @yielded/sync-local-indexeddb @effect/atom-react react
 ```
 
 `BrowserSource.bind` supplies browser services and Atom bindings. Add an

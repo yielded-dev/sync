@@ -2,7 +2,7 @@
 
 These boundaries apply to changes in the library and its adapters. For usage,
 start with [getting started](src/content/docs/guide/getting-started.md), the
-[counter example](src/content/docs/api/consumer.md), or the
+[server actions guide](src/content/docs/api/consumer.md), or the
 [client guide](src/content/docs/client.mdx). Schemas and source interfaces own
 wire formats and implementation details.
 

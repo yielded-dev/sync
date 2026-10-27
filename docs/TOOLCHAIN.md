@@ -97,8 +97,7 @@ Top-level files in `docs/` are contributor guidance and are not published.
 owns rendering, colors, and the library switcher.
 
 Use relative Markdown links between public pages. The build rewrites them and
-checks links and anchors. `{{SYNC_VERSION}}` reads the core package version from
-its manifest for installation examples. Follow the
+checks links and anchors. Installation examples use bare package names. Follow the
 [documentation guidance](../AGENTS.md#documentation) when editing pages.
 
 ## Releases and docs deployment
