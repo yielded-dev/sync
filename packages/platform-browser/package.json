@@ -1,6 +1,6 @@
 {
   "name": "@yielded/sync-platform-browser",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "description": "Browser platform services and Atom bindings for Effect Sync.",
   "license": "MIT",
   "repository": {
