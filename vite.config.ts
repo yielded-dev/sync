@@ -127,6 +127,7 @@ export default defineConfig({
                     "effect-cf/*",
                     "alchemy",
                     "alchemy/*",
+                    "@alchemy.run/*",
                     "expo-*",
                     "@effect/platform-*",
                     "@yielded/sync-*",

@@ -5,13 +5,7 @@
  * @since 0.1.0-beta.0
  */
 
-import { ProtocolError, type Source } from "@yielded/sync";
-import {
-  Cloudflare,
-  type DurableObject as SyncDurableObject,
-} from "@yielded/sync-platform-cloudflare";
-import type { ServerCrypto, SourceStorage, StorageError } from "@yielded/sync/server";
-import type { Container } from "alchemy/Cloudflare";
+import type { Container } from "@alchemy.run/cloudflare";
 import {
   DurableObject,
   DurableObjectState,
@@ -19,7 +13,13 @@ import {
   Request as NativeRequest,
   type WebSocket,
   type Worker,
-} from "alchemy/Cloudflare/Workers";
+} from "@alchemy.run/cloudflare/Workers";
+import { ProtocolError, type Source } from "@yielded/sync";
+import {
+  Cloudflare,
+  type DurableObject as SyncDurableObject,
+} from "@yielded/sync-platform-cloudflare";
+import type { ServerCrypto, SourceStorage, StorageError } from "@yielded/sync/server";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import type * as HttpServerError from "effect/http/HttpServerError";
