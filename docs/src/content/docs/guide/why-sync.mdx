@@ -1,96 +1,112 @@
 ---
 title: Why Sync?
-description: Build shared, responsive Effect applications with typed actions, optimistic updates, and recovery built in.
+description: Keep clients up to date with server data through live updates, automatic reconnection, and recovery.
 ---
 
-import { Trace } from "@yielded/starlight-theme/components";
+import { FlowMap } from "@yielded/starlight-theme/components";
 
-Sync is a real-time state library for Effect. Build shared boards, admin tools,
-and other interactive apps where edits appear immediately and changes reach
-every connected client.
+Sync keeps your clients up to date with the data on your server. Connect them
+to a Sync source and they receive its current state, follow live changes, and
+automatically reconnect and catch up after a disconnect.
 
-You define the data and actions, implement the server rules, and connect the UI.
-Sync handles version tracking, optimistic updates, retries, rollbacks, and
-reconnect recovery for you.
+Your app defines what data to share and who can access it. Sync handles initial
+loading, update delivery, version tracking, and recovery.
 
-## Keep the API typed from server to UI
-
-Define your state, action payloads, results, and errors with Effect Schema. Sync
-derives the client and server types from that contract and validates data as it
-crosses the network.
-
-Here is a persistent browser client for the
-[counter contract](./getting-started.md#define-a-source):
-
-```ts title="counter-atoms.ts"
-import { IndexedDb } from "@yielded/sync-local-indexeddb";
-import { BrowserSource } from "@yielded/sync-platform-browser";
-import { Client } from "@yielded/sync/client";
-
-import { Counter, CounterId } from "./counter";
-
-const CounterClient = Client.definition(Counter, {
-  applyEvent: (_snapshot, event) => ({ value: event.value }),
-  optimistic: {
-    set: (_snapshot, payload) => ({ value: payload.value }),
-  },
-});
-
-export const counter = BrowserSource.bind(CounterClient, {
-  id: CounterId.make("demo"),
-  actorId: "alice",
-  persistence: IndexedDb.layer({ namespace: "counter" }),
-});
-```
-
-React reads `counter.replica` and dispatches `counter.action.set`, both typed from
-`Counter`. Use the signed-in actor's ID; the server authenticates the connection.
-
-## Show edits immediately
-
-Your optimistic reducer updates the UI before the server replies. The server
-still runs your authorization and business rules:
-
-<Trace
-  lanes={[
-    { id: "ui", label: "Your UI" },
-    { id: "library", label: "Sync" },
-    { id: "server", label: "Your server" },
-  ]}
-  steps={[
-    { lane: "ui", title: "Dispatch a typed action" },
-    { lane: "library", title: "Show the optimistic update" },
-    { lane: "server", title: "Authorize and validate the change" },
+<FlowMap
+  title="Server data stays in sync across clients"
+  description="A Sync source shares server data with connected clients. Clients receive live updates, and a reconnecting client catches up on the changes it missed."
+  columns={3}
+  nodes={[
     {
-      lane: "library",
-      title: "Confirm or roll back the edit",
-      detail: "Accepted edits reach other connected clients. Rejected edits return a typed error.",
+      id: "server",
+      at: [1, 2],
+      owner: "library",
+      title: "Sync source",
+      note: "Data on your server",
     },
+    {
+      id: "client-a",
+      at: [2, 1],
+      owner: "library",
+      title: "Client A",
+      note: "Gets live updates",
+    },
+    {
+      id: "client-b",
+      at: [2, 2],
+      owner: "library",
+      title: "Client B",
+      note: "Gets live updates",
+    },
+    {
+      id: "client-c",
+      at: [2, 3],
+      owner: "library",
+      title: "Client C",
+      note: "Reconnects and catches up",
+    },
+  ]}
+  edges={[
+    { from: "server", to: "client-a" },
+    { from: "server", to: "client-b" },
+    { from: "server", to: "client-c" },
   ]}
 />
 
-## Recover interrupted work
+## Keep your UI current
 
-Sync keeps an edit's identity through automatic retries. If a response is lost,
-it looks up the saved result before resending the same command. A confirmed edit
-isn't applied twice.
+Once the [client is connected](./getting-started.md#connect-a-client), components
+render its data. Server changes update the replica and rerender the component
+automatically:
 
-Versioned updates let clients catch up after reconnecting; a fresh snapshot
-repairs gaps in retained history. IndexedDB keeps pending edits across reloads,
-and schema version checks catch incompatible data.
+```tsx title="App.tsx"
+import { RegistryProvider, useAtomValue } from "@effect/atom-react";
 
-If a result can no longer be confirmed, Sync preserves the edit for your app to
-resolve. [Recovery controls](../client.mdx#retry-and-recovery) expose that work to
-your UI.
+import { counter } from "./counter-atoms";
 
-## Use your own application stack
+function CounterValue() {
+  const replica = useAtomValue(counter.replica);
 
-Server handlers and client workflows are Effects, so database access,
-permissions, logging, and errors compose with the rest of your application.
+  if (replica._tag === "Failure") {
+    return <p role="alert">Could not load the counter.</p>;
+  }
+  if (replica._tag !== "Success") {
+    return <output>Connecting…</output>;
+  }
 
-Start with the Cloudflare and IndexedDB adapters, or provide your own storage
-and transport. Your app owns its data, authentication, conflict rules, and
-schema migrations.
+  return <output>{replica.value.value?.value ?? "Connecting…"}</output>;
+}
 
-[Build a synced counter](./getting-started.md) or explore the
+export function App() {
+  return (
+    <RegistryProvider>
+      <CounterValue />
+    </RegistryProvider>
+  );
+}
+```
+
+## Reconnect and catch up
+
+Sync tracks which version each client has seen. After reconnecting, it replays
+missed updates or loads a fresh snapshot if that history is no longer available.
+Your components keep reading the same replica throughout.
+
+## Send edits back
+
+Clients can also send typed actions to the server. Optimistic reducers show edits
+immediately; Sync confirms them when accepted or rolls them back when rejected.
+
+Automatic retries keep the original command identity, so a lost reply doesn't
+apply the same edit twice. With IndexedDB persistence, pending edits survive
+reloads. Unresolved edits stay available through the
+[recovery controls](../client.mdx#retry-and-recovery) for your app to resolve.
+
+## Built for Effect
+
+Effect Schema defines your shared state, actions, results, and errors. Server
+handlers are Effects, and client bindings work with Effect Atom and React.
+Use the Cloudflare and IndexedDB adapters or supply your own storage and transport.
+
+[Get started](./getting-started.md) with a synced counter, or explore the
 [complete board example](https://github.com/yielded-dev/sync/tree/main/examples/list-board).
