@@ -131,12 +131,11 @@ without publishing or tagging. Temporary manifest and prerelease-state changes
 are restored after the command. Once npm makes a release available,
 `vp run release:check --registry` verifies a clean registry consumer.
 
-Successful publication triggers [Deploy docs](../.github/workflows/deploy-docs.yml)
-for the validated revision. A skipped publisher does not deploy docs, and an
-older revision is skipped if `main` has advanced.
-Manual dispatch from current `main` publishes docs between releases or retries a
-skipped deployment. The workflow needs `CLOUDFLARE_API_TOKEN` with access to the
-site Worker and its `yielded.dev` route.
+Pushes to `main` that change docs, the site Worker, package manifests, or build
+inputs trigger [Deploy docs](../.github/workflows/deploy-docs.yml). Deployments run
+one at a time and check out current `main` when the job starts. Manual dispatch
+from `main` can retry a deployment. The workflow needs `CLOUDFLARE_API_TOKEN` with
+access to the site Worker and its `yielded.dev` route.
 
 `vp run docs:deploy` builds and deploys locally using [site/wrangler.jsonc](../site/wrangler.jsonc).
 When using Wrangler OAuth, unset unrelated `CLOUDFLARE_API_TOKEN` and
