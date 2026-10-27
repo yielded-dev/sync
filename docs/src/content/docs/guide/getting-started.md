@@ -16,7 +16,7 @@ framework adapter:
 ```sh
 bun add @yielded/sync-platform-effect-cf@{{SYNC_VERSION}} effect-cf
 # Or:
-bun add @yielded/sync-platform-alchemy-cf@{{SYNC_VERSION}} alchemy
+bun add @yielded/sync-platform-alchemy-cf@{{SYNC_VERSION}} @alchemy.run/cloudflare alchemy
 ```
 
 For durable browser storage, add IndexedDB persistence:

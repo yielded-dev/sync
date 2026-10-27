@@ -4,10 +4,16 @@ Define a Sync Durable Object with the shared Cloudflare package, then select
 Alchemy at application composition. The provider supplies native SQLite storage,
 crypto, transport, and lifecycle handling around `Server.host`.
 
+Install the adapter with Alchemy's Cloudflare provider:
+
+```sh
+bun add @yielded/sync-platform-alchemy-cf @yielded/sync-platform-cloudflare @alchemy.run/cloudflare alchemy effect
+```
+
 ```ts
+import * as Cloudflare from "@alchemy.run/cloudflare";
 import { AlchemyServices } from "@yielded/sync-platform-alchemy-cf";
 import { DurableObject } from "@yielded/sync-platform-cloudflare";
-import * as Cloudflare from "alchemy/Cloudflare";
 import { Effect } from "effect";
 
 import { authenticate } from "./auth";

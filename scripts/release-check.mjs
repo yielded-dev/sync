@@ -82,6 +82,7 @@ try {
   dependencies.effect = rootManifest.catalog.effect;
   dependencies["effect-cf"] = rootManifest.catalog["effect-cf"];
   dependencies.alchemy = rootManifest.catalog.alchemy;
+  dependencies["@alchemy.run/cloudflare"] = rootManifest.catalog["@alchemy.run/cloudflare"];
 
   await writeFile(
     join(consumer, "package.json"),
