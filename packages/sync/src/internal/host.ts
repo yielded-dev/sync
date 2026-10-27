@@ -290,15 +290,18 @@ export const host = Effect.fn("Server.host")(function* <
         const executed = yield* runtime.dispatch(connection.session, command);
 
         committed = true;
-        for (const event of executed.events) {
+        const last = executed.events.at(-1);
+
+        if (last !== undefined) {
           const frame = yield* Schema.decodeEffect(
-            Schema.toCodecJson(contract.envelope.eventFrame),
+            Schema.toCodecJson(contract.envelope.eventsFrame),
           )({
-            _tag: "Event",
+            _tag: "Events",
             protocolVersion: 1,
             address: runtime.address,
             schemaVersion: contract.schemaVersion,
-            event,
+            position: last.position,
+            events: executed.events,
           }).pipe(Effect.mapError(() => unavailable("Invalid event frame")));
 
           yield* broadcast(runtime, frame);

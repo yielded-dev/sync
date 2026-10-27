@@ -15,7 +15,7 @@ export const BoardClient = Client.definition(Board, {
           ),
         };
       case "Renamed":
-        return { ...snapshot, title: event.title };
+        return { ...snapshot, title: event.title, titleRevision: event.titleRevision };
     }
   },
   optimistic: {
@@ -29,6 +29,11 @@ export const BoardClient = Client.definition(Board, {
         card.id === payload.id ? { ...card, lane: payload.lane } : card,
       ),
     }),
-    rename: (snapshot, title) => ({ ...snapshot, title }),
+    rename: (snapshot, payload) => {
+      const { title, expectedRevision } =
+        typeof payload === "string" ? { title: payload, expectedRevision: 0 } : payload;
+
+      return expectedRevision === snapshot.titleRevision ? { ...snapshot, title } : snapshot;
+    },
   },
 });

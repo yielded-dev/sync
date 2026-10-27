@@ -8,6 +8,7 @@
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { CommandId, SourceAddress, type SourceAddress as Address } from "../Model.ts";
 
@@ -55,6 +56,14 @@ export interface JournalChanges {
  * @since 0.1.0-beta.0
  */
 export interface IntentJournal {
+  /**
+   * Acquire exclusive coordination for this actor and source until scope closure.
+   * The client calls this before restoring state and releases it after source
+   * operations stop. Contention fails with `Conflict`; it must not steal ownership.
+   * Omit only when the application already guarantees one runtime per journal
+   * address. Atomic writes alone do not coordinate independent runtime state.
+   */
+  readonly acquire?: (address: Address) => Effect.Effect<void, PersistenceError, Scope.Scope>;
   readonly load: (
     address: Address,
     limit: number,

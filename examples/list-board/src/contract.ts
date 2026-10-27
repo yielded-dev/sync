@@ -1,5 +1,5 @@
 import { Action, Source } from "@yielded/sync";
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 
 export const Lane = Schema.Literals(["todo", "doing", "done"]);
 export const BoardId = Schema.NonEmptyString.pipe(Schema.brand("BoardId"));
@@ -15,15 +15,28 @@ export class CardRejected extends Schema.TaggedError<CardRejected>()("CardReject
   reason: Schema.Literals(["Duplicate", "Missing"]),
 }) {}
 
+export class RenameRejected extends Schema.TaggedError<RenameRejected>()("RenameRejected", {
+  currentRevision: Schema.Int,
+}) {}
+
+const Revision = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+
 export const Board = Source.make({
   kind: "boards",
   id: BoardId,
   schemaVersion: 1,
-  snapshot: Schema.Struct({ title: Schema.String, cards: Schema.Array(Card) }),
+  snapshot: Schema.Struct({
+    title: Schema.String,
+    titleRevision: Revision.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
+    cards: Schema.Array(Card),
+  }),
   event: Schema.Union([
     Schema.TaggedStruct("Added", { card: Card }),
     Schema.TaggedStruct("Moved", { id: Schema.String, lane: Lane }),
-    Schema.TaggedStruct("Renamed", { title: Schema.String }),
+    Schema.TaggedStruct("Renamed", {
+      title: Schema.String,
+      titleRevision: Revision.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
+    }),
   ]),
   message: Schema.Struct({ editingCardId: Schema.NullOr(Schema.String) }),
   actions: [
@@ -38,9 +51,13 @@ export const Board = Source.make({
       error: CardRejected,
     }),
     Action.make("rename", {
-      payload: Schema.String,
+      // Retain legacy command bytes for exact receipt lookup; strings target revision zero.
+      payload: Schema.Union([
+        Schema.String,
+        Schema.Struct({ title: Schema.String, expectedRevision: Revision }),
+      ]),
       success: Schema.String,
-      error: Schema.Never,
+      error: RenameRejected,
     }),
   ],
 });

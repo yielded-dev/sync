@@ -12,7 +12,10 @@ export const Publication = Source.make({
   snapshot: Schema.Int,
   event: Schema.Int,
   message: Schema.Never,
-  actions: [Action.make("set", { payload: Schema.Int, success: Schema.Int, error: Schema.Never })],
+  actions: [
+    Action.make("set", { payload: Schema.Int, success: Schema.Int, error: Schema.Never }),
+    Action.make("pair", { payload: Schema.Int, success: Schema.Int, error: Schema.Never }),
+  ],
   plugins: [],
 });
 
@@ -30,6 +33,8 @@ const server = Server.make(Publication, {
   },
   actions: {
     set: ({ payload }) => Effect.succeed({ state: payload, events: [payload], result: payload }),
+    pair: ({ payload }) =>
+      Effect.succeed({ state: payload, events: [payload - 1, payload], result: payload }),
   },
   plugins: [],
 });

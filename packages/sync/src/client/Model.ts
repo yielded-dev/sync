@@ -100,6 +100,20 @@ export type Intent = typeof Intent.Type;
 export type Connection = "idle" | "connecting" | "live" | "recovering" | "parked" | "closed";
 
 /**
+ * Automatic recovery diagnostics for this runtime's current command lifetime.
+ * Counts reset on explicit source recovery and are not persisted across reloads.
+ * Exhaustion stops automatic attempts; exact manual retry remains available.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
+export interface CommandRecovery {
+  readonly attempts: number;
+  readonly lastError: ClientError | undefined;
+  readonly automaticRetryExhausted: boolean;
+}
+
+/**
  * An observable replica view with optimistic state, durable progress, and failures.
  *
  * `provisional` is cached or unversioned state; only `authoritative` establishes
@@ -118,6 +132,7 @@ export interface Replica<Snapshot, Rejection = never> {
   readonly pending: ReadonlyArray<{
     readonly commandId: string;
     readonly phase: Intent["phase"] | "Quarantined" | "AuthorityChanged";
+    readonly recovery: CommandRecovery;
   }>;
   readonly failures: ReadonlyArray<{
     readonly commandId: string;

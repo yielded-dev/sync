@@ -491,7 +491,11 @@ export function App() {
                   Change {index + 1}
                   {change.phase === "Quarantined" || change.phase === "AuthorityChanged"
                     ? " needs review before retrying."
-                    : ""}
+                    : change.recovery.automaticRetryExhausted
+                      ? " needs a manual retry; automatic attempts stopped."
+                      : ""}
+                  {change.recovery.lastError !== undefined &&
+                    ` ${errorMessage(change.recovery.lastError)}`}
                 </span>
                 <button
                   className="button button-secondary button-small"
