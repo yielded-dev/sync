@@ -1,28 +1,94 @@
 ---
 title: Why Sync?
+description: Build shared, responsive Effect applications with typed actions, optimistic updates, and recovery built in.
 ---
 
-Sync keeps clients up to date with server state. It tracks versions and handles
-retries, optimistic updates, rollbacks, and recovery after disconnects.
+Sync is a real-time state library for Effect. Build shared boards, admin tools,
+and other interactive apps where edits appear immediately and changes reach
+every connected client.
 
-## What it takes care of
+You define the data and actions, implement the server rules, and connect the UI.
+Sync handles version tracking, optimistic updates, retries, rollbacks, and
+reconnect recovery for you.
 
-| Problem                   | What Sync does                                                                                                                      |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Versioning                | Tracks which updates a client has seen and applies new ones in order. Checks that data uses the expected schema version.            |
-| Automatic retries         | Retries the same edit after a lost connection. If the server already saved it, Sync returns that result without applying it again.  |
-| Client rollbacks          | Lets you show an edit before the server replies. If the server rejects it, Sync removes that preview and gives you the error.       |
-| Recovery                  | Brings a reconnecting client up to date with missed changes, or reloads the current state if those changes are no longer available. |
-| Reloads and offline edits | With persistence enabled, keeps pending edits across reloads and resumes them when the connection returns.                          |
+## Keep the API typed from server to UI
 
-If a result cannot be recovered, the original edit stays visible for your app to
-resolve.
+Define your state, action payloads, results, and errors with Effect Schema. Sync
+derives the client and server types from that contract and validates data as it
+crosses the network.
 
-## What you write
+Here is a persistent browser client for the
+[counter contract](./getting-started.md#define-a-source):
 
-You write the actions that change your data, the rules for who can call them,
-and how those changes update the client. Your app still owns its UI, conflict
-rules, and data migrations.
+```ts title="counter-atoms.ts"
+import { IndexedDb } from "@yielded/sync-local-indexeddb";
+import { BrowserSource } from "@yielded/sync-platform-browser";
+import { Client } from "@yielded/sync/client";
 
-[Get started](./getting-started.md) with a counter, a Cloudflare Durable Object,
-and a React client.
+import { Counter, CounterId } from "./counter";
+
+const CounterClient = Client.definition(Counter, {
+  applyEvent: (_snapshot, event) => ({ value: event.value }),
+  optimistic: {
+    set: (_snapshot, payload) => ({ value: payload.value }),
+  },
+});
+
+export const counter = BrowserSource.bind(CounterClient, {
+  id: CounterId.make("demo"),
+  actorId: "alice",
+  persistence: IndexedDb.layer({ namespace: "counter" }),
+});
+```
+
+React reads `counter.replica` and dispatches `counter.action.set`, both typed from
+`Counter`. Use the signed-in actor's ID; the server authenticates the connection.
+
+## Show edits immediately
+
+Your optimistic reducer updates the UI before the server replies. The server
+still runs your authorization and business rules:
+
+```mermaid
+sequenceDiagram
+  accTitle: Immediate client updates with server approval
+  accDescr: A client shows an optimistic edit and submits its action. The server either confirms the change to connected clients or rejects it, causing the editing client to roll back its prediction.
+  participant C as Client
+  participant S as Your server
+  participant O as Other clients
+  C->>C: Show the update
+  C->>S: Submit typed action
+  alt Accepted
+    S-->>C: Confirm the change
+    S-->>O: Apply the change
+  else Rejected
+    S-->>C: Return typed error
+    C->>C: Roll back the prediction
+  end
+```
+
+## Recover interrupted work
+
+Sync keeps an edit's identity through automatic retries. If a response is lost,
+it looks up the saved result before resending the same command. A confirmed edit
+isn't applied twice.
+
+Versioned updates let clients catch up after reconnecting; a fresh snapshot
+repairs gaps in retained history. IndexedDB keeps pending edits across reloads,
+and schema version checks catch incompatible data.
+
+If a result can no longer be confirmed, Sync preserves the edit for your app to
+resolve. [Recovery controls](../client.mdx#retry-and-recovery) expose that work to
+your UI.
+
+## Use your own application stack
+
+Server handlers and client workflows are Effects, so database access,
+permissions, logging, and errors compose with the rest of your application.
+
+Start with the Cloudflare and IndexedDB adapters, or provide your own storage
+and transport. Your app owns its data, authentication, conflict rules, and
+schema migrations.
+
+[Build a synced counter](./getting-started.md) or explore the
+[complete board example](https://github.com/yielded-dev/sync/tree/main/examples/list-board).
