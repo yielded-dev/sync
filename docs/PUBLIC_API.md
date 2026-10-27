@@ -33,6 +33,16 @@ values. Shared codecs require no services; handlers acquire their dependencies
 through scoped Layers. Composition must preserve each action's inferred payload,
 result, rejection, and service types.
 
+Public modules support namespace imports from their owning entry point and direct
+imports such as `@yielded/sync/Source` or `@yielded/sync/client/Client`. Server,
+client, and Atom modules stay under their respective boundaries. Package export
+maps list public modules explicitly; `internal` modules are implementation details.
+Public types describe the contract independently of runtime implementations.
+
+API JSDoc owns descriptions, examples, defaults, errors, and resource lifetimes,
+with `@category` and `@since` metadata on public declarations. Keep operational
+caveats beside the affected option or operation, and use guides for composition.
+
 ## Source composition
 
 `Source.make` defines a kind, positive schema version, public snapshot, events,

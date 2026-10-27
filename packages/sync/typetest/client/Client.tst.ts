@@ -1,12 +1,13 @@
+import { expectTypeOf } from "@effect/vitest";
 import { SourceAtom } from "@yielded/sync/atom";
 import { Client, type ClientError } from "@yielded/sync/client";
-import { Context, Effect, Layer, type Scope } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Scope from "effect/Scope";
 
-import { Counter, type InvalidValue, Label } from "../fixtures/counter.ts";
+import { Counter, type InvalidValue, Label } from "../../test/fixtures/counter.ts";
 
-type Equal<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
-type Assert<T extends true> = T;
 class Session extends Context.Service<Session, { readonly start: Effect.Effect<void> }>()(
   "client-example/Session",
 ) {}
@@ -33,25 +34,23 @@ const client = Client.make(definition, {
   persistence: { mode: "volatile" },
 });
 
-export type Requirements = Assert<
-  Equal<
-    Effect.Services<typeof client>,
-    Session | Client.CurrentActor | Client.Transport | Scope.Scope
-  >
->;
+expectTypeOf<Effect.Services<typeof client>>().toEqualTypeOf<
+  Session | Client.CurrentActor | Client.Transport | Scope.Scope
+>();
 
 declare const lease: Client.Lease<typeof Counter.spec>;
 const result = lease.execute(Counter.actions.set, { value: 7 });
 
-export type Success = Assert<
-  Equal<Effect.Success<typeof result>, { readonly previous: number; readonly current: number }>
->;
+expectTypeOf<Effect.Success<typeof result>>().toEqualTypeOf<{
+  readonly previous: number;
+  readonly current: number;
+}>();
 
-export type Rejection = Assert<Equal<Effect.Error<typeof result>, InvalidValue | ClientError>>;
+expectTypeOf<Effect.Error<typeof result>>().toEqualTypeOf<InvalidValue | ClientError>();
 const renamed = lease.execute(Counter.plugins.label.actions.rename, { text: "hi" });
 
-export type Renamed = Assert<Equal<Effect.Success<typeof renamed>, { readonly text: string }>>;
-export type RenameError = Assert<Equal<Effect.Error<typeof renamed>, ClientError>>;
+expectTypeOf<Effect.Success<typeof renamed>>().toEqualTypeOf<{ readonly text: string }>();
+expectTypeOf<Effect.Error<typeof renamed>>().toEqualTypeOf<ClientError>();
 
 // @ts-expect-error A set cannot receive a rename payload.
 export const invalidPayload = lease.execute(Counter.actions.set, { text: "wrong" });
@@ -59,6 +58,4 @@ declare const runtime: Client.Runtime<typeof Counter.spec>;
 const atoms = SourceAtom.make(runtime);
 const mutation = atoms.execute(Counter.address("demo"), Counter.actions.set, { value: 1 });
 
-export type AtomResult = Assert<
-  Equal<Effect.Success<typeof mutation>, Effect.Success<typeof result>>
->;
+expectTypeOf<Effect.Success<typeof mutation>>().toEqualTypeOf<Effect.Success<typeof result>>();

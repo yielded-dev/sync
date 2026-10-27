@@ -1,6 +1,20 @@
-import { Effect, Option, Result, Schema } from "effect";
-import { Url } from "effect/http";
-import { Rpc, RpcGroup } from "effect/rpc";
+/**
+ * Shared source contracts and their derived wire schemas and RPCs.
+ *
+ * A source combines its own snapshot and actions with named plugin slots.
+ * The same definition is used by server handlers, clients, and transports.
+ *
+ * @since 0.1.0-beta.0
+ */
+
+import * as Effect from "effect/Effect";
+import * as Url from "effect/http/Url";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Rpc from "effect/rpc/Rpc";
+import * as RpcGroup from "effect/rpc/RpcGroup";
+import type * as RpcSchema from "effect/rpc/RpcSchema";
+import * as Schema from "effect/Schema";
 
 import type * as Action from "./Action.ts";
 import { bind, registry } from "./internal/action.ts";
@@ -22,9 +36,20 @@ import {
 } from "./Model.ts";
 import type * as Plugin from "./Plugin.ts";
 
+/**
+ * A source kind, positive schema version, and its public capabilities.
+ *
+ * The version describes the application schema, independently of the wire
+ * protocol version and authority generation.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Spec extends Plugin.Spec {
   readonly kind: string;
+  /** Identity validation, including brands. Defaults to Schema.NonEmptyString in make. */
   readonly id: Schema.Schema<string>;
+  /** Canonical absolute base path. Defaults to /sync/<encoded kind>. */
   readonly path?: string;
   readonly schemaVersion: number;
   readonly plugins: ReadonlyArray<Plugin.Definition>;
@@ -54,8 +79,20 @@ type Normalized<S extends Input> = S extends Spec
         : readonly [];
     };
 
+/**
+ * The decoded identity type of a source, including application brands.
+ *
+ * @category type-level
+ * @since 0.1.0-beta.0
+ */
 export type Id<S extends Spec> = S["id"]["Type"];
 
+/**
+ * A source kind and its schema-validated identity.
+ *
+ * @category type-level
+ * @since 0.1.0-beta.0
+ */
 export type Address<S extends Spec = Spec> = {
   readonly kind: S["kind"];
   readonly id: Id<S>;
@@ -162,7 +199,7 @@ type ActionRpcs<S extends Spec> =
   | BoundActions<S, "$source", S["actions"]>[number]["execute" | "result"]
   | PluginRpcs<S, S["plugins"]>;
 
-const define = <const S extends Spec>(spec: S) => {
+const define = <const S extends Spec>(spec: S): Definition<S> => {
   validate(Schema.NonEmptyString, spec.kind, "source kind");
   validate(SchemaVersion, spec.schemaVersion, "schema version");
   assertUnique(
@@ -337,8 +374,39 @@ const define = <const S extends Spec>(spec: S) => {
   });
 };
 
-export type Definition<S extends Spec = Spec> = ReturnType<typeof define<S>>;
-
+/**
+ * Defines a source and derives its addresses, envelopes, and RPC group.
+ *
+ * Snapshots have `{ source, plugins }` slots. Root actions use `$source`;
+ * plugin actions use the plugin id. Invalid names, versions, or duplicate
+ * registrations throw `RegistrationError` before resources are acquired.
+ *
+ * @example
+ * ```ts
+ * import * as Action from "@yielded/sync/Action"
+ * import * as Source from "@yielded/sync/Source"
+ * import * as Schema from "effect/Schema"
+ *
+ * const Counter = Source.make({
+ *   kind: "counter",
+ *   schemaVersion: 1,
+ *   snapshot: Schema.Number,
+ *   event: Schema.Number,
+ *   message: Schema.Never,
+ *   actions: [Action.make("set", {
+ *     payload: Schema.Number,
+ *     success: Schema.Void,
+ *     error: Schema.Never
+ *   })],
+ *   plugins: []
+ * })
+ *
+ * const address = Counter.address("shared")
+ * ```
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export function make<const S extends Input>(
   input: S & {
     readonly actions: S["actions"] & Unique<Names<S["actions"]>>;
@@ -346,6 +414,39 @@ export function make<const S extends Input>(
   } & ([S] extends [Spec] ? never : unknown),
 ): Definition<Normalized<S>>;
 
+/**
+ * Defines a source and derives its addresses, envelopes, and RPC group.
+ *
+ * Snapshots have `{ source, plugins }` slots. Root actions use `$source`;
+ * plugin actions use the plugin id. Invalid names, versions, or duplicate
+ * registrations throw `RegistrationError` before resources are acquired.
+ *
+ * @example
+ * ```ts
+ * import * as Action from "@yielded/sync/Action"
+ * import * as Source from "@yielded/sync/Source"
+ * import * as Schema from "effect/Schema"
+ *
+ * const Counter = Source.make({
+ *   kind: "counter",
+ *   schemaVersion: 1,
+ *   snapshot: Schema.Number,
+ *   event: Schema.Number,
+ *   message: Schema.Never,
+ *   actions: [Action.make("set", {
+ *     payload: Schema.Number,
+ *     success: Schema.Void,
+ *     error: Schema.Never
+ *   })],
+ *   plugins: []
+ * })
+ *
+ * const address = Counter.address("shared")
+ * ```
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export function make<const S extends Spec>(
   input: S & {
     readonly actions: S["actions"] & Unique<Names<S["actions"]>>;
@@ -353,6 +454,39 @@ export function make<const S extends Spec>(
   },
 ): Definition<S>;
 
+/**
+ * Defines a source and derives its addresses, envelopes, and RPC group.
+ *
+ * Snapshots have `{ source, plugins }` slots. Root actions use `$source`;
+ * plugin actions use the plugin id. Invalid names, versions, or duplicate
+ * registrations throw `RegistrationError` before resources are acquired.
+ *
+ * @example
+ * ```ts
+ * import * as Action from "@yielded/sync/Action"
+ * import * as Source from "@yielded/sync/Source"
+ * import * as Schema from "effect/Schema"
+ *
+ * const Counter = Source.make({
+ *   kind: "counter",
+ *   schemaVersion: 1,
+ *   snapshot: Schema.Number,
+ *   event: Schema.Number,
+ *   message: Schema.Never,
+ *   actions: [Action.make("set", {
+ *     payload: Schema.Number,
+ *     success: Schema.Void,
+ *     error: Schema.Never
+ *   })],
+ *   plugins: []
+ * })
+ *
+ * const address = Counter.address("shared")
+ * ```
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export function make(input: Input): unknown {
   return define({
     ...input,
@@ -362,7 +496,12 @@ export function make(input: Input): unknown {
   });
 }
 
-/** Encode one source ID using its shared path and identity schema. */
+/**
+ * Encode one source ID using its shared path and identity schema.
+ *
+ * @category http
+ * @since 0.1.0-beta.0
+ */
 export const pathFor = <S extends Spec>(
   source: Definition<S>,
   id: NoInfer<Id<S>>,
@@ -378,7 +517,12 @@ export const pathFor = <S extends Spec>(
     Effect.mapError(invalidId),
   );
 
-/** Unmatched paths are absent; malformed IDs on a matched route are typed failures. */
+/**
+ * Unmatched paths are absent; malformed IDs on a matched route are typed failures.
+ *
+ * @category http
+ * @since 0.1.0-beta.0
+ */
 export const matchPath = <S extends Spec>(
   source: Definition<S>,
   pathname: string,
@@ -397,3 +541,172 @@ export const matchPath = <S extends Spec>(
     Effect.mapError(invalidId),
   );
 };
+
+type Header<S extends Spec> = {
+  readonly protocolVersion: typeof ProtocolVersion;
+  readonly address: Definition<S>["addressSchema"];
+  readonly schemaVersion: Schema.Literal<S["schemaVersion"]>;
+};
+
+type Frames<S extends Spec, Key extends "event" | "message"> = Schema.Union<
+  readonly [SlotFrame<"$source", S[Key]>, ...PluginFrames<S["plugins"], Key>]
+>;
+
+interface Envelope<S extends Spec> {
+  readonly sequenced: Schema.Struct<{
+    readonly position: typeof SourcePosition;
+    readonly command: Schema.optionalKey<
+      Schema.Struct<{
+        readonly actorId: typeof ActorId;
+        readonly commandId: typeof CommandId;
+      }>
+    >;
+    readonly event: Frames<S, "event">;
+  }>;
+  readonly snapshotFrame: Schema.TaggedStruct<
+    "Snapshot",
+    Header<S> & {
+      readonly position: typeof SourcePosition;
+      readonly snapshot: Definition<S>["snapshot"];
+    }
+  >;
+  readonly eventFrame: Schema.TaggedStruct<
+    "Event",
+    Header<S> & {
+      readonly event: Envelope<S>["sequenced"];
+    }
+  >;
+  readonly eventsFrame: Schema.TaggedStruct<
+    "Events",
+    Header<S> & {
+      readonly position: typeof SourcePosition;
+      readonly events: Schema.$Array<Envelope<S>["sequenced"]>;
+    }
+  >;
+  readonly resetFrame: Schema.TaggedStruct<
+    "Reset",
+    Header<S> & {
+      readonly position: typeof SourcePosition;
+      readonly snapshot: Definition<S>["snapshot"];
+    }
+  >;
+  readonly gapFrame: Schema.TaggedStruct<
+    "ResyncRequired",
+    Header<S> & {
+      readonly position: typeof SourcePosition;
+      readonly reason: Schema.NonEmptyString;
+    }
+  >;
+  readonly messageFrame: Schema.TaggedStruct<
+    "Message",
+    Header<S> & {
+      readonly actorId: typeof ActorId;
+      readonly connectionId: typeof ConnectionId;
+      readonly message: Frames<S, "message">;
+    }
+  >;
+  readonly leaveFrame: Schema.TaggedStruct<
+    "MessageLeave",
+    Header<S> & {
+      readonly actorId: typeof ActorId;
+      readonly connectionId: typeof ConnectionId;
+    }
+  >;
+  readonly outbound: Schema.Union<
+    readonly [
+      Envelope<S>["snapshotFrame"],
+      Envelope<S>["eventFrame"],
+      Envelope<S>["eventsFrame"],
+      Envelope<S>["resetFrame"],
+      Envelope<S>["gapFrame"],
+      Envelope<S>["messageFrame"],
+      Envelope<S>["leaveFrame"],
+    ]
+  >;
+}
+
+/**
+ * A validated source contract, preserving literal kinds, plugin ids,
+ * action names, and every codec's decoded type.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
+export interface Definition<S extends Spec = Spec> {
+  readonly kind: S["kind"];
+  readonly id: Schema.Codec<Id<S>, string>;
+  readonly path: string;
+  readonly schemaVersion: S["schemaVersion"];
+  readonly spec: S;
+  /**
+   * Constructs an address, validating the source identity schema. Invalid ids throw SchemaError.
+   */
+  readonly address: (id: Id<S>) => Address<S>;
+  readonly addressSchema: Schema.Struct<{
+    readonly kind: Schema.Literal<S["kind"]>;
+    readonly id: Schema.Codec<Id<S>, string>;
+  }>;
+  /**
+   * The public composite snapshot: { source, plugins }.
+   */
+  readonly snapshot: Schema.Struct<{
+    readonly source: S["snapshot"];
+    /**
+     * Plugins and their bound action registries, indexed by plugin id.
+     */
+    readonly plugins: Schema.Struct<SnapshotFields<S>>;
+  }>;
+  /**
+   * Namespaced durable events that advance the source cursor.
+   */
+  readonly event: Frames<S, "event">;
+  /**
+   * Namespaced ephemeral messages; these never advance durable progress.
+   */
+  readonly message: Frames<S, "message">;
+  /**
+   * Root actions bound to the $source namespace.
+   */
+  readonly actions: Action.Registry<BoundActions<S, "$source", S["actions"]>>;
+  readonly plugins: BoundPlugins<S>;
+  /**
+   * Wire frames used by transports and recovery.
+   */
+  readonly envelope: Envelope<S>;
+  /**
+   * The complete typed RPC group, including root and plugin action procedures.
+   */
+  readonly rpc: RpcGroup.RpcGroup<
+    | ActionRpcs<S>
+    | Rpc.Rpc<
+        "snapshot",
+        Schema.toCodecJson<Schema.Struct<Header<S>>>,
+        Schema.toCodecJson<Envelope<S>["snapshotFrame"]>,
+        typeof ProtocolError
+      >
+    | Rpc.Rpc<
+        "subscribe",
+        Schema.toCodecJson<
+          Schema.Struct<
+            Header<S> & {
+              readonly after: Schema.optionalKey<typeof SourcePosition>;
+            }
+          >
+        >,
+        RpcSchema.Stream<Schema.toCodecJson<Envelope<S>["outbound"]>, typeof ProtocolError>,
+        Schema.Never
+      >
+    | Rpc.Rpc<
+        "publishMessage",
+        Schema.toCodecJson<
+          Schema.Struct<
+            Header<S> & {
+              readonly message: Frames<S, "message">;
+            }
+          >
+        >,
+        Schema.Void,
+        typeof ProtocolError
+      >
+  >;
+}

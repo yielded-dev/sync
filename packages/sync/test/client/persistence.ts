@@ -1,6 +1,6 @@
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
-import { Persistence } from "../../persistence/src/index.ts";
+import { Persistence } from "../../../persistence/src/index.ts";
 
 const store = (): Persistence.AtomicStore => {
   const values = new Map<string, string>();

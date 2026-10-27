@@ -1,5 +1,5 @@
-import { Schema } from "effect";
-import { Rpc } from "effect/rpc";
+import * as Rpc from "effect/rpc/Rpc";
+import * as Schema from "effect/Schema";
 
 import type * as Action from "../Action.ts";
 import {
@@ -12,15 +12,7 @@ import {
   actionOutcome,
   resultLookup,
 } from "../Model.ts";
-import { assertUnique } from "./registration.ts";
-
-type Escape<S extends string> = string extends S
-  ? string
-  : S extends `${infer Head}%${infer Tail}`
-    ? `${Escape<Head>}%25${Escape<Tail>}`
-    : S extends `${infer Head}/${infer Tail}`
-      ? `${Escape<Head>}%2F${Escape<Tail>}`
-      : S;
+import { assertUnique, type Escape } from "./registration.ts";
 
 const escape = <const S extends string>(value: S): Escape<S> =>
   value.replaceAll("%", "%25").replaceAll("/", "%2F") as Escape<S>;
@@ -35,7 +27,7 @@ export const bind = <
   schemaVersion: Version,
   namespace: Namespace,
   action: A,
-) => {
+): Action.Bound<Kind, Version, Namespace, A> => {
   const command = Schema.Struct({
     protocolVersion: ProtocolVersion,
     commandId: CommandId,

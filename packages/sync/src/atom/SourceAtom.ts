@@ -1,30 +1,80 @@
-import { type Cause, Effect, Fiber, Schema, type Scope, Stream } from "effect";
-import { type AsyncResult, Atom, AtomRegistry, type Reactivity } from "effect/reactivity";
+/**
+ * Effect Atom bindings over one headless client runtime.
+ *
+ * Mounted active atoms own source leases. Passive atoms observe the same state
+ * without opening connections, and registry disposal releases active leases.
+ *
+ * @since 0.1.0-beta.0
+ */
+
+import type * as Cause from "effect/Cause";
+import type * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import type * as AsyncResult from "effect/reactivity/AsyncResult";
+import * as Atom from "effect/reactivity/Atom";
+import * as AtomRegistry from "effect/reactivity/AtomRegistry";
+import type * as Reactivity from "effect/reactivity/Reactivity";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 import type * as Action from "../Action.ts";
-import type { SourceAddress } from "../Model.ts";
-import type * as Plugin from "../Plugin.ts";
-import type * as Source from "../Source.ts";
-import type { CurrentActor } from "./CurrentActor.ts";
-import type { Definition } from "./Definition.ts";
-import { initial, type ClientError, type Connection, type Replica } from "./Model.ts";
-import * as Presence from "./Presence.ts";
-import type { ReplicaPersistence } from "./ReplicaPersistence.ts";
 import {
+  type Definition,
   make as makeClient,
   type Actions,
   type Lease,
   type Options,
   type Runtime,
   type Snapshot,
-} from "./Runtime.ts";
-import type { Transport } from "./Transport.ts";
-import { view } from "./View.ts";
+} from "../client/Client.ts";
+import type { CurrentActor } from "../client/CurrentActor.ts";
+import type { ClientError, Connection, Replica } from "../client/Model.ts";
+import type { ReplicaPersistence } from "../client/ReplicaPersistence.ts";
+import type { Transport } from "../client/Transport.ts";
+import { view } from "../client/View.ts";
+import { initial } from "../internal/clientModel.ts";
+import * as Presence from "../internal/presence.ts";
+import type { SourceAddress } from "../Model.ts";
+import type * as Plugin from "../Plugin.ts";
+import type * as Source from "../Source.ts";
 
-export type { Peer, Options as PresenceOptions } from "./Presence.ts";
+/**
+ * One live presence announcement, identified by actor and connection with a local expiry.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
+export interface Peer<A> {
+  readonly actorId: string;
+  readonly connectionId: string;
+  readonly value: A;
+  readonly expiresAtMillis: number;
+}
 
-/** Bindings own leases, while every registry observes the same headless state. */
-export const make = <S extends Source.Spec>(runtime: Runtime<S>) => {
+/**
+ * Heartbeat, expiry, and peer capacity for an ephemeral presence subscription.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
+export interface PresenceOptions {
+  /** Defaults to 8 seconds. */
+  readonly heartbeatInterval?: Duration.Input;
+  /** Defaults to 25 seconds; expiry is checked every 5 seconds or sooner. */
+  readonly timeToLive?: Duration.Input;
+  /** Defaults to 32 connections, keeping the most recently heard peers. */
+  readonly maxPeers?: number;
+}
+
+/**
+ * Bindings own leases, while every registry observes the same headless state.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
+export const make = <S extends Source.Spec>(runtime: Runtime<S>): Bindings<S> => {
   type Address = Source.Address<S>;
   const key = (address: SourceAddress) => JSON.stringify([address.kind, address.id]);
 
@@ -108,6 +158,12 @@ interface SlotOptions<S extends Plugin.Spec> {
   readonly actions?: ActionOptions<S>;
 }
 
+/**
+ * The Atom runtime, source address, explicit persistence choice, and action concurrency.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface BindOptions<S extends Source.Spec, R, E> extends Options, SlotOptions<S> {
   readonly runtime: Atom.AtomRuntime<R, E>;
   readonly address: Source.Address<S>;
@@ -123,6 +179,9 @@ type ResultAtom<A, E> = Atom.Atom<
 /**
  * Await the original bound action in the current registry. Atom combinators
  * produce derived atoms and need not retain its call signature at runtime.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
  */
 export interface ActionAtom<Input, A, E> extends Atom.AtomResultFn<Input, A, E> {
   (input: Input): Effect.Effect<A, E, AtomRegistry.AtomRegistry>;
@@ -141,10 +200,16 @@ interface SlotBinding<S extends Plugin.Spec, E, Rejection> {
   /** Announce this payload and observe other actors while the returned atom is mounted. */
   readonly presence: (
     payload: Atom.Atom<S["message"]["Type"]>,
-    options?: Presence.Options,
-  ) => ResultAtom<ReadonlyArray<Presence.Peer<S["message"]["Type"]>>, E>;
+    options?: PresenceOptions,
+  ) => ResultAtom<ReadonlyArray<Peer<S["message"]["Type"]>>, E>;
 }
 
+/**
+ * Source and plugin views with callable action atoms sharing one scoped client session.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Binding<S extends Source.Spec, E = never, R = never> extends SlotBinding<
   S,
   E,
@@ -253,6 +318,9 @@ const callable = <Input, A, E>(
 /**
  * Define once, or use Atom.family for parameterized addresses. The returned atoms
  * share one lazy client and lease per registry; runtime layers supply external services.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
  */
 export function bind<S extends Source.Spec, R, E, Services = R | CurrentActor | Transport>(
   definition: Definition<S, R>,
@@ -364,7 +432,7 @@ export function bind<S extends Source.Spec, R, E, Services>(
             { initialValue: initial<unknown, Action.Error<Actions<S>>>() },
           ).pipe(Atom.setIdleTTL(0)),
           action: actionAtoms(registeredPlugins[id].actions, pluginSettings?.[id]?.actions),
-          presence: (payload: Atom.Atom<unknown>, settings?: Presence.Options) =>
+          presence: (payload: Atom.Atom<unknown>, settings?: PresenceOptions) =>
             Presence.make(
               options.runtime,
               session,
@@ -404,4 +472,37 @@ export function bind<S extends Source.Spec, R, E, Services>(
         settings,
       ),
   };
+}
+
+type Address<S extends Source.Spec> = Source.Address<S>;
+type ReplicaAtom<S extends Source.Spec> = Atom.Atom<
+  AsyncResult.AsyncResult<
+    Replica<Snapshot<S>, Action.Error<Actions<S>>>,
+    ClientError | Cause.NoSuchElementError
+  >
+>;
+
+/**
+ * Source-addressed atoms and commands sharing the client's replica state.
+ *
+ * Active atoms own leases; command effects acquire temporary scoped leases.
+ * No additional command queue or retry loop is created.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
+export interface Bindings<S extends Source.Spec> {
+  readonly replica: (address: Address<S>) => ReplicaAtom<S>;
+  readonly passiveReplica: (address: Address<S>) => ReplicaAtom<S>;
+  readonly status: (address: Address<S>) => Atom.Atom<Connection>;
+  readonly execute: <A extends Actions<S>>(
+    address: Address<S>,
+    action: A,
+    payload: Action.Payload<NoInfer<A>>,
+  ) => Effect.Effect<Action.Success<A>, Action.Error<A> | ClientError>;
+  readonly retry: (
+    address: Address<S>,
+    commandId: string,
+  ) => Effect.Effect<Action.Success<Actions<S>>, Action.Error<Actions<S>> | ClientError>;
+  readonly recover: (address: Address<S>) => Effect.Effect<void, ClientError>;
 }

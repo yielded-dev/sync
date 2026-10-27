@@ -1,9 +1,12 @@
+import * as IndexedDb from "@yielded/sync-local-indexeddb/IndexedDb";
 import type { Persistence } from "@yielded/sync-persistence";
 import { Client, type ClientError, type PersistenceError } from "@yielded/sync/client";
-import { Effect, Exit, Schema, Scope } from "effect";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 
-import * as scenarios from "../../sync/test/persistence-scenarios.ts";
-import { IndexedDb } from "../src/index.ts";
+import * as scenarios from "../../../sync/test/client/utils.ts";
 
 export const run = (
   scenario: "concurrent" | "runtimeSeed" | "runtimeRestore",

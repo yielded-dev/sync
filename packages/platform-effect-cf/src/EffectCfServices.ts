@@ -1,10 +1,16 @@
+/**
+ * Native effect-cf services for Sync Durable Object declarations.
+ * Storage, crypto, sockets, and RPC fibers belong to the native object instance.
+ *
+ * @since 0.1.0-beta.0
+ */
+
 import { ProtocolError, type Source } from "@yielded/sync";
 import {
   Cloudflare,
   type DurableObject as SyncDurableObject,
 } from "@yielded/sync-platform-cloudflare";
 import type { ServerCrypto, SourceStorage, StorageError } from "@yielded/sync/server";
-import { Context, Effect, Layer } from "effect";
 import {
   DurableObject,
   DurableObjectDefinition,
@@ -13,9 +19,17 @@ import {
   DurableObjectWebSocket,
   Worker,
 } from "effect-cf";
-import { RpcServer } from "effect/rpc";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as RpcServer from "effect/rpc/RpcServer";
 
-/** Default platform services for custom composition in an effect-cf object. */
+/**
+ * Default platform services for custom composition in an effect-cf object.
+ *
+ * @category layers
+ * @since 0.1.0-beta.0
+ */
 export const layer = <DeliveryR = never, E = never, R = never>(
   options: Cloudflare.Options<DeliveryR, E, R> = {},
 ): Layer.Layer<
@@ -29,7 +43,12 @@ export const layer = <DeliveryR = never, E = never, R = never>(
     ),
   );
 
-/** Construct an effect-cf object at application composition; acquire services per instance. */
+/**
+ * Construct an effect-cf object at application composition; acquire services per instance.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const EffectCfServices = <
   S extends Source.Spec,
   R extends DurableObject.RuntimeContext<SourceStorage | ServerCrypto>,

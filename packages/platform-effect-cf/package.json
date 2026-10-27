@@ -20,6 +20,10 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
+    },
+    "./EffectCfServices": {
+      "types": "./dist/EffectCfServices.d.mts",
+      "import": "./dist/EffectCfServices.mjs"
     }
   },
   "publishConfig": {

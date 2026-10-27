@@ -1,10 +1,11 @@
-import { DateTime, Effect, Schema, type Scope } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import type * as Action from "../Action.ts";
 import { ProtocolError, type SourceAddress, SourcePosition, type WireSchema } from "../Model.ts";
-import type * as Source from "../Source.ts";
-import { decode, encode, invalid, unavailable } from "./codec.ts";
-import type { AuthorizationOperation, Definition } from "./Server.ts";
+import type { AuthorizationOperation, Definition, Limits, Runtime } from "../server/Server.ts";
 import {
   ServerCrypto,
   SourceStorage,
@@ -13,8 +14,19 @@ import {
   type StoredHead,
   type StoredReceipt,
   type OutboxRecord,
-} from "./SourceStorage.ts";
+} from "../server/SourceStorage.ts";
+import type * as Source from "../Source.ts";
+import { decode, encode, invalid, unavailable } from "./serverCodec.ts";
 
+/**
+ * Schema for trusted host authentication metadata.
+ *
+ * The host authenticates the principal and actor and supplies an expiry in
+ * Unix epoch milliseconds. Command payloads are never authentication evidence.
+ *
+ * @category schemas
+ * @since 0.1.0-beta.0
+ */
 export const Session = Schema.Struct({
   principal: Schema.Json,
   actorId: Schema.NonEmptyString,
@@ -22,65 +34,45 @@ export const Session = Schema.Struct({
   expiresAtMillis: Schema.Finite,
 });
 
+/**
+ * The trusted principal, actor, connection id, and expiry for a source operation.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export type Session = typeof Session.Type;
 
-export interface Limits {
-  readonly maxEvents: number;
-  readonly maxOutbox: number;
-  readonly maxBytes: number;
-  readonly turnTimeoutMillis: number;
+interface Evaluated {
+  readonly state: Schema.Json;
+  readonly events: ReadonlyArray<Schema.Json>;
+  readonly result: Schema.Json;
+  readonly outbox: ReadonlyArray<Schema.Json>;
 }
 
-export interface Runtime<S extends Source.Spec> {
-  readonly contract: Source.Definition<S>;
-  readonly address: SourceAddress;
-  readonly snapshot: (
-    session: Session,
-  ) => Effect.Effect<Source.Definition<S>["envelope"]["snapshotFrame"]["Type"], ProtocolError>;
-  readonly bootstrap: (
-    session: Session,
-    after?: SourcePosition,
-  ) => Effect.Effect<
-    | Source.Definition<S>["envelope"]["snapshotFrame"]["Type"]
-    | Source.Definition<S>["envelope"]["eventsFrame"]["Type"]
-    | Source.Definition<S>["envelope"]["gapFrame"]["Type"],
-    ProtocolError
+/** @internal Schema-erased slot, after validating the typed definition. */
+export interface Slot {
+  readonly id: string;
+  readonly initialize: Effect.Effect<Schema.Json, ProtocolError>;
+  readonly snapshot: (state: Schema.Json) => Effect.Effect<Schema.Json, ProtocolError>;
+  readonly actions: ReadonlyMap<
+    string,
+    (
+      state: Schema.Json,
+      payload: unknown,
+      principal: unknown,
+      address: SourceAddress,
+    ) => Effect.Effect<
+      | { readonly _tag: "Succeeded"; readonly plan: Evaluated }
+      | { readonly _tag: "Rejected"; readonly error: Schema.Json },
+      ProtocolError
+    >
   >;
-  readonly execute: <A extends { readonly command: WireSchema; readonly outcome: WireSchema }>(
-    session: Session,
-    action: A,
-    input: A["command"]["Type"],
-  ) => Effect.Effect<A["outcome"]["Type"], ProtocolError>;
-  readonly result: <A extends { readonly command: WireSchema; readonly lookup: WireSchema }>(
-    session: Session,
-    action: A,
-    input: A["command"]["Type"],
-  ) => Effect.Effect<A["lookup"]["Type"], ProtocolError>;
-  readonly dispatch: (
-    session: Session,
-    input: unknown,
-  ) => Effect.Effect<
-    { readonly outcome: Schema.Json; readonly events: ReadonlyArray<StoredEvent> },
-    ProtocolError
-  >;
-  readonly lookup: (
-    session: Session,
-    input: unknown,
-  ) => Effect.Effect<
-    { readonly _tag: "Unknown" } | { readonly _tag: "Found"; readonly outcome: Schema.Json },
-    ProtocolError
-  >;
-  readonly publishMessage: (
-    session: Session,
-    message: unknown,
-  ) => Effect.Effect<Source.Definition<S>["envelope"]["messageFrame"]["Type"], ProtocolError>;
-  readonly checkSubscription: (session: Session) => Effect.Effect<void, ProtocolError>;
 }
 
 const StateSlots = Schema.Record(Schema.String, Schema.Json);
 
 /** Deterministic JSON ordering, after the owning Schema's JSON encoding. */
-export const canonicalJson = (value: Schema.Json): string => {
+const canonicalJson = (value: Schema.Json): string => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value !== null && typeof value === "object") {
     const record = value as Readonly<Record<string, Schema.Json>>;
@@ -101,6 +93,16 @@ const CommandHeader = Schema.Struct({
   admittedGeneration: Schema.NullOr(SourcePosition.fields.sourceAuthorityGeneration),
 });
 
+/**
+ * Acquires the authoritative runtime for one source address.
+ *
+ * Requires `SourceStorage` and `ServerCrypto` plus the definition's services.
+ * The caller's scope owns their resources. Invalid limits are configuration
+ * defects; operational failures remain in the `ProtocolError` channel.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const open = Effect.fn("Server.open")(function* <S extends Source.Spec, R>(
   definition: Definition<S, R>,
   address: SourceAddress,

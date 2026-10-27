@@ -1,11 +1,14 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
-export class RegistrationError extends Schema.TaggedError<RegistrationError>()(
-  "RegistrationError",
-  {
-    message: Schema.String,
-  },
-) {}
+import { RegistrationError } from "../RegistrationError.ts";
+
+export type Escape<S extends string> = string extends S
+  ? string
+  : S extends `${infer Head}%${infer Tail}`
+    ? `${Escape<Head>}%25${Escape<Tail>}`
+    : S extends `${infer Head}/${infer Tail}`
+      ? `${Escape<Head>}%2F${Escape<Tail>}`
+      : S;
 
 export type Unique<
   Values extends ReadonlyArray<string>,

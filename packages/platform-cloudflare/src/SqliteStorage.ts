@@ -1,3 +1,9 @@
+/**
+ * Cloudflare SQLite implementation of authoritative source storage.
+ *
+ * @since 0.1.0-beta.0
+ */
+
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import {
   OutboxRecord,
@@ -11,9 +17,20 @@ import {
   type SourceTransaction,
   type StorageCommit,
 } from "@yielded/sync/server";
-import { Effect, Layer, Schema, Scheduler } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Scheduler from "effect/Scheduler";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
+/**
+ * A storage namespace, retained event window, and pending outbox capacity.
+ *
+ * Replay retention must not remove receipts or unresolved outbox obligations.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Options {
   readonly namespace: string;
   readonly replayWindow: number;
@@ -35,6 +52,15 @@ const fromRow = <S extends Schema.Codec<unknown, unknown>>(schema: S, row: unkno
 const toJson = <S extends Schema.Codec<unknown, unknown>>(schema: S, value: S["Type"]) =>
   Schema.encodeEffect(Schema.fromJsonString(schema))(value).pipe(Effect.mapError(failure));
 
+/**
+ * Provides atomic authoritative storage from native Durable Object SQLite.
+ *
+ * State, ordered events, receipts, and outbox records commit in one transaction.
+ * The namespace is a durable identity; changing it requires application migration.
+ *
+ * @category layers
+ * @since 0.1.0-beta.0
+ */
 export const layer = (native: DurableObjectStorage, options: Options) =>
   Layer.effect(
     SourceStorage,

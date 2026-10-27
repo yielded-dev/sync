@@ -20,6 +20,10 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
+    },
+    "./Persistence": {
+      "types": "./dist/Persistence.d.mts",
+      "import": "./dist/Persistence.mjs"
     }
   },
   "publishConfig": {

@@ -1,19 +1,36 @@
-import {
-  Context,
-  Duration,
-  Effect,
-  Exit,
-  Fiber,
-  PubSub,
-  Queue,
-  Random,
-  Schema,
-  Scope,
-  Semaphore,
-  Stream,
-} from "effect";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as PubSub from "effect/PubSub";
+import * as Queue from "effect/Queue";
+import * as Random from "effect/Random";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 
 import type * as Action from "../Action.ts";
+import type {
+  Definition,
+  Actions,
+  Snapshot,
+  State,
+  Limits,
+  Retry,
+  Options,
+  Runtime,
+  Lease,
+} from "../client/Client.ts";
+import { CurrentActor } from "../client/CurrentActor.ts";
+import { ClientError, type EncodedCommand, Intent } from "../client/Model.ts";
+import {
+  ReplicaPersistence,
+  type JournalRow,
+  type PersistenceError,
+} from "../client/ReplicaPersistence.ts";
+import { Transport, type Request } from "../client/Transport.ts";
 import {
   ActorId,
   type ActionOutcome,
@@ -23,37 +40,18 @@ import {
   type WireSchema,
 } from "../Model.ts";
 import type * as Source from "../Source.ts";
-import { CurrentActor } from "./CurrentActor.ts";
-import type { Definition, Slot } from "./Definition.ts";
-import {
-  ClientError,
-  type EncodedCommand,
-  Intent,
-  copyJson,
-  decode,
-  encode,
-  error,
-  initial,
-  type Replica,
-} from "./Model.ts";
+import { copyJson, decode, encode, error, initial } from "./clientModel.ts";
 import * as ReplicaState from "./replica.ts";
-import {
-  ReplicaPersistence,
-  type JournalRow,
-  type PersistenceError,
-} from "./ReplicaPersistence.ts";
-import { Transport, type Request } from "./Transport.ts";
 
-type SourceActions<S extends Source.Spec> =
-  | (S["actions"][number] & { readonly namespace: "$source" })
-  | {
-      [P in S["plugins"][number] as P["id"]]: P["spec"]["actions"][number] & {
-        readonly namespace: P["id"];
-      };
-    }[S["plugins"][number]["id"]];
-export type Actions<S extends Source.Spec> = Extract<SourceActions<S>, Action.Definition>;
-export type Snapshot<S extends Source.Spec> = Source.Definition<S>["snapshot"]["Type"];
-export type State<S extends Source.Spec> = Replica<Snapshot<S>, Action.Error<Actions<S>>>;
+/** @internal The registration boundary retains the schema for every erased slot. */
+export interface Slot {
+  readonly id: string;
+  readonly applyEvent: (snapshot: unknown, event: unknown) => unknown;
+  readonly optimistic: Readonly<
+    Partial<Record<string, (snapshot: unknown, payload: unknown) => unknown>>
+  >;
+}
+
 type BoundAction<S extends Source.Spec> = Omit<
   Action.Bound<string, number, string, Action.Definition>,
   "execute" | "result" | "outcome" | "lookup"
@@ -66,66 +64,6 @@ type Outcome<S extends Source.Spec> = ActionOutcome<
   Action.Success<Actions<S>>,
   Action.Error<Actions<S>>
 >;
-
-export interface Limits {
-  readonly maxSources: number;
-  readonly maxPendingPerSource: number;
-  readonly frameBuffer: number;
-  readonly operationTimeout?: Duration.Input;
-  readonly heartbeatInterval?: Duration.Input;
-}
-
-export interface Retry {
-  readonly maxAttempts: number;
-  readonly initialDelay: Duration.Input;
-  readonly maxDelay: Duration.Input;
-}
-
-export interface Options {
-  readonly persistence: { readonly mode: "volatile" | "persistent" };
-  readonly limits?: Limits;
-  readonly retry?: Retry;
-}
-
-export interface Lease<S extends Source.Spec> {
-  readonly read: Effect.Effect<State<S>, ClientError>;
-  readonly changes: Stream.Stream<State<S>, ClientError>;
-  readonly ready: Effect.Effect<Snapshot<S>, ClientError>;
-  /** Journal locally and start background delivery without waiting for the network. */
-  readonly enqueue: <A extends Actions<S>>(
-    action: A,
-    payload: Action.Payload<NoInfer<A>>,
-  ) => Effect.Effect<string, ClientError>;
-  readonly execute: <A extends Actions<S>>(
-    action: A,
-    payload: Action.Payload<NoInfer<A>>,
-  ) => Effect.Effect<Action.Success<A>, Action.Error<A> | ClientError>;
-  /** A bare id can belong to any action in this source; results/errors retain that union. */
-  readonly retry: (
-    commandId: string,
-  ) => Effect.Effect<Action.Success<Actions<S>>, Action.Error<Actions<S>> | ClientError>;
-  readonly recover: Effect.Effect<void, ClientError>;
-  readonly publishMessage: (message: S["message"]["Type"]) => Effect.Effect<void, ClientError>;
-  readonly publishPluginMessage: <Id extends S["plugins"][number]["id"]>(
-    id: Id,
-    message: Extract<S["plugins"][number], { readonly id: Id }>["message"]["Type"],
-  ) => Effect.Effect<void, ClientError>;
-  readonly messages: Stream.Stream<
-    Source.Definition<S>["envelope"]["messageFrame" | "leaveFrame"]["Type"],
-    ClientError
-  >;
-  readonly dismissFailure: (commandId: string) => Effect.Effect<void, ClientError>;
-}
-
-export interface Runtime<S extends Source.Spec> {
-  readonly actorId: string;
-  readonly contract: Source.Definition<S>;
-  readonly open: (address: Source.Address<S>) => Effect.Effect<Lease<S>, ClientError, Scope.Scope>;
-  readonly read: (address: Source.Address<S>) => Effect.Effect<State<S>, ClientError>;
-  /** Passive observations never acquire a source lease. Slow observers coalesce views. */
-  readonly changes: (address: Source.Address<S>) => Stream.Stream<State<S>, ClientError>;
-  readonly flush: Effect.Effect<void, ClientError>;
-}
 
 interface Entry<S extends Source.Spec> {
   readonly address: SourceAddress;
@@ -162,25 +100,7 @@ const operationError = (failure: ProtocolError, commandId?: string) =>
     commandId,
   );
 
-export function make<S extends Source.Spec, R>(
-  definition: Definition<S, R>,
-  options: Options & { readonly persistence: { readonly mode: "volatile" } },
-): Effect.Effect<Runtime<S>, ClientError, R | CurrentActor | Transport | Scope.Scope>;
-
-export function make<S extends Source.Spec, R>(
-  definition: Definition<S, R>,
-  options: Options,
-): Effect.Effect<
-  Runtime<S>,
-  ClientError,
-  R | CurrentActor | Transport | ReplicaPersistence | Scope.Scope
->;
-
-export function make<S extends Source.Spec, R>(definition: Definition<S, R>, options: Options) {
-  return makeRuntime(definition, options);
-}
-
-const makeRuntime = Effect.fn("Client.make")(function* <S extends Source.Spec, R>(
+export const make = Effect.fn("Client.make")(function* <S extends Source.Spec, R>(
   definition: Definition<S, R>,
   options: Options,
 ): Effect.fn.Return<

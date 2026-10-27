@@ -1,10 +1,33 @@
+/**
+ * IndexedDB persistence for scoped Sync clients.
+ *
+ * The intent journal and disposable snapshot cache use separate databases.
+ * Ordinary scope disposal closes connections and retains stored data.
+ *
+ * @since 0.1.0-beta.0
+ */
+
 import { Persistence } from "@yielded/sync-persistence";
 import { ReplicaPersistence, type Client, type PersistenceError } from "@yielded/sync/client";
-import { Effect, Layer, Schema, type Scope } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
+/**
+ * IndexedDB namespace and capacity options for client persistence.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export type Options = Persistence.Options;
 
-/** Stable names: changing a format never silently selects a new journal. */
+/**
+ * Stable names: changing a format never silently selects a new journal.
+ *
+ * @category utilities
+ * @since 0.1.0-beta.0
+ */
 export const databaseNames = (namespace: string) => ({
   journal: `yielded-sync:${encodeURIComponent(namespace)}:journal`,
   cache: `yielded-sync:${encodeURIComponent(namespace)}:cache`,
@@ -116,6 +139,15 @@ const store = Effect.fn("IndexedDb.store")(function* (name: string, version: 1 |
   } satisfies Persistence.AtomicStore;
 });
 
+/**
+ * Opens generation-fenced IndexedDB persistence for `CurrentActor`.
+ *
+ * The caller's scope owns the connections. Unreadable journals remain intact
+ * for recovery; disposable cache recovery never removes retry evidence.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const open = Effect.fn("IndexedDb.open")(function* (
   options: Options,
 ): Effect.fn.Return<
@@ -134,6 +166,15 @@ export const open = Effect.fn("IndexedDb.open")(function* (
   });
 });
 
+/**
+ * Provides `ReplicaPersistence` using scoped IndexedDB connections.
+ *
+ * The current actor is captured when the layer is acquired. Scope disposal
+ * retains durable data; logout deletion is explicit application policy.
+ *
+ * @category layers
+ * @since 0.1.0-beta.0
+ */
 export const layer = (
   options: Options,
 ): Layer.Layer<ReplicaPersistence, PersistenceError, Client.CurrentActor> =>

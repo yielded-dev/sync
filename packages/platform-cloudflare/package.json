@@ -20,6 +20,18 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
+    },
+    "./Cloudflare": {
+      "types": "./dist/Cloudflare.d.mts",
+      "import": "./dist/Cloudflare.mjs"
+    },
+    "./DurableObject": {
+      "types": "./dist/DurableObject.d.mts",
+      "import": "./dist/DurableObject.mjs"
+    },
+    "./SqliteStorage": {
+      "types": "./dist/SqliteStorage.d.mts",
+      "import": "./dist/SqliteStorage.mjs"
     }
   },
   "publishConfig": {

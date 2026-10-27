@@ -1,4 +1,21 @@
-import { ProtocolError, Source, SourceAddress } from "@yielded/sync";
+/**
+ * Shared Cloudflare Durable Object hosting for Sync sources.
+ *
+ * Applications own routing, authentication, bindings, and delivery destinations.
+ * Sync owns source ordering, replay, authenticated sockets, and the object alarm.
+ *
+ * @since 0.1.0-beta.0
+ */
+
+import {
+  ProtocolError,
+  Source,
+  SourceAddress,
+  type Action,
+  type ActionOutcome,
+  type ResultLookup,
+} from "@yielded/sync";
+import type { Client } from "@yielded/sync/client";
 import {
   Server,
   ServerCrypto,
@@ -6,24 +23,26 @@ import {
   StorageError,
   type SourceStorage,
 } from "@yielded/sync/server";
-import {
-  Crypto,
-  DateTime,
-  Effect,
-  Exit,
-  Layer,
-  Option,
-  PlatformError,
-  Schema,
-  Scope,
-} from "effect";
-import { Hex } from "effect/encoding";
-import { HttpServerRequest, HttpServerResponse, Url } from "effect/http";
-import { RpcSerialization, RpcServer } from "effect/rpc";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as Exit from "effect/Exit";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
+import * as Url from "effect/http/Url";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as PlatformError from "effect/PlatformError";
+import type * as RpcClientError from "effect/rpc/RpcClientError";
+import * as RpcSerialization from "effect/rpc/RpcSerialization";
+import * as RpcServer from "effect/rpc/RpcServer";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 
-import { makeClient, type ClientConstructor } from "./RemoteClient.ts";
-import * as RpcHost from "./RpcHost.ts";
-import * as SocketTransport from "./SocketTransport.ts";
+import { makeClient, type ClientConstructor } from "./internal/remoteClient.ts";
+import * as RpcHost from "./internal/rpcHost.ts";
+import * as SocketTransport from "./internal/socketTransport.ts";
 import * as SqliteStorage from "./SqliteStorage.ts";
 
 const invalid = () =>
@@ -39,8 +58,17 @@ export type {
   Socket,
   Transport,
   Factory as TransportFactory,
-} from "./SocketTransport.ts";
+} from "./internal/socketTransport.ts";
 
+/**
+ * Host storage, replay, socket, and outbox bounds.
+ *
+ * Counts and durations must be positive safe integers. Changing the storage
+ * namespace selects new storage; it does not migrate receipts or outbox work.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Options<DeliveryR = never, E = never, R = never> {
   readonly replay?: Server.HostOptions["replay"];
   readonly sockets?: Server.HostOptions["connections"];
@@ -52,7 +80,51 @@ export interface Options<DeliveryR = never, E = never, R = never> {
   readonly crypto?: Layer.Layer<ServerCrypto, E, R>;
 }
 
-export type { ClientOptions, Command, RemoteClient } from "./RemoteClient.ts";
+/**
+ * Trusted identity, source address, and the application's native request transport.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
+export interface ClientOptions<Kind extends string, E = never, R = never> {
+  readonly address: { readonly kind: Kind; readonly id: string };
+  readonly identity: Identity;
+  readonly fetch: (request: Request) => Effect.Effect<Response, E, R>;
+}
+
+/**
+ * Retain this exact request for retries and result lookup, including a null generation.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
+export type Command<A extends Action.Definition> = Pick<
+  Client.EncodedCommand,
+  "commandId" | "admittedGeneration"
+> & { readonly payload: Action.Payload<A> };
+
+type RequestError = ProtocolError | RpcClientError.RpcClientError;
+
+/**
+ * A scoped request-only client for snapshots, exact command execution, and result lookup.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
+export interface RemoteClient<S extends Source.Spec> {
+  readonly snapshot: Effect.Effect<
+    Source.Definition<S>["envelope"]["snapshotFrame"]["Type"],
+    RequestError
+  >;
+  readonly execute: <A extends Client.Actions<S>>(
+    action: A,
+    command: Command<NoInfer<A>>,
+  ) => Effect.Effect<ActionOutcome<Action.Success<A>, Action.Error<A>>, RequestError>;
+  readonly result: <A extends Client.Actions<S>>(
+    action: A,
+    command: Command<NoInfer<A>>,
+  ) => Effect.Effect<ResultLookup<Action.Success<A>, Action.Error<A>>, RequestError>;
+}
 
 const webCrypto = Crypto.make({
   randomBytes: (size) => crypto.getRandomValues(new Uint8Array(size)),
@@ -81,7 +153,12 @@ const CryptoLive = Layer.succeed(ServerCrypto, {
     }),
 });
 
-/** Build in the object's scope. The same defaults serve both framework integrations. */
+/**
+ * Build in the object's scope. The same defaults serve both framework integrations.
+ *
+ * @category layers
+ * @since 0.1.0-beta.0
+ */
 export const layer = <DeliveryR = never, E = never, R = never>(
   native: DurableObjectStorage,
   options: Options<DeliveryR, E, R> = {},
@@ -101,6 +178,12 @@ export const layer = <DeliveryR = never, E = never, R = never>(
 const decode = <S extends Schema.Codec<unknown, unknown>>(schema: S, value: unknown) =>
   Schema.decodeUnknownEffect(schema)(value).pipe(Effect.mapError(invalid));
 
+/**
+ * Scoped handlers for a native Durable Object's fetch, WebSocket, and alarm events.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Handlers {
   readonly fetch: (request: Request) => Effect.Effect<Response, ProtocolError>;
   readonly webSocketMessage: (
@@ -112,7 +195,12 @@ export interface Handlers {
   readonly alarm: Effect.Effect<void, ProtocolError | StorageError>;
 }
 
-/** Acquire once per native object. RPC fibers live in the instance scope; source operations are scoped separately. */
+/**
+ * Acquire once per native object. RPC fibers live in the instance scope; source operations are scoped separately.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const make = Effect.fn("Cloudflare.make")(function* <
   S extends Source.Spec,
   R,
@@ -373,8 +461,21 @@ const readBody = Effect.fn("Cloudflare.readBody")(function* (request: Request, m
   return result;
 });
 
+/**
+ * Trusted authentication metadata supplied by the application before routing
+ * to a source object. The host allocates the connection id.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export type Identity = Omit<Server.Session, "connectionId">;
 
+/**
+ * Authentication and object naming for the source contract's shared HTTP route.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface HandlerOptions<S extends Source.Spec = Source.Spec, R = never> {
   /** Authenticate before forwarding; incoming Sync identity headers are never trusted. */
   readonly authenticate: (
@@ -385,7 +486,12 @@ export interface HandlerOptions<S extends Source.Spec = Source.Spec, R = never> 
   readonly objectName?: (id: Source.Id<S>) => string;
 }
 
-/** Match the shared route and forward one authenticated HTTP request or WebSocket upgrade. */
+/**
+ * Match the shared route and forward one authenticated HTTP request or WebSocket upgrade.
+ *
+ * @category http
+ * @since 0.1.0-beta.0
+ */
 export const handler = <S extends Source.Spec, R, FetchR>(
   contract: Source.Definition<S>,
   options: HandlerOptions<NoInfer<S>, R> & {
@@ -415,14 +521,24 @@ export const handler = <S extends Source.Spec, R, FetchR>(
     Effect.catchTag("ProtocolError", (error) => Effect.succeed(errorResponse(error))),
   );
 
-/** The caller owns routing, authentication and its typed object binding. */
+/**
+ * The caller owns routing, authentication and its typed object binding.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface RequestOptions<Kind extends string> {
   readonly request: Request;
   readonly address: { readonly kind: Kind; readonly id: string };
   readonly identity: Identity;
 }
 
-/** Attach trusted Sync metadata before the application calls its native object stub. */
+/**
+ * Attach trusted Sync metadata before the application calls its native object stub.
+ *
+ * @category http
+ * @since 0.1.0-beta.0
+ */
 export const prepareRequest: <S extends Source.Spec>(
   contract: Source.Definition<S>,
   input: RequestOptions<S["kind"]>,
@@ -447,10 +563,20 @@ export const prepareRequest: <S extends Source.Spec>(
   return request;
 });
 
-/** A scoped, request-only client. The application retains exact command identities. */
+/**
+ * A scoped, request-only client. The application retains exact command identities.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const client: ClientConstructor = makeClient(prepareRequest);
 
-/** Protocol failure response for hosts that expose Sync directly over HTTP. */
+/**
+ * Protocol failure response for hosts that expose Sync directly over HTTP.
+ *
+ * @category http
+ * @since 0.1.0-beta.0
+ */
 export const errorResponse = (error: ProtocolError): Response =>
   Response.json(error, {
     status:

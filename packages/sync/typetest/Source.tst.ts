@@ -1,12 +1,13 @@
+import { expectTypeOf } from "@effect/vitest";
 import { Action, type ProtocolError } from "@yielded/sync";
-import { Context, Effect, Layer, Schema, Stream } from "effect";
-import { type Rpc } from "effect/rpc";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Rpc from "effect/rpc/Rpc";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
-import { Counter } from "../fixtures/counter.ts";
-
-type Equal<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
-type Assert<T extends true> = T;
+import { Counter } from "../test/fixtures/counter.ts";
 
 class Access extends Context.Service<
   Access,
@@ -37,11 +38,11 @@ const execute = Effect.fn("example.execute")(function* (
 
 const executeLayer = Counter.rpc.toLayerHandler("execute/$source/set", execute);
 
-export type RequirementsRemainVisible = Assert<Equal<Layer.Services<typeof executeLayer>, Access>>;
+expectTypeOf<Layer.Services<typeof executeLayer>>().toEqualTypeOf<Access>();
 
 const supplied = executeLayer.pipe(Layer.provide(Layer.succeed(Access, { check: Effect.void })));
 
-export type ProvisionSubtractsRequirement = Assert<Equal<Layer.Services<typeof supplied>, never>>;
+expectTypeOf<Layer.Services<typeof supplied>>().toEqualTypeOf<never>();
 
 const handlers = Counter.rpc.of({
   snapshot: () => Effect.die("contract example only"),
@@ -63,11 +64,9 @@ const handlers = Counter.rpc.of({
 
 const combinedLayer = Counter.rpc.toLayer(handlers);
 
-export type CompositionUnionsRequirements = Assert<
-  Equal<Layer.Services<typeof combinedLayer>, Access | Audit>
->;
+expectTypeOf<Layer.Services<typeof combinedLayer>>().toEqualTypeOf<Access | Audit>();
 
-// Type-only function: invalid definitions must never execute during the example.
+// This file is checked by the compiler and is never executed.
 export const invalidRegistrations = () => {
   // @ts-expect-error Transported codecs cannot require runtime services.
   Action.make("service", { payload: serviceCodec, success: Schema.Void, error: Schema.Never });

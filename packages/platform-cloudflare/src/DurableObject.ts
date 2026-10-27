@@ -1,3 +1,10 @@
+/**
+ * Framework-independent declarations for native Cloudflare source objects.
+ * Providers select the framework at application composition time.
+ *
+ * @since 0.1.0-beta.0
+ */
+
 import type { Source } from "@yielded/sync";
 import type { Server } from "@yielded/sync/server";
 
@@ -10,7 +17,12 @@ type WithInstanceType<A extends Constructor> = A & {
   readonly Type: InstanceType<A>;
 };
 
-/** A Sync object definition, before a framework constructs its native export. */
+/**
+ * A Sync object definition, before a framework constructs its native export.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Definition<
   S extends Source.Spec,
   R = never,
@@ -26,7 +38,12 @@ export interface Definition<
   ) => WithInstanceType<A>;
 }
 
-/** Keep the definition independent of the framework selected by the application. */
+/**
+ * Keep the definition independent of the framework selected by the application.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const make = <S extends Source.Spec, R, DeliveryR = never, E = never, PlatformR = never>(
   server: Server.Definition<S, R>,
   options: Options<DeliveryR, E, PlatformR> = {},

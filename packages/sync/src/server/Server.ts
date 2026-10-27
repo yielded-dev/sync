@@ -1,20 +1,149 @@
-import { Effect, Layer, Schema, type Scope } from "effect";
+/**
+ * Private source handlers, authorization, and the authoritative runtime.
+ *
+ * Handlers construct commit plans. The runtime validates and atomically commits
+ * state, events, receipts, and outbox work before returning success.
+ *
+ * @since 0.1.0-beta.0
+ */
+
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import type * as Action from "../Action.ts";
+import { assertUnique, type Ids, type Unique } from "../internal/registration.ts";
+import type { Session, Slot } from "../internal/server.ts";
+import { decode, encode } from "../internal/serverCodec.ts";
 import {
-  assertUnique,
-  RegistrationError,
-  type Ids,
-  type Unique,
-} from "../internal/registration.ts";
-import { ProtocolError, type SourceAddress, type WireSchema } from "../Model.ts";
+  ProtocolError,
+  type SourceAddress,
+  type WireSchema,
+  type SourcePosition,
+} from "../Model.ts";
 import type * as Plugin from "../Plugin.ts";
+import { RegistrationError } from "../RegistrationError.ts";
 import type * as Source from "../Source.ts";
-import { decode, encode } from "./codec.ts";
+import type { StoredEvent } from "./SourceStorage.ts";
 
-export { open, type Runtime, type Limits, Session, canonicalJson } from "./Runtime.ts";
+/** @since 0.1.0-beta.0 */
+export { open, Session } from "../internal/server.ts";
+/** @since 0.1.0-beta.0 */
 export { host, type Host, type HostOptions, type Connection, type LiveConnection } from "./Host.ts";
 
+/**
+ * Positive bounds for a serialized source turn. All fields are required
+ * when overriding the default limits.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
+export interface Limits {
+  /**
+   * Maximum events per commit or replay batch. Defaults to 512.
+   */
+  readonly maxEvents: number;
+  /**
+   * Maximum outbox obligations in one commit. Defaults to 100.
+   */
+  readonly maxOutbox: number;
+  /**
+   * Maximum encoded commit or replay batch size. Defaults to 600000 bytes.
+   */
+  readonly maxBytes: number;
+  /**
+   * Maximum serialized turn duration. Defaults to 5000 milliseconds.
+   */
+  readonly turnTimeoutMillis: number;
+}
+
+/**
+ * An authoritative source instance with authenticated operations.
+ *
+ * Authorization, receipt lookup, handler evaluation, and commit share one
+ * serialized storage turn. The enclosing scope owns acquired handler services.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
+export interface Runtime<S extends Source.Spec> {
+  readonly contract: Source.Definition<S>;
+  readonly address: SourceAddress;
+  /**
+   * Authorizes and reads the current public snapshot.
+   */
+  readonly snapshot: (
+    session: Session,
+  ) => Effect.Effect<Source.Definition<S>["envelope"]["snapshotFrame"]["Type"], ProtocolError>;
+  /**
+   * Returns replay after a position, a snapshot, or an explicit resynchronization gap.
+   */
+  readonly bootstrap: (
+    session: Session,
+    after?: SourcePosition,
+  ) => Effect.Effect<
+    | Source.Definition<S>["envelope"]["snapshotFrame"]["Type"]
+    | Source.Definition<S>["envelope"]["eventsFrame"]["Type"]
+    | Source.Definition<S>["envelope"]["gapFrame"]["Type"],
+    ProtocolError
+  >;
+  /**
+   * Authorizes and executes a typed action, or returns its exact durable outcome.
+   */
+  readonly execute: <A extends { readonly command: WireSchema; readonly outcome: WireSchema }>(
+    session: Session,
+    action: A,
+    input: A["command"]["Type"],
+  ) => Effect.Effect<A["outcome"]["Type"], ProtocolError>;
+  /**
+   * Looks up the outcome for this authenticated actor and exact command.
+   */
+  readonly result: <A extends { readonly command: WireSchema; readonly lookup: WireSchema }>(
+    session: Session,
+    action: A,
+    input: A["command"]["Type"],
+  ) => Effect.Effect<A["lookup"]["Type"], ProtocolError>;
+  /**
+   * Encoded action dispatch for transport adapters; events are returned only after commit.
+   */
+  readonly dispatch: (
+    session: Session,
+    input: unknown,
+  ) => Effect.Effect<
+    { readonly outcome: Schema.Json; readonly events: ReadonlyArray<StoredEvent> },
+    ProtocolError
+  >;
+  /**
+   * Encoded exact-result lookup for transport adapters.
+   */
+  readonly lookup: (
+    session: Session,
+    input: unknown,
+  ) => Effect.Effect<
+    { readonly _tag: "Unknown" } | { readonly _tag: "Found"; readonly outcome: Schema.Json },
+    ProtocolError
+  >;
+  /**
+   * Authorizes an ephemeral message without committing events or advancing the cursor.
+   */
+  readonly publishMessage: (
+    session: Session,
+    message: unknown,
+  ) => Effect.Effect<Source.Definition<S>["envelope"]["messageFrame"]["Type"], ProtocolError>;
+  /**
+   * Revalidates subscription authorization and session expiry.
+   */
+  readonly checkSubscription: (session: Session) => Effect.Effect<void, ProtocolError>;
+}
+
+/**
+ * A proposed action commit: next private state, public events, result, and
+ * JSON outbox obligations. A changed state must emit at least one event.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Commit<State, Event, Result> {
   readonly state: State;
   readonly events: ReadonlyArray<Event>;
@@ -22,10 +151,26 @@ export interface Commit<State, Event, Result> {
   readonly outbox?: ReadonlyArray<Schema.Json>;
 }
 
+/**
+ * Constructs a typed commit plan without performing I/O.
+ *
+ * The runtime validates and commits the complete plan atomically. Keep
+ * external side effects in `outbox`, outside the serialized source turn.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const commit = <State, Event, Result>(
   plan: Commit<State, Event, Result>,
 ): Required<Commit<State, Event, Result>> => ({ ...plan, outbox: plan.outbox ?? [] });
 
+/**
+ * The operation being authorized, including the exact command identity
+ * for action execution and result lookup.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export type AuthorizationOperation =
   | { readonly _tag: "snapshot" | "subscribe" | "message" }
   | {
@@ -35,6 +180,13 @@ export type AuthorizationOperation =
       readonly commandId: string;
     };
 
+/**
+ * The authenticated principal, source address, private root state, and
+ * operation passed to the application's authorization policy.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface AuthorizationInput<P, State> {
   readonly principal: P;
   readonly address: SourceAddress;
@@ -65,42 +217,34 @@ interface SlotSpec<S extends Plugin.Spec, State extends WireSchema, P extends Wi
   readonly snapshot: (state: State["Type"]) => S["snapshot"]["Type"];
   readonly actions: Handlers<S, State["Type"], P["Type"], R>;
 }
-interface Evaluated {
-  readonly state: Schema.Json;
-  readonly events: ReadonlyArray<Schema.Json>;
-  readonly result: Schema.Json;
-  readonly outbox: ReadonlyArray<Schema.Json>;
-}
 
-/** @internal Schema-erased slot, after validating the typed definition. */
-export interface Slot {
-  readonly id: string;
-  readonly initialize: Effect.Effect<Schema.Json, ProtocolError>;
-  readonly snapshot: (state: Schema.Json) => Effect.Effect<Schema.Json, ProtocolError>;
-  readonly actions: ReadonlyMap<
-    string,
-    (
-      state: Schema.Json,
-      payload: unknown,
-      principal: unknown,
-      address: SourceAddress,
-    ) => Effect.Effect<
-      | { readonly _tag: "Succeeded"; readonly plan: Evaluated }
-      | { readonly _tag: "Rejected"; readonly error: Schema.Json },
-      ProtocolError
-    >
-  >;
-}
-
+/**
+ * A plugin's private server implementation and its scoped service requirements.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface PluginDefinition<Id extends string = string, R = never> {
   readonly id: Id;
   readonly contract: Plugin.Definition;
+  /**
+   * @internal Acquires the validated runtime implementation.
+   */
   readonly acquire: Effect.Effect<Slot, ProtocolError, R | Scope.Scope>;
 }
 
+/**
+ * A source's private implementation, authorization policy, and requirements.
+ *
+ * @category models
+ * @since 0.1.0-beta.0
+ */
 export interface Definition<S extends Source.Spec, R = never> {
   readonly contract: Source.Definition<S>;
   readonly allowUnboundCommands: boolean;
+  /**
+   * @internal Acquires the validated runtime implementation.
+   */
   readonly acquire: Effect.Effect<
     {
       readonly slots: ReadonlyArray<Slot>;
@@ -218,6 +362,15 @@ type HandlerSpec<
   readonly actions: H & Record<Exclude<keyof H, S["actions"][number]["name"]>, never>;
 };
 
+/**
+ * Implements one plugin's private state, initialization, projection, and actions.
+ *
+ * Handlers must exactly match the plugin contract or registration throws
+ * `RegistrationError`. Each handler can update only its own slot.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const plugin = <
   Id extends string,
   S extends Plugin.Spec,
@@ -242,6 +395,20 @@ type PluginRequirements<Plugins extends ReadonlyArray<PluginDefinition<string, u
   Scope.Scope
 >;
 
+/**
+ * Implements a shared source contract with private state and authorization.
+ *
+ * Handlers and plugins must exactly match the contract or registration throws
+ * `RegistrationError`. Plugin services are acquired in declaration order and
+ * finalized in reverse order. Commands without an admitted authority require
+ * explicit `allowUnboundCommands` opt-in on both server and client.
+ *
+ * Every authorized viewer receives the same public snapshot. Use a separate
+ * source authorization boundary for viewer-private data.
+ *
+ * @category constructors
+ * @since 0.1.0-beta.0
+ */
 export const make = <
   S extends Source.Spec,
   State extends WireSchema,
@@ -321,7 +488,14 @@ export const make = <
   };
 };
 
-/** Layer resources remain in the caller's source scope, in acquisition order. */
+/**
+ * Provides services to a source implementation in its owning operation scope.
+ *
+ * Layer resources remain scoped and are released in reverse acquisition order.
+ *
+ * @category context
+ * @since 0.1.0-beta.0
+ */
 export const provide = <S extends Source.Spec, R, Out, In>(
   definition: Definition<S, R>,
   layer: Layer.Layer<Out, ProtocolError, In>,
@@ -335,6 +509,12 @@ export const provide = <S extends Source.Spec, R, Out, In>(
   }),
 });
 
+/**
+ * Provides services to a server plugin in its owning source operation scope.
+ *
+ * @category context
+ * @since 0.1.0-beta.0
+ */
 export const providePlugin = <Id extends string, R, Out, In>(
   definition: PluginDefinition<Id, R>,
   layer: Layer.Layer<Out, ProtocolError, In>,
