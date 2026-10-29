@@ -62,7 +62,7 @@
     },
     "packages/local-indexeddb": {
       "name": "@yielded/sync-local-indexeddb",
-      "version": "0.1.0-beta.4",
+      "version": "0.1.0-beta.5",
       "dependencies": {
         "@yielded/sync": "workspace:*",
         "@yielded/sync-persistence": "workspace:*",
@@ -81,7 +81,7 @@
     },
     "packages/persistence": {
       "name": "@yielded/sync-persistence",
-      "version": "0.1.0-beta.4",
+      "version": "0.1.0-beta.5",
       "dependencies": {
         "@yielded/sync": "workspace:*",
       },
@@ -97,7 +97,7 @@
     },
     "packages/platform-alchemy-cf": {
       "name": "@yielded/sync-platform-alchemy-cf",
-      "version": "0.1.0-beta.4",
+      "version": "0.1.0-beta.5",
       "dependencies": {
         "@yielded/sync": "workspace:*",
         "@yielded/sync-platform-cloudflare": "workspace:*",
@@ -119,7 +119,7 @@
     },
     "packages/platform-browser": {
       "name": "@yielded/sync-platform-browser",
-      "version": "0.1.0-beta.4",
+      "version": "0.1.0-beta.5",
       "dependencies": {
         "@effect/platform-browser": "catalog:",
         "@yielded/sync": "workspace:*",
@@ -136,7 +136,7 @@
     },
     "packages/platform-cloudflare": {
       "name": "@yielded/sync-platform-cloudflare",
-      "version": "0.1.0-beta.4",
+      "version": "0.1.0-beta.5",
       "dependencies": {
         "@effect/sql-sqlite-do": "catalog:",
         "@yielded/sync": "workspace:*",
@@ -154,7 +154,7 @@
     },
     "packages/platform-effect-cf": {
       "name": "@yielded/sync-platform-effect-cf",
-      "version": "0.1.0-beta.4",
+      "version": "0.1.0-beta.5",
       "dependencies": {
         "@yielded/sync": "workspace:*",
         "@yielded/sync-platform-cloudflare": "workspace:*",
@@ -176,7 +176,7 @@
     },
     "packages/sync": {
       "name": "@yielded/sync",
-      "version": "0.1.0-beta.4",
+      "version": "0.1.0-beta.5",
       "devDependencies": {
         "@effect/vitest": "catalog:",
         "effect": "catalog:",
