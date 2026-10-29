@@ -171,7 +171,7 @@
       },
       "peerDependencies": {
         "effect": "catalog:",
-        "effect-cf": "^0.58.0",
+        "effect-cf": "^0.59.0",
       },
     },
     "packages/sync": {
@@ -247,7 +247,7 @@
     "alchemy": "2.0.0-beta.84",
     "astro": "7.4.2",
     "effect": "4.1.0",
-    "effect-cf": "0.58.0",
+    "effect-cf": "0.59.0",
     "playwright": "1.64.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
@@ -1352,7 +1352,7 @@
 
     "effect": ["effect@4.1.0", "", {}, "sha512-lGx2MJJyrXA8RZb2UpQ/0Nkb5Utaimby7oD92+18noBxLPE85IFOvptdzau8dvcxAOwfwHo9iqapbKeFzqQM/Q=="],
 
-    "effect-cf": ["effect-cf@0.58.0", "", { "dependencies": { "@effect/platform-browser": "^4.0.6" }, "peerDependencies": { "@cloudflare/computer": "^0.2.0", "@cloudflare/sandbox": "^0.13.0-next.738.2 || ^1.0.0", "@cloudflare/vitest-plugin": "^1.0.0", "@cloudflare/workers-types": "^5.20261026.1", "@effect/sql-d1": "^4.0.0", "@effect/sql-pg": "^4.0.0", "@effect/sql-sqlite-do": "^4.0.0", "effect": "^4.0.6" }, "optionalPeers": ["@cloudflare/computer", "@cloudflare/sandbox", "@cloudflare/vitest-plugin", "@cloudflare/workers-types", "@effect/sql-pg"] }, "sha512-sYBFBlzENZ3Yf+uYEWM301niinb/58wTyAhiW+AchNBakR5OOACbrZHG/iIAlvBI7AXB89RKdfdG53CR5Q5ioA=="],
+    "effect-cf": ["effect-cf@0.59.0", "", { "dependencies": { "@effect/platform-browser": "^4.1.0" }, "peerDependencies": { "@cloudflare/computer": "^0.8.0", "@cloudflare/sandbox": "^0.13.0-next.830.1 || ^1.0.3", "@cloudflare/vitest-plugin": "^1.0.0", "@cloudflare/workers-types": "^5.20261026.1", "@effect/sql-d1": "^4.0.0", "@effect/sql-pg": "^4.0.0", "@effect/sql-sqlite-do": "^4.0.0", "effect": "^4.1.0", "just-bash": "^3.0.1" }, "optionalPeers": ["@cloudflare/computer", "@cloudflare/sandbox", "@cloudflare/vitest-plugin", "@cloudflare/workers-types", "@effect/sql-pg", "just-bash"] }, "sha512-w3tcnrdLO1e3fv/zULzPfh93pwl4BK8WRyCvYPHBorPykKIJkUlMO7N2f3X2i4EM/5BSu4dVk+lkMqXvUzHxIw=="],
 
     "elkjs": ["elkjs@0.9.3", "", {}, "sha512-f/ZeWvW/BCXbhGEf1Ujp29EASo/lk1FDnETgNKwJrsVvGZhUWCZyg3xLJjAsxfOmt8KjswHmI5EwCQcPMpOYhQ=="],
 

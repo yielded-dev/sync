@@ -8,7 +8,8 @@
 "@yielded/sync-local-indexeddb": patch
 ---
 
-Require Effect 4.1 and align the runtime companion packages with that release.
+Require Effect 4.1 and effect-cf 0.59, and align the runtime companion packages
+with that release.
 
 The browser runtime provides `SecureRandom.SecureRandom` from `effect/crypto` in
 place of the removed `Crypto.Crypto` service. Use its `uuidV4()` method instead of
