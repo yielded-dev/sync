@@ -26,7 +26,7 @@ export const board = BrowserSource.bind(BoardClient, {
 Read `board.replica`, dispatch `board.action.moveCard`, and compose actions with
 `board.fn(function* () { ... })`. Inside the generator, await
 `board.action.moveCard(payload)` and use `Atom.get` / `Atom.set` for local state.
-The runtime provides `Crypto.Crypto`,
+The runtime provides `SecureRandom.SecureRandom` from `effect/crypto`,
 `Client.CurrentActor`, and `Client.Transport`. Declared plugins keep their typed
 bindings under `board.plugins`; optional `board.presence(payloadAtom)` shares the
 source connection. See the [runnable board](../../examples/list-board/README.md).
