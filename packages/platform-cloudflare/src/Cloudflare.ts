@@ -23,7 +23,7 @@ import {
   StorageError,
   type SourceStorage,
 } from "@yielded/sync/server";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
@@ -33,7 +33,6 @@ import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Url from "effect/http/Url";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as PlatformError from "effect/PlatformError";
 import type * as RpcClientError from "effect/rpc/RpcClientError";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
 import * as RpcServer from "effect/rpc/RpcServer";
@@ -126,23 +125,10 @@ export interface RemoteClient<S extends Source.Spec> {
   ) => Effect.Effect<ResultLookup<Action.Success<A>, Action.Error<A>>, RequestError>;
 }
 
-const webCrypto = Crypto.make({
-  randomBytes: (size) => crypto.getRandomValues(new Uint8Array(size)),
-  digest: (algorithm, data) =>
-    Effect.tryPromise({
-      try: async () => new Uint8Array(await crypto.subtle.digest(algorithm, new Uint8Array(data))),
-      catch: (cause) =>
-        PlatformError.systemError({
-          _tag: "Unknown",
-          module: "Crypto",
-          method: "digest",
-          cause,
-        }),
-    }),
-});
+const secureRandom = SecureRandom.make((size) => crypto.getRandomValues(new Uint8Array(size)));
 
 const CryptoLive = Layer.succeed(ServerCrypto, {
-  generation: webCrypto.randomUUIDv4().pipe(Effect.orDie),
+  generation: secureRandom.uuidV4(),
   sha256: (text) =>
     Effect.tryPromise({
       try: async () =>
@@ -552,7 +538,7 @@ export const prepareRequest: <S extends Source.Spec>(
 
   const session = yield* decode(Server.Session, {
     ...input.identity,
-    connectionId: yield* webCrypto.randomUUIDv4().pipe(Effect.orDie),
+    connectionId: yield* secureRandom.uuidV4(),
   });
 
   const request = new Request(input.request);

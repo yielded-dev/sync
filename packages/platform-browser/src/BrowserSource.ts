@@ -9,13 +9,13 @@ import { BrowserCrypto } from "@effect/platform-browser";
 import { ProtocolError, type Source } from "@yielded/sync";
 import { SourceAtom } from "@yielded/sync/atom";
 import { Client, type ReplicaPersistence } from "@yielded/sync/client";
-import type * as Crypto from "effect/Crypto";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Atom from "effect/reactivity/Atom";
 import * as Socket from "effect/socket/Socket";
 
-type Services = Client.CurrentActor | Client.Transport | Crypto.Crypto;
+type Services = Client.CurrentActor | Client.Transport | SecureRandom.SecureRandom;
 
 /**
  * Browser source identity, actor, transport, and persistence choices.
@@ -46,7 +46,7 @@ export interface Binding<S extends Source.Spec, E = never> extends SourceAtom.Bi
   E | ProtocolError,
   Services
 > {
-  /** Use the same browser services, including Crypto, in application workflow atoms. */
+  /** Use the same browser services, including SecureRandom, in application workflow atoms. */
   readonly runtime: Atom.AtomRuntime<Services, E | ProtocolError>;
 }
 
@@ -86,7 +86,7 @@ export const bind = <S extends Source.Spec, E = never>(
 
   const platform = Layer.mergeAll(
     transport,
-    BrowserCrypto.layer,
+    BrowserCrypto.layerSecureRandom,
     Layer.succeed(Client.CurrentActor, { actorId }),
   );
 

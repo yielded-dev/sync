@@ -2,7 +2,8 @@ import type { ProtocolError } from "@yielded/sync";
 import { IndexedDb } from "@yielded/sync-local-indexeddb";
 import { BrowserSource } from "@yielded/sync-platform-browser";
 import type { ClientError, PersistenceError } from "@yielded/sync/client";
-import { Crypto, Effect, Option, Schema } from "effect";
+import { Option, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 import { Atom } from "effect/reactivity";
 
 import { BoardClient } from "../client.ts";
@@ -48,8 +49,8 @@ export const addCardAtom = board.fn(function* () {
   const title = (yield* Atom.get(cardDraftAtom)).trim();
 
   if (title.length === 0) return;
-  const crypto = yield* Crypto.Crypto;
-  const id = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
+  const random = yield* SecureRandom.SecureRandom;
+  const id = yield* random.uuidV4();
 
   yield* board.action.addCard({ id, title });
   yield* Atom.set(cardDraftAtom, "");
