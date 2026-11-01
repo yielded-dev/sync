@@ -59,7 +59,7 @@
     "@effect/atom-react": "4.1.0",
     "@effect/platform-browser": "4.1.0",
     "@effect/sql-sqlite-do": "4.1.0",
-    "@effect/tsgo": "0.59.0",
+    "@effect/tsgo": "0.63.0",
     "@effect/vitest": "4.1.0",
     "@types/node": "26.6.5",
     "effect": "4.1.0",
