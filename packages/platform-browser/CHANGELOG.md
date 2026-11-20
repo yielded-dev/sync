@@ -1,5 +1,19 @@
 # @yielded/sync-platform-browser
 
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- 71519bd: Require Effect 4.1 and effect-cf 0.59, and align the runtime companion packages
+  with that release.
+
+  The browser runtime provides `SecureRandom.SecureRandom` from `effect/crypto` in
+  place of the removed `Crypto.Crypto` service. Use its `uuidV4()` method instead of
+  `randomUUIDv4()` in application workflows.
+
+- Updated dependencies [71519bd]
+  - @yielded/sync@0.1.0-beta.5
+
 ## 0.1.0-beta.4
 
 ### Patch Changes
