@@ -42,7 +42,7 @@
     "typecheck": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict"
   },
   "dependencies": {
-    "@effect/sql-sqlite-do": "catalog:",
+    "@effect/sql-sqlite-do": "4.1.0",
     "@yielded/sync": "workspace:*"
   },
   "devDependencies": {
@@ -53,6 +53,6 @@
     "vite-plus": "catalog:"
   },
   "peerDependencies": {
-    "effect": "catalog:"
+    "effect": "^4.1.0"
   }
 }

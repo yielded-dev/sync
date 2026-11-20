@@ -116,8 +116,7 @@
             "include": ["**/src/**/*.ts"],
             "options": {
               "diagnosticSeverity": {
-                "nodeBuiltinImport": "warning",
-                "preferSchemaOverJson": "suggestion"
+                "nodeBuiltinImport": "warning"
               }
             }
           },
