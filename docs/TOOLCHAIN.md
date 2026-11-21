@@ -36,10 +36,10 @@ and `vp help` for command options.
 | `vp run docs:build`                       | Build the documentation site                         |
 
 `vp run typecheck` checks root tooling, all libraries, and the board example
-with `effect-tsrs diagnostics --project tsconfig.json --type-check --strict`. It
-checks TypeScript types and Effect diagnostics; configured errors and warnings
-fail the check. The packed-consumer check uses `tsrs --noEmit`; the docs workspace
-retains its Astro build.
+with `effect-tsgo tsrs --noEmit -p tsconfig.json`. It checks TypeScript types
+and Effect diagnostics; configured errors and warnings fail the check. The
+packed-consumer check uses `tsrs --noEmit`; the docs workspace retains its Astro
+build.
 
 Builds precede typechecks because workspace imports resolve built ESM and
 declarations. Use `vp run --no-cache <task>` to investigate stale task results.
