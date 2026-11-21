@@ -107,7 +107,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict",
+    "typecheck": "effect-tsgo tsrs --noEmit -p tsconfig.json",
     "test": "vp test"
   },
   "devDependencies": {

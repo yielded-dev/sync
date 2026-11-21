@@ -39,7 +39,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict"
+    "typecheck": "effect-tsgo tsrs --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@effect/sql-sqlite-do": "4.1.0",

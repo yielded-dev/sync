@@ -10,7 +10,6 @@
         "@effect/tsgo": "catalog:",
         "@stylistic/eslint-plugin": "5.10.0",
         "@types/node": "catalog:",
-        "@yielded/effect-tsrs": "catalog:",
         "effect": "catalog:",
         "oxfmt": "0.74.0",
         "oxlint": "1.89.0",
@@ -244,7 +243,6 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
-    "@yielded/effect-tsrs": "0.2.2",
     "@yielded/starlight-theme": "0.2.2",
     "alchemy": "2.0.0-beta.84",
     "astro": "7.4.2",
@@ -1057,18 +1055,6 @@
     "@voidzero-dev/vite-plus-win32-arm64-msvc": ["@voidzero-dev/vite-plus-win32-arm64-msvc@1.4.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-PLGVov8c4/QfveOM/AYjYDlgMCQ0SxCmJp392qBgxaSXP0nEg6yP4hn5UtnhxvluhHEzVkTf2r1Q3LNlZRI7kw=="],
 
     "@voidzero-dev/vite-plus-win32-x64-msvc": ["@voidzero-dev/vite-plus-win32-x64-msvc@1.4.0", "", { "os": "win32", "cpu": "x64" }, "sha512-DYG7wDsMLLs2/+8qfeyLScdoMh+aPM4IZanoVPSNt8fMeeXR2GQiiZDKc0qZHKN9+YcdCGK1HLAdMAGSywKvsA=="],
-
-    "@yielded/effect-tsrs": ["@yielded/effect-tsrs@0.2.2", "", { "optionalDependencies": { "@yielded/effect-tsrs-darwin-arm64": "0.2.2", "@yielded/effect-tsrs-darwin-x64": "0.2.2", "@yielded/effect-tsrs-linux-arm64": "0.2.2", "@yielded/effect-tsrs-linux-x64": "0.2.2", "@yielded/effect-tsrs-win32-x64": "0.2.2" }, "bin": { "effect-tsrs": "bin/effect-tsrs.js" } }, "sha512-F0woy23jX5bMMVOo4Wh+PXhUPvnsH3pNZn7IUamUB2K0sKijui4YNz7dib8Tb6y90+0/pbnIU3iKrZTAsI1phw=="],
-
-    "@yielded/effect-tsrs-darwin-arm64": ["@yielded/effect-tsrs-darwin-arm64@0.2.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-G1O4xUTCvDkg7OsMe3uIbhLj4lrVYMr69WhmQlHyISnBAb2fsa0QprnH7qQ/8PqxUszvC/OWBDim5Uo8xi9dkA=="],
-
-    "@yielded/effect-tsrs-darwin-x64": ["@yielded/effect-tsrs-darwin-x64@0.2.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-Zvp+OjYuKNnFx25KyQe7UWs3Omue1xBEmPIDXLR5aIZUMKjW99cdEy21jNxDNxsjM9kHzZjZMDBkdm5DX0dLRg=="],
-
-    "@yielded/effect-tsrs-linux-arm64": ["@yielded/effect-tsrs-linux-arm64@0.2.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-/G13YyZSO6HnpsAxYz8Np7owDobQWNr8WmTQ4mcVIVY+s+wl8raNUP84nh+Ok0GYqX+zhdFydEHqvWu9IqV9ew=="],
-
-    "@yielded/effect-tsrs-linux-x64": ["@yielded/effect-tsrs-linux-x64@0.2.2", "", { "os": "linux", "cpu": "x64" }, "sha512-orS8USUkEzL9Pkvm2MH8VXgBhu9yCadr1IT/rIyDOZCWmDyFMNZQ2DVg+NBvFfPEQHn8IpZMkza9aYLgy8KJyQ=="],
-
-    "@yielded/effect-tsrs-win32-x64": ["@yielded/effect-tsrs-win32-x64@0.2.2", "", { "os": "win32", "cpu": "x64" }, "sha512-5Vb0JusFTEPUJ6LREP94qO2hX4gMMTx06cg7dPt5OU9Xb0eiBcqi1m8xegw3maK1fEFc8rd2hYN+ikTleSlPDw=="],
 
     "@yielded/starlight-theme": ["@yielded/starlight-theme@0.2.2", "", { "dependencies": { "@fontsource-variable/ibm-plex-sans": "^5.3.0", "@fontsource/ibm-plex-mono": "^5.3.0", "@fontsource/ibm-plex-sans": "^5.3.0", "@resvg/resvg-js": "^2.6.2", "github-slugger": "^2.0.0", "mdast-util-from-markdown": "^2.0.3", "mdast-util-gfm": "^3.1.0", "mermaid": "^12.0.0", "micromark-extension-gfm": "^3.0.0", "satori": "^0.33.5" }, "peerDependencies": { "@astrojs/starlight": ">=0.42.0", "astro": ">=7.2.10" } }, "sha512-Jq/l7INND8IYYAwpIy5T9oACEoVlYtSdGzgBI1ArJefHAroF/E5S+BZ7BoYukksZFqBoz3H4Wnc6/lFWiIPM2Q=="],
 
